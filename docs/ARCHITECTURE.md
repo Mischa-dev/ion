@@ -63,9 +63,7 @@ Shared files with small, append-only edits: root `Cargo.toml`,
   components that read them.
 - `ion_core::navigation::Omnibox` decides between address and search. Bangs and
   commands plug in as earlier steps in `Omnibox::resolve`.
-- The browser profile is persistent (`storageName: "Default"`). It is fetched
-  in `Main.qml`'s `Component.onCompleted`: `instance()` is still null while the
-  prototype is created, so a binding would leave tabs off the record.
+- The browser profile is persistent (`storageName: "Default"`).
 - Per-tab UI (find bar, permission prompt, context menu, new-tab page) is
   declared inside `BrowserTab.qml`; window-wide pieces (downloads panel,
   fullscreen) sit next to the view stack in `Main.qml`. Zoom levels are saved
