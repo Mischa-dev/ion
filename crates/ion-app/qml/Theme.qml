@@ -1,20 +1,44 @@
 pragma Singleton
 
 import QtQuick
+import Ion
 
 // Design tokens for Ion's UI. Every surface reads its colors and sizes from
-// here, so the theming work can swap the palette (built-in themes, DMS,
-// system accent) without touching individual components.
+// here. Colors come from the active theme, resolved in Rust by `ThemeEngine`
+// (crates/ion-theme): a built-in theme, a DMS or manual palette file (live
+// reloaded), or the system accent. Components only read tokens, so the whole
+// UI re-themes together without restarting.
 QtObject {
+    id: theme
+
+    // Theme selection, set from config or a theme picker.
+    // source: "builtin" (default) | "dms" | "system" | "manual"
+    property alias source: engine.source
+    // Built-in or installed theme id for "builtin"; "auto" follows the system
+    // light/dark mode.
+    property alias themeName: engine.themeName
+    // Palette file for "dms" / "manual"; empty uses ~/.config/ion/dms-palette.toml
+    // or ~/.config/ion/palette.toml.
+    property alias palettePath: engine.palettePath
+
+    readonly property string name: engine.name
+    readonly property bool dark: engine.dark
+    readonly property var themeIds: engine.themeIds
+    readonly property string error: engine.error
+
     // Palette
-    readonly property color background: "#16161d"
-    readonly property color surface: "#1f1f28"
-    readonly property color surfaceRaised: "#2a2a37"
-    readonly property color surfaceHover: "#363646"
-    readonly property color text: "#dcd7ba"
-    readonly property color textMuted: "#8a8980"
-    readonly property color accent: "#7e9cd8"
-    readonly property color border: "#2a2a37"
+    readonly property color background: engine.background
+    readonly property color surface: engine.surface
+    readonly property color surfaceRaised: engine.surfaceRaised
+    readonly property color surfaceHover: engine.surfaceHover
+    readonly property color text: engine.text
+    readonly property color textMuted: engine.textMuted
+    readonly property color accent: engine.accent
+    readonly property color onAccent: engine.onAccent
+    readonly property color border: engine.border
+    readonly property color danger: engine.danger
+    readonly property color warning: engine.warning
+    readonly property color success: engine.success
 
     // Shape and density
     readonly property int radius: 8
@@ -29,4 +53,15 @@ QtObject {
 
     // Motion
     readonly property int animationMs: 120
+
+    readonly property SystemPalette systemPalette: SystemPalette {}
+
+    readonly property ThemeEngine engine: ThemeEngine {
+        id: engine
+        // An unknown scheme (common on Linux without a platform theme) counts
+        // as dark, Ion's default look.
+        systemDark: Qt.styleHints.colorScheme !== Qt.ColorScheme.Light
+        systemAccent: theme.systemPalette.accent
+        onErrorChanged: if (error.length > 0) console.warn("Ion theme:", error)
+    }
 }

@@ -10,12 +10,16 @@ publish = false
 
 [workspace.dependencies]
 ion-core = { path = "crates/ion-core" }
+ion-theme = { path = "crates/ion-theme" }
 
 cxx = "1.0"
 cxx-qt = "0.10"
 cxx-qt-lib = { version = "0.10", features = ["qt_gui", "qt_qml"] }
 cxx-qt-build = "0.10"
 url = "2.5"
+notify = "8"
+serde = { version = "1", features = ["derive"] }
+toml = "1"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "warn"

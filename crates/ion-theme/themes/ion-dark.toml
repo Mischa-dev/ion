@@ -1,0 +1,15 @@
+name = "Ion Dark"
+scheme = "dark"
+
+[colors]
+background = "#16161d"
+surface = "#1f1f28"
+surface_raised = "#2a2a37"
+surface_hover = "#363646"
+border = "#2a2a37"
+text = "#dcd7ba"
+text_muted = "#8a8980"
+accent = "#7e9cd8"
+danger = "#e46876"
+warning = "#e6c384"
+success = "#98bb6c"

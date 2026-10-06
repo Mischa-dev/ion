@@ -1,0 +1,16 @@
+# Catppuccin Mocha, https://catppuccin.com (MIT)
+name = "Catppuccin Mocha"
+scheme = "dark"
+
+[colors]
+background = "#181825"
+surface = "#1e1e2e"
+surface_raised = "#313244"
+surface_hover = "#45475a"
+border = "#313244"
+text = "#cdd6f4"
+text_muted = "#a6adc8"
+accent = "#cba6f7"
+danger = "#f38ba8"
+warning = "#f9e2af"
+success = "#a6e3a1"

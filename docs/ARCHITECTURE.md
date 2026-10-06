@@ -56,9 +56,10 @@ Shared files with small, append-only edits: root `Cargo.toml`,
 
 - Tabs live in a QML `ListModel` in `Main.qml`. The sessions work moves them
   into a Rust model so they can be saved, restored and driven by agents.
-- `Theme.qml` holds static tokens. The theming work drives them from Rust
-  (built-in themes, DMS palette file, system accent) without changing the
-  components that read them.
+- `Theme.qml`'s colors come from `ThemeEngine` (`crates/ion-theme`): built-in
+  themes, DMS or manual palette files (live reloaded) and the system accent.
+  Config sets `Theme.source`, `Theme.themeName` and `Theme.palettePath`; see
+  `crates/ion-theme/README.md`. Sizes and motion tokens are still static.
 - `ion_core::navigation::Omnibox` decides between address and search. Bangs and
   commands plug in as earlier steps in `Omnibox::resolve`.
 - The browser profile is persistent (`storageName: "Default"`).
