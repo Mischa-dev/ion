@@ -28,7 +28,9 @@ ApplicationWindow {
         id: profilePrototype
         storageName: "Default"
     }
-    readonly property WebEngineProfile profile: profilePrototype.instance()
+    // Assigned in Component.onCompleted: instance() is still null while bindings
+    // are first evaluated, which silently left every tab off-the-record.
+    property WebEngineProfile profile: null
 
     // Tabs live in the Rust `Tabs` model (bridge/tabs.rs), which also saves them
     // so the next start reopens them. These helpers return the new tab's view.
@@ -64,6 +66,7 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
+        profile = profilePrototype.instance()
         Tabs.restoreLastSession()
         // URLs on the command line (`ion %U` from the desktop file) open as new
         // tabs after the restored ones; the first one becomes current.
@@ -226,7 +229,7 @@ ApplicationWindow {
     Shortcut { sequence: "Ctrl+7"; onActivated: Tabs.activate(6) }
     Shortcut { sequence: "Ctrl+8"; onActivated: Tabs.activate(7) }
     Shortcut { sequence: "Ctrl+9"; onActivated: Tabs.activate(Tabs.count - 1) }
-    Shortcut { sequences: [StandardKey.Refresh]; onActivated: window.currentView?.reload() }
+    Shortcut { sequences: [StandardKey.Refresh, "Ctrl+R"]; onActivated: window.currentView?.reload() }
     Shortcut { sequences: [StandardKey.Back]; onActivated: window.currentView?.goBack() }
     Shortcut { sequences: [StandardKey.Forward]; onActivated: window.currentView?.goForward() }
     Shortcut { sequences: [StandardKey.Quit]; onActivated: Qt.quit() }
