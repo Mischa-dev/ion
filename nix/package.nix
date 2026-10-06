@@ -36,6 +36,7 @@ rustPlatform.buildRustPackage {
   preConfigure = ''
     export QMAKE=${qt.env}/bin/qmake
     export RUSTFLAGS="${qt.rustflags} ''${RUSTFLAGS:-}"
+    export CXXFLAGS="${qt.cxxflags} ''${CXXFLAGS:-}"
   '';
 
   cargoBuildFlags = [

@@ -18,6 +18,11 @@ rec {
 
   env = qt6.env "ion-qt-${qt6.qtbase.version}" modules;
 
+  # On macOS nixpkgs ships Qt as frameworks, whose headers include each other
+  # as <QtCore/…>. cxx-qt-build only passes -I …/QtCore.framework/Headers, so
+  # clang also needs the framework search path to resolve those includes.
+  cxxflags = lib.optionalString stdenv.hostPlatform.isDarwin "-F${env}/lib";
+
   # cxx-qt-build links against the merged prefix but does not set a runtime
   # search path on Linux, so without this the binary finds neither libQt6*.so
   # nor libstdc++ outside a Nix build sandbox.

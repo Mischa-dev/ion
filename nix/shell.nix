@@ -46,6 +46,7 @@ mkShell {
   shellHook = ''
     export QMAKE=${qt.env}/bin/qmake
     export RUSTFLAGS="${qt.rustflags} ''${RUSTFLAGS:-}"
+    export CXXFLAGS="${qt.cxxflags} ''${CXXFLAGS:-}"
     echo "Ion dev shell: cargo run -p ion-app  (Qt ${qt6.qtbase.version})"
   '';
 }
