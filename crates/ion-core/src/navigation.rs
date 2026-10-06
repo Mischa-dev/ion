@@ -92,6 +92,11 @@ impl Omnibox {
 
 /// Returns the normalized URL if `input` looks like an address rather than a search.
 fn as_url(input: &str) -> Option<String> {
+    // Absolute local path; may contain spaces (`/tmp/My Page.html`).
+    if input.starts_with('/') {
+        return Url::from_file_path(input).ok().map(String::from);
+    }
+
     if input.chars().any(char::is_whitespace) {
         return None;
     }
@@ -101,11 +106,6 @@ fn as_url(input: &str) -> Option<String> {
         if KNOWN_SCHEMES.contains(&scheme.to_ascii_lowercase().as_str()) {
             return Url::parse(input).ok().map(String::from);
         }
-    }
-
-    // Absolute local path.
-    if input.starts_with('/') {
-        return Url::from_file_path(input).ok().map(String::from);
     }
 
     let (host, _) = split_host(input);
@@ -207,6 +207,10 @@ mod tests {
     #[test]
     fn absolute_paths_become_file_urls() {
         assert_eq!(resolve("/tmp/a.html"), url("file:///tmp/a.html"));
+        assert_eq!(
+            resolve("/tmp/My Page.html"),
+            url("file:///tmp/My%20Page.html")
+        );
     }
 
     #[test]
