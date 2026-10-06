@@ -426,7 +426,15 @@ dependencies = [
  "cxx-qt",
  "cxx-qt-build",
  "cxx-qt-lib",
+ "ion-basics",
  "ion-core",
+]
+
+[[package]]
+name = "ion-basics"
+version = "0.1.0"
+dependencies = [
+ "url",
 ]
 
 [[package]]

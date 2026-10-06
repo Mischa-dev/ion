@@ -71,6 +71,7 @@ ApplicationWindow {
 
     header: ColumnLayout {
         spacing: 0
+        visible: !fullScreen.active
 
         TabStrip {
             Layout.fillWidth: true
@@ -88,6 +89,7 @@ ApplicationWindow {
             id: navBar
             Layout.fillWidth: true
             view: window.currentView
+            downloads: downloads
         }
     }
 
@@ -106,14 +108,18 @@ ApplicationWindow {
                 profile: window.profile
                 url: initialUrl.length > 0 ? initialUrl : "about:blank"
 
-                onTitleChanged: tabs.setProperty(index, "title", title)
+                onTitleChanged: tabs.setProperty(index, "title", Basics.isNewTabUrl(url) ? "" : title)
                 onNewTabRequested: request => {
                     const background = request.destination === WebEngineNewWindowRequest.InNewBackgroundTab
                     request.openIn(window.openTab("", !background))
                 }
+                onOpenInNewTab: target => window.openTab(target, false)
             }
         }
     }
+
+    DownloadsPanel { id: downloads; profile: window.profile }
+    FullScreenController { id: fullScreen; window: window; view: window.currentView }
 
     // Keyboard shortcuts. "Ctrl" maps to Cmd on macOS automatically.
     Shortcut { sequences: [StandardKey.AddTab]; onActivated: { window.openTab(""); window.focusUrlBar() } }
@@ -125,4 +131,7 @@ ApplicationWindow {
     Shortcut { sequences: [StandardKey.Back]; onActivated: window.currentView?.goBack() }
     Shortcut { sequences: [StandardKey.Forward]; onActivated: window.currentView?.goForward() }
     Shortcut { sequences: [StandardKey.Quit]; onActivated: Qt.quit() }
+    Shortcut { sequences: [StandardKey.ZoomIn, "Ctrl+="]; onActivated: window.currentView?.zoomIn() }
+    Shortcut { sequences: [StandardKey.ZoomOut]; onActivated: window.currentView?.zoomOut() }
+    Shortcut { sequences: ["Ctrl+0"]; onActivated: window.currentView?.resetZoom() }
 }

@@ -8,6 +8,7 @@ Rectangle {
     id: bar
 
     property var view   // BrowserTab of the current tab, may be null
+    property DownloadsPanel downloads   // may be null
     property alias urlBar: urlBar
 
     implicitHeight: Theme.urlBarHeight + Theme.spacing * 2
@@ -47,6 +48,17 @@ Rectangle {
                     bar.view.url = target
             }
         }
+
+        IconButton {
+            readonly property real factor: bar.view?.zoomFactor ?? 1
+            visible: bar.view !== null && !Zoom.isDefault(factor)
+            implicitWidth: Theme.urlBarHeight * 1.6
+            glyph: Zoom.label(factor)
+            tip: qsTr("Reset zoom")
+            onClicked: bar.view.resetZoom()
+        }
+
+        DownloadsButton { panel: bar.downloads }
     }
 
     // Thin load progress line along the bottom edge.
