@@ -3,8 +3,8 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Ion
 
-// Horizontal tab strip over the `Tabs` model. Reports clicks; Main.qml decides
-// what they do. VerticalTabStrip.qml is the sidebar variant.
+// Vertical variant of TabStrip: a sidebar listing tabs top to bottom, for
+// people who keep many tabs open. Same model, same signals.
 Rectangle {
     id: strip
 
@@ -16,36 +16,54 @@ Rectangle {
     signal newTabRequested()
     signal menuRequested(Item anchor)
 
-    implicitHeight: Theme.tabHeight + Theme.spacing
+    implicitWidth: Theme.tabMaxWidth
     color: Theme.background
 
-    RowLayout {
+    ColumnLayout {
         anchors.fill: parent
-        anchors.leftMargin: Theme.spacing
-        anchors.rightMargin: Theme.spacing
-        anchors.topMargin: Theme.spacing
+        anchors.margins: Theme.spacing
         spacing: Theme.spacing / 2
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Theme.spacing / 2
+
+            IconButton {
+                Layout.fillWidth: true
+                glyph: "+"
+                tip: qsTr("New tab")
+                onClicked: strip.newTabRequested()
+            }
+
+            IconButton {
+                id: menuButton
+                glyph: "⋯"
+                tip: qsTr("Tabs and sessions")
+                onClicked: strip.menuRequested(menuButton)
+            }
+        }
 
         ListView {
             id: list
             Layout.fillWidth: true
             Layout.fillHeight: true
-            orientation: ListView.Horizontal
             spacing: Theme.spacing / 2
             clip: true
-            interactive: contentWidth > width
+            boundsBehavior: Flickable.StopAtBounds
             model: strip.tabs
             currentIndex: strip.currentIndex
+            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
             delegate: Rectangle {
                 id: tab
 
                 required property int index
                 required property string title
+                required property string url
                 readonly property bool current: index === strip.currentIndex
 
-                width: Math.min(Theme.tabMaxWidth, Math.max(120, list.width / Math.max(1, list.count) - list.spacing))
-                height: list.height
+                width: list.width
+                height: Theme.tabHeight
                 radius: Theme.radius
                 color: current ? Theme.surface : tabMouse.containsMouse ? Theme.surfaceRaised : "transparent"
 
@@ -72,7 +90,7 @@ Rectangle {
 
                     Text {
                         Layout.fillWidth: true
-                        text: tab.title.length > 0 ? tab.title : qsTr("New Tab")
+                        text: tab.title.length > 0 ? tab.title : tab.url.length > 0 ? tab.url : qsTr("New Tab")
                         color: tab.current ? Theme.text : Theme.textMuted
                         font.pixelSize: Theme.fontSize
                         elide: Text.ElideRight
@@ -88,21 +106,6 @@ Rectangle {
                     }
                 }
             }
-        }
-
-        IconButton {
-            Layout.alignment: Qt.AlignVCenter
-            glyph: "+"
-            tip: qsTr("New tab")
-            onClicked: strip.newTabRequested()
-        }
-
-        IconButton {
-            id: menuButton
-            Layout.alignment: Qt.AlignVCenter
-            glyph: "⋯"
-            tip: qsTr("Tabs and sessions")
-            onClicked: strip.menuRequested(menuButton)
         }
     }
 }
