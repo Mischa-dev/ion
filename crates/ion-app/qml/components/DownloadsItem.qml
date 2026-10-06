@@ -112,7 +112,8 @@ Rectangle {
             onClicked: row.download.isPaused ? row.download.resume() : row.download.pause()
         }
         IconButton {
-            visible: row.interrupted
+            // Finished interrupted downloads cannot be resumed.
+            visible: row.interrupted && !row.download.isFinished
             glyph: "↻"
             tip: qsTr("Retry")
             onClicked: row.download.resume()
