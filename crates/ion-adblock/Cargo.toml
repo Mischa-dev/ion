@@ -1,0 +1,18 @@
+[package]
+name = "ion-adblock"
+description = "Qt-free ad and tracker blocking for the Ion browser"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+url.workspace = true
+# `single-thread` is left out so the engine is Send: it is built on a worker
+# thread and handed to the UI thread, where QtWebEngine asks about requests.
+adblock = { version = "0.13", default-features = false, features = ["embedded-domain-resolver", "full-regex-handling"] }
+dirs = "6"
+ureq = "3"
+
+[lints]
+workspace = true

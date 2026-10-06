@@ -47,6 +47,8 @@ Rectangle {
                     bar.view.url = target
             }
         }
+
+        AdblockButton { view: bar.view }
     }
 
     // Thin load progress line along the bottom edge.
