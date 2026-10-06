@@ -21,7 +21,8 @@ ApplicationWindow {
         id: profilePrototype
         storageName: "Default"
     }
-    readonly property WebEngineProfile profile: profilePrototype.instance()
+    // Set in Component.onCompleted: instance() is null until the prototype is complete.
+    property WebEngineProfile profile: null
 
     // Tab state lives here; TabStrip and the view stack both read it.
     ListModel {
@@ -58,6 +59,7 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
+        profile = profilePrototype.instance()
         // URLs on the command line (`ion %U` from the desktop file) open as tabs.
         const urls = Qt.application.arguments.slice(1).filter(arg => !arg.startsWith("-"))
         if (urls.length === 0)
