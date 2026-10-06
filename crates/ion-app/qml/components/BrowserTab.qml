@@ -35,6 +35,7 @@ WebEngineView {
     NewTabPage { view: view }
     FindBar { view: view }
     PermissionPrompt { view: view }
+    ScreenSharePicker { view: view }
     ContextMenuHandler {
         view: view
         omnibox: tabOmnibox

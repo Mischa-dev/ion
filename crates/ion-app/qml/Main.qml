@@ -121,6 +121,7 @@ ApplicationWindow {
     }
 
     DownloadsPanel { id: downloads; profile: window.profile }
+    NotificationToasts { profile: window.profile }
     FullScreenController { id: fullScreen; window: window; view: window.currentView }
 
     // Keyboard shortcuts. "Ctrl" maps to Cmd on macOS automatically.
