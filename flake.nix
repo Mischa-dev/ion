@@ -23,6 +23,11 @@
         default = ion;
       });
 
+      homeManagerModules = rec {
+        ion = import ./nix/hm-module.nix { inherit self; };
+        default = ion;
+      };
+
       devShells = forAllSystems (pkgs: {
         default = pkgs.callPackage ./nix/shell.nix {
           ion = self.packages.${pkgs.stdenv.hostPlatform.system}.ion;
@@ -36,6 +41,9 @@
         in
         {
           inherit ion;
+          hm-module = pkgs.callPackage ./nix/hm-module-test.nix {
+            module = self.homeManagerModules.default;
+          };
           clippy = ion.overrideAttrs (old: {
             pname = "ion-clippy";
             nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.clippy ];

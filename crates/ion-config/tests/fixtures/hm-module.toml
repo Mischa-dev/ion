@@ -1,0 +1,21 @@
+[adblock]
+lists = ["easylist", "easyprivacy", "ublock-filters"]
+
+[bangs]
+gh = "https://github.com/search?q={}"
+nix = "https://search.nixos.org/packages?query={}"
+
+[general]
+restoreSession = false
+
+[theme]
+source = "dms"
+
+[ui]
+cornerRadius = 8
+density = "compact"
+tabs = "vertical"
+
+[ui.animations]
+enable = true
+speed = 1.5

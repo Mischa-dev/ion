@@ -7,7 +7,7 @@ import Ion
 ApplicationWindow {
     id: window
 
-    readonly property string homeUrl: "https://duckduckgo.com/"
+    readonly property string homeUrl: Config.homePage
     readonly property var currentView: views.count > 0 ? views.itemAt(tabs.currentIndex) : null
 
     width: 1280
@@ -67,7 +67,11 @@ ApplicationWindow {
         tabs.currentIndex = 0
     }
 
-    Omnibox { id: urlBarResolver }
+    Omnibox {
+        id: urlBarResolver
+        searchEngineName: Config.searchEngineName
+        searchTemplate: Config.searchTemplate
+    }
 
     header: ColumnLayout {
         spacing: 0
