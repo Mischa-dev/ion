@@ -1,0 +1,12 @@
+[package]
+name = "ion-platform"
+description = "Qt-free platform integration for the Ion browser: Chromium flags and single-instance handoff"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

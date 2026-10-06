@@ -427,6 +427,7 @@ dependencies = [
  "cxx-qt-build",
  "cxx-qt-lib",
  "ion-core",
+ "ion-platform",
 ]
 
 [[package]]
@@ -435,6 +436,10 @@ version = "0.1.0"
 dependencies = [
  "url",
 ]
+
+[[package]]
+name = "ion-platform"
+version = "0.1.0"
 
 [[package]]
 name = "itoa"

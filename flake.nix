@@ -36,6 +36,7 @@
         in
         {
           inherit ion;
+          packaging = pkgs.callPackage ./nix/packaging-check.nix { inherit ion; };
           clippy = ion.overrideAttrs (old: {
             pname = "ion-clippy";
             nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.clippy ];

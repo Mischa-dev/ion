@@ -4,4 +4,5 @@
 //! this directory automatically; only the `mod` line below is shared.
 
 pub mod omnibox;
+pub mod platform;
 pub mod webengine;

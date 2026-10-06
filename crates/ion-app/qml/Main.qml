@@ -69,6 +69,8 @@ ApplicationWindow {
 
     Omnibox { id: urlBarResolver }
 
+    PlatformIntegration { window: window }
+
     header: ColumnLayout {
         spacing: 0
 
