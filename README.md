@@ -34,6 +34,15 @@ Supported systems: `x86_64-linux`, `aarch64-linux`, `aarch64-darwin`.
 | Next / previous tab | Ctrl+Tab / Ctrl+Shift+Tab |
 | Reload | Ctrl/Cmd+R, F5 |
 | Back / forward | Alt+Left / Alt+Right (Cmd+[ / Cmd+] on macOS) |
+| Command palette | Ctrl/Cmd+K |
+
+## Bangs
+
+Type `!name query` (or `query !name`) in the URL bar or the palette to search
+a site directly, e.g. `!gh cxx-qt`, `!nix ripgrep`, `!yt`. A bang on its own
+opens the site. The built-in set lives in `crates/ion-bangs/src/bang.rs`;
+unknown bangs go to the search engine. In the palette, `!` lists bangs and `>`
+lists commands.
 
 ## Layout
 

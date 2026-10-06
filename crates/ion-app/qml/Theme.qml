@@ -29,4 +29,9 @@ QtObject {
 
     // Motion
     readonly property int animationMs: 120
+
+    // Command palette
+    readonly property int paletteWidth: 640
+    readonly property int paletteMaxRows: 8
+    readonly property real scrimOpacity: 0.4
 }

@@ -10,6 +10,7 @@ publish = false
 
 [workspace.dependencies]
 ion-core = { path = "crates/ion-core" }
+ion-bangs = { path = "crates/ion-bangs" }
 
 cxx = "1.0"
 cxx-qt = "0.10"

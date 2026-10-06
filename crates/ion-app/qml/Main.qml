@@ -69,6 +69,17 @@ ApplicationWindow {
 
     Omnibox { id: urlBarResolver }
 
+    // Command palette (Ctrl/Cmd+K) reads and drives tabs through these.
+    readonly property int currentTabIndex: tabs.currentIndex
+    function activateTab(index) { tabs.currentIndex = index }
+    function tabEntries() {
+        const entries = []
+        for (let i = 0; i < tabs.count; ++i)
+            entries.push({ title: tabs.get(i).title, url: views.itemAt(i)?.url.toString() ?? tabs.get(i).initialUrl })
+        return entries
+    }
+    CommandPalette { id: palette; browser: window }
+
     header: ColumnLayout {
         spacing: 0
 
@@ -125,4 +136,5 @@ ApplicationWindow {
     Shortcut { sequences: [StandardKey.Back]; onActivated: window.currentView?.goBack() }
     Shortcut { sequences: [StandardKey.Forward]; onActivated: window.currentView?.goForward() }
     Shortcut { sequences: [StandardKey.Quit]; onActivated: Qt.quit() }
+    Shortcut { sequences: ["Ctrl+K"]; onActivated: palette.show() }
 }
