@@ -113,7 +113,9 @@ ApplicationWindow {
                 onTitleChanged: tabs.setProperty(index, "title", Basics.isNewTabUrl(url) ? "" : title)
                 onNewTabRequested: request => {
                     const background = request.destination === WebEngineNewWindowRequest.InNewBackgroundTab
-                    request.openIn(window.openTab("", !background))
+                    const tab = window.openTab("", !background)
+                    tab.showNewTabPage = false
+                    request.openIn(tab)
                 }
                 onOpenInNewTab: target => window.openTab(target, false)
             }

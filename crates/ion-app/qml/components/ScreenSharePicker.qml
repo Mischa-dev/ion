@@ -75,15 +75,31 @@ Popup {
             font.pixelSize: Theme.fontSize
         }
 
-        SourceList {
-            title: qsTr("Screens")
-            model: picker.request ? picker.request.screensModel : null
-            fromScreens: true
-        }
-        SourceList {
-            title: qsTr("Windows")
-            model: picker.request ? picker.request.windowsModel : null
-            fromScreens: false
+        // Scrolls when there are more windows than fit in the tab.
+        ScrollView {
+            id: scroller
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            implicitHeight: sources.implicitHeight
+            contentWidth: availableWidth
+            clip: true
+
+            ColumnLayout {
+                id: sources
+                width: scroller.availableWidth
+                spacing: Theme.spacing
+
+                SourceList {
+                    title: qsTr("Screens")
+                    model: picker.request ? picker.request.screensModel : null
+                    fromScreens: true
+                }
+                SourceList {
+                    title: qsTr("Windows")
+                    model: picker.request ? picker.request.windowsModel : null
+                    fromScreens: false
+                }
+            }
         }
 
         Button {

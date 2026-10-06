@@ -13,7 +13,7 @@ Rectangle {
 
     property date now: new Date()
 
-    visible: Basics.isNewTabUrl(view.url) && !view.loading
+    visible: view.showNewTabPage && Basics.isNewTabUrl(view.url) && !view.loading
     anchors.fill: parent
     z: 5
     color: Theme.background

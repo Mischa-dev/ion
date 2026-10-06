@@ -12,6 +12,10 @@ WebEngineView {
     // Emitted when Ion's own UI (context menu) wants `target` opened in a new tab.
     signal openInNewTab(url target)
 
+    // False for tabs a page opened (window.open), whose blank document the
+    // page fills in itself; those must not be covered by the new-tab page.
+    property bool showNewTabPage: true
+
     onNewWindowRequested: request => view.newTabRequested(request)
 
     // Both are off by default; Ion asks before a page uses them.
