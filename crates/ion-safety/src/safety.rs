@@ -219,13 +219,10 @@ impl Safety {
         let Subject::Agent(request) = &prompt.subject else {
             return None;
         };
+        // Anything that now denies the request (including a rule added by a
+        // config reload while the prompt was up) wins over the answer.
         let decision = self.policy.decide_agent(request);
-        match decision.reason {
-            Reason::HardLimit { .. } | Reason::Stopped | Reason::Paused | Reason::TakenOver => {
-                Some(decision.reason)
-            }
-            _ => None,
-        }
+        (decision.verdict == Verdict::Deny).then_some(decision.reason)
     }
 
     /// The person answered `prompt`. Remembers the answer as the prompt
@@ -646,6 +643,28 @@ mod tests {
 
         assert_eq!(safety.answer(&prompt, Choice::Allow), Ok(Verdict::Allow));
         assert_eq!(safety.request_agent(req).verdict(), Verdict::Allow);
+    }
+
+    #[test]
+    fn answers_after_a_new_config_deny_deny() {
+        let mut safety = Safety::in_memory();
+        let req = agent_req(Action::Submit, "https://github.com");
+        let prompt = safety.request_agent(req).prompt.unwrap();
+        safety.set_profiles(
+            [(
+                "ion".to_owned(),
+                AgentProfile {
+                    rules: vec![crate::policy::ConfigRule {
+                        what: crate::rule::What::Action(Action::Submit),
+                        site: crate::site::SitePattern::Any,
+                        effect: crate::rule::Effect::Deny,
+                    }],
+                    ..AgentProfile::default()
+                },
+            )]
+            .into(),
+        );
+        assert_eq!(safety.answer(&prompt, Choice::AllowOnce), Ok(Verdict::Deny));
     }
 
     #[test]

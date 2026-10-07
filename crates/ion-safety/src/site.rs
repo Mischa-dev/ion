@@ -188,18 +188,32 @@ impl TryFrom<String> for SitePattern {
 /// `url` with its user info, query and fragment removed, for the activity
 /// log: keeps where an agent went without the tokens and search terms URLs
 /// often carry.
+///
+/// URLs that carry content rather than an address (`data:`, `javascript:`,
+/// `blob:` and other URLs without a host, except local files) keep only
+/// their scheme, and the result is never longer than [`MAX_LOGGED_URL`].
 pub fn loggable_url(url: &str) -> String {
-    match url::Url::parse(url.trim()) {
-        Ok(mut url) => {
-            let _ = url.set_username("");
-            let _ = url.set_password(None);
-            url.set_query(None);
-            url.set_fragment(None);
-            url.to_string()
-        }
-        Err(_) => "[unparsable URL]".to_owned(),
+    let Ok(mut url) = url::Url::parse(url.trim()) else {
+        return "[unparsable URL]".to_owned();
+    };
+    if url.host_str().is_none_or(str::is_empty) && url.scheme() != "file" {
+        return format!("{}:[…]", url.scheme());
     }
+    let _ = url.set_username("");
+    let _ = url.set_password(None);
+    url.set_query(None);
+    url.set_fragment(None);
+    let text = url.to_string();
+    if text.chars().count() <= MAX_LOGGED_URL {
+        return text;
+    }
+    let mut short: String = text.chars().take(MAX_LOGGED_URL).collect();
+    short.push('…');
+    short
 }
+
+/// Longest URL written to the activity log, in characters.
+pub const MAX_LOGGED_URL: usize = 300;
 
 #[cfg(test)]
 mod tests {
@@ -323,5 +337,20 @@ mod tests {
             "https://example.com/a/b"
         );
         assert_eq!(loggable_url("nope"), "[unparsable URL]");
+        assert_eq!(
+            loggable_url("data:text/html,<p>secret page</p>"),
+            "data:[…]"
+        );
+        assert_eq!(
+            loggable_url("javascript:alert(document.cookie)"),
+            "javascript:[…]"
+        );
+        assert_eq!(loggable_url("blob:https://a.example/123"), "blob:[…]");
+        assert_eq!(
+            loggable_url("file:///home/me/a.html?x"),
+            "file:///home/me/a.html"
+        );
+        let long = format!("https://a.example/{}", "x".repeat(1000));
+        assert_eq!(loggable_url(&long).chars().count(), MAX_LOGGED_URL + 1);
     }
 }
