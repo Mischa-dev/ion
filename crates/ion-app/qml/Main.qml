@@ -110,7 +110,7 @@ ApplicationWindow {
                 profile: window.profile
                 url: initialUrl.length > 0 ? initialUrl : "about:blank"
 
-                onTitleChanged: tabs.setProperty(index, "title", Basics.isNewTabUrl(url) ? "" : title)
+                onTitleChanged: tabs.setProperty(index, "title", showNewTabPage && Basics.isNewTabUrl(url) ? "" : title)
                 onNewTabRequested: request => {
                     const background = request.destination === WebEngineNewWindowRequest.InNewBackgroundTab
                     const tab = window.openTab("", !background)

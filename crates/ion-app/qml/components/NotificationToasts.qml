@@ -17,7 +17,13 @@ ColumnLayout {
 
     function present(notification) {
         notification.show()
-        let kept = items.concat([notification])
+        // A notification with the same tag from the same site replaces the
+        // old one instead of stacking beside it.
+        const replaces = n => notification.tag.length > 0
+            && n.tag === notification.tag && n.origin.toString() === notification.origin.toString()
+        for (const old of items.filter(replaces))
+            old.close()
+        let kept = items.filter(n => !replaces(n)).concat([notification])
         while (kept.length > maxVisible) {
             kept[0].close()
             kept = kept.slice(1)
