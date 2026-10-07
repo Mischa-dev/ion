@@ -59,7 +59,7 @@ pub mod qobject {
         #[qproperty(QString, error)]
         #[qproperty(i32, revision)]
         /// Bumped whenever `pageCss` and `genericCss` may answer differently:
-        /// new lists, no lists, or the global switch.
+        /// new lists, no lists, the global switch or a per-site switch.
         #[qproperty(i32, filters_revision, cxx_name = "filtersRevision")]
         #[namespace = "ion"]
         type Adblock = super::AdblockRust;
@@ -504,6 +504,8 @@ impl qobject::Adblock {
         }
         let next = self.revision.wrapping_add(1);
         self.as_mut().set_revision(next);
+        // Other tabs on this site update their hiding sheets.
+        self.as_mut().filters_changed();
         true
     }
 
