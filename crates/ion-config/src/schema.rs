@@ -140,6 +140,9 @@ pub struct Theme {
     pub palette: Option<PathBuf>,
     /// What web pages see of the theme.
     pub pages: PageTheming,
+    /// Give page scrollbars, form controls and text selection Ion's colors,
+    /// unless the page styles them itself.
+    pub page_controls: bool,
     /// Per-site theming, keyed by site (`example.com` also covers its
     /// subdomains; the most specific entry wins).
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
@@ -153,6 +156,7 @@ impl Default for Theme {
             name: "auto".into(),
             palette: None,
             pages: PageTheming::default(),
+            page_controls: true,
             sites: BTreeMap::new(),
         }
     }

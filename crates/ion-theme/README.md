@@ -42,6 +42,10 @@ Per site, `[theme.sites."<site>"]` can switch darkening on or off
 subdomains, and the most specific entry wins. `prefers-color-scheme` stays
 browser-wide: QtWebEngine has one setting for every page.
 
+`theme.pageControls` (on by default) gives page scrollbars, form controls
+(`accent-color`) and text selection the palette's colors. The CSS sits in a
+cascade layer, so a page's own styles always win over it.
+
 Changes apply to open pages live. QtWebEngine has no API for a page color
 scheme, so `cpp/theme.cpp` in `ion-app` feeds it through the
 `QStyleHints::colorSchemeChanged` signal it listens to; see the comment there.

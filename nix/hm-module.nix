@@ -101,6 +101,7 @@ in
                 "darken"
               ])
               "What web pages see: the theme's light/dark (`match`), the system's, or `match` plus darkening pages without a dark style.";
+          pageControls = setting types.bool "Give web page scrollbars, checkboxes and text selection the theme's colors, unless the page styles them itself.";
           sites = mkOption {
             type = types.attrsOf (
               types.submodule {

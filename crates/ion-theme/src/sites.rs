@@ -69,25 +69,27 @@ pub fn darken(sites: &BTreeMap<String, SiteTheme>, url: &str, dark: bool, defaul
         .unwrap_or(default)
 }
 
-/// A user script that adds each site's CSS to its pages, or an empty string
-/// when no site has any. It matches hosts itself, so one script serves every
-/// page, and running it again replaces the CSS it added before.
-pub fn css_script(sites: &BTreeMap<String, SiteTheme>) -> String {
+/// A user script that adds `base` to every page and each site's CSS to its
+/// pages, or an empty string when there is no CSS at all. It matches hosts
+/// itself, so one script serves every page, and running it again replaces the
+/// CSS it added before.
+pub fn css_script(sites: &BTreeMap<String, SiteTheme>, base: &str) -> String {
     let css: BTreeMap<String, &str> = sites
         .iter()
         .filter(|(_, s)| !s.css.trim().is_empty())
         .filter_map(|(site, s)| Some((normalize_site(site)?, s.css.as_str())))
         .collect();
-    if css.is_empty() {
+    if css.is_empty() && base.trim().is_empty() {
         return String::new();
     }
     let map = serde_json::to_string(&css).expect("strings always serialize");
+    let base = serde_json::to_string(base).expect("strings always serialize");
     format!(
         r#"(function () {{
   const css = {map};
   const host = location.hostname.toLowerCase().replace(/\.$/, "");
   const parts = host.split(".");
-  let text = "";
+  let text = {base};
   for (let i = parts.length - 1; i >= 0; i--) {{
     const site = parts.slice(i).join(".");
     if (Object.hasOwn(css, site)) text += css[site] + "\n";
@@ -217,8 +219,8 @@ mod tests {
 
     #[test]
     fn script_carries_only_sites_with_css() {
-        assert_eq!(css_script(&sites(&[("a.com", Some(true), " ")])), "");
-        let script = css_script(&sites(&[("A.com", None, "body { color: \"red\" }")]));
+        assert_eq!(css_script(&sites(&[("a.com", Some(true), " ")]), ""), "");
+        let script = css_script(&sites(&[("A.com", None, "body { color: \"red\" }")]), "");
         assert!(
             script.contains(r#"{"a.com":"body { color: \"red\" }"}"#),
             "{script}"
@@ -226,5 +228,14 @@ mod tests {
         // Both scripts share the isolated-world state.
         assert!(script.contains("window.__ionSiteCss ??="));
         assert!(clear_css_script().contains("window.__ionSiteCss.style?.remove()"));
+    }
+
+    #[test]
+    fn script_carries_base_css_for_every_page() {
+        let script = css_script(&BTreeMap::new(), "a { color: red }\n");
+        assert!(
+            script.contains(r#"let text = "a { color: red }\n";"#),
+            "{script}"
+        );
     }
 }

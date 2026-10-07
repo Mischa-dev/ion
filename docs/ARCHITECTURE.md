@@ -79,8 +79,10 @@ Shared files with small, append-only edits: root `Cargo.toml`,
   `Theme.qml` binds them to the `[theme]` config section; see
   `crates/ion-theme/README.md`. Sizes and motion tokens are still static.
 - Web pages follow the theme's light/dark (`theme.pages`), with per-site
-  darkening and CSS (`[theme.sites]`); `BrowserTab` re-applies its settings when
-  either changes. Palette-tinted dark mode is not built yet.
+  darkening and CSS (`[theme.sites]`) and page controls in the palette's colors
+  (`theme.pageControls`); `BrowserTab` re-applies its settings when any of these
+  changes. Palette-tinted dark mode isn't possible: Chromium hard-codes the
+  darkened background.
 - `ion_core::navigation::Omnibox` decides between address and search. Extra
   stages implement `InputStep` and run first; `ion_bangs::BangTable` is one.
   Config feeds user bangs through `BangTable::apply`.

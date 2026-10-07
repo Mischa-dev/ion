@@ -150,8 +150,10 @@ pub struct ThemeEngineRust {
     /// `darken = true` depends on it whatever `theme.pages` is.
     page_dark: Option<bool>,
     site_css_script: QString,
-    /// `[theme.sites]`, with site names lower-cased.
+    /// `[theme.sites]`, with site names normalized.
     sites: BTreeMap<String, SiteTheme>,
+    /// The palette's page-controls CSS, whether or not it is on.
+    controls_css: String,
     config_subscription: Option<ion_config::Subscription>,
 
     /// The palette file being watched, and its watcher.
@@ -196,6 +198,7 @@ impl Default for ThemeEngineRust {
             page_dark: None,
             site_css_script: QString::default(),
             sites: BTreeMap::new(),
+            controls_css: String::new(),
             config_subscription: None,
             watched: None,
             reload_queued: Arc::default(),
@@ -223,6 +226,20 @@ impl ThemeEngineRust {
         self.danger = qcolor(p.danger);
         self.warning = qcolor(p.warning);
         self.success = qcolor(p.success);
+        self.controls_css = ion_theme::controls::css(p);
+    }
+
+    /// Rebuild the script that adds CSS to pages. Returns whether it changed.
+    fn update_page_script(&mut self, page_controls: bool) -> bool {
+        let page_css = if page_controls {
+            self.controls_css.clone()
+        } else {
+            String::new()
+        };
+        let script = QString::from(ion_theme::sites::css_script(&self.sites, &page_css).as_str());
+        let changed = script != self.site_css_script;
+        self.site_css_script = script;
+        changed
     }
 
     /// Decide what pages see of the current palette and hand QtWebEngine the
@@ -327,7 +344,9 @@ impl qobject::ThemeEngine {
             Err(e) => Some(e.to_string()),
         };
         let error = error.or(pages.as_ref().err().cloned());
-        let page_changed = rust.update_pages(pages.unwrap_or_default());
+        let page_controls = ion_config::global().config().theme.page_controls;
+        let page_changed =
+            rust.update_pages(pages.unwrap_or_default()) | rust.update_page_script(page_controls);
         let error = QString::from(error.unwrap_or_default().as_str());
         let error_changed = rust.error != error;
         rust.error = error;
@@ -357,10 +376,11 @@ impl qobject::ThemeEngine {
         QString::from(ion_theme::sites::clear_css_script().as_str())
     }
 
-    /// Re-read `[theme.sites]`; tells pages when it changed.
+    /// Re-read `[theme.sites]` and `theme.pageControls`; tells pages when
+    /// either changed.
     fn reload_sites(mut self: Pin<&mut Self>) {
-        let sites: BTreeMap<String, SiteTheme> = ion_config::global()
-            .config()
+        let config = ion_config::global().config();
+        let sites: BTreeMap<String, SiteTheme> = config
             .theme
             .sites
             .iter()
@@ -378,14 +398,12 @@ impl qobject::ThemeEngine {
                 Some((site, theme))
             })
             .collect();
-        if sites == self.sites {
-            return;
-        }
-        let script = QString::from(ion_theme::sites::css_script(&sites).as_str());
         let mut rust = self.as_mut().rust_mut();
+        let sites_changed = sites != rust.sites;
         rust.sites = sites;
-        rust.site_css_script = script;
-        self.page_scheme_changed();
+        if rust.update_page_script(config.theme.page_controls) || sites_changed {
+            self.page_scheme_changed();
+        }
     }
 
     /// Watch `path` for changes (or stop watching). Returns an error message
