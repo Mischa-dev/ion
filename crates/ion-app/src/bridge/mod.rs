@@ -10,4 +10,5 @@ pub mod omnibox;
 pub mod palette;
 pub mod platform;
 pub mod tabs;
+pub mod theme;
 pub mod webengine;

@@ -1,0 +1,16 @@
+# Nord, https://www.nordtheme.com (MIT)
+name = "Nord"
+scheme = "dark"
+
+[colors]
+background = "#2e3440"
+surface = "#3b4252"
+surface_raised = "#434c5e"
+surface_hover = "#4c566a"
+border = "#434c5e"
+text = "#eceff4"
+text_muted = "#a5adbb"
+accent = "#88c0d0"
+danger = "#bf616a"
+warning = "#ebcb8b"
+success = "#a3be8c"

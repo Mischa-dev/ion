@@ -37,8 +37,11 @@ animations = { enable = true, speed = 1.0 }
 
 [theme]
 source = "builtin"           # "builtin" | "dms" | "system" | "manual"
-name = "dark"
-# palette = "/path/to/palette.json"   # for "manual" (and "dms" to override its path)
+name = "auto"                # "auto" follows light/dark mode; or "dark", "light",
+                             # "catppuccin-mocha", "catppuccin-latte", "nord", or
+                             # a palette file in ~/.config/ion/themes/<name>.toml
+# palette = "/path/to/palette.toml"   # "manual" defaults to ~/.config/ion/palette.toml,
+                                      # "dms" to ~/.config/ion/dms-palette.toml
 
 [bangs]                      # your own, on top of Ion's built-in set
 # gh = "https://github.com/search?q={}"   # adds or replaces !gh
