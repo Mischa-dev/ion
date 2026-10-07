@@ -14,6 +14,18 @@ pub struct SiteTheme {
     pub css: String,
 }
 
+/// A configured site as the browser spells its host: IDNA ASCII form
+/// (`bücher.de` becomes `xn--bcher-kva.de`), lower-cased, without a trailing
+/// dot. `None` when it is not a valid host.
+pub fn normalize_site(site: &str) -> Option<String> {
+    let site = site.trim().trim_end_matches('.');
+    if site.is_empty() {
+        return None;
+    }
+    let host = url::Host::parse(site).ok()?.to_string();
+    Some(host.trim_end_matches('.').to_ascii_lowercase())
+}
+
 /// The host of an http(s) URL, lower-cased and without a trailing dot.
 fn host_of(url: &str) -> Option<String> {
     let parsed = url::Url::parse(url).ok()?;
@@ -64,12 +76,7 @@ pub fn css_script(sites: &BTreeMap<String, SiteTheme>) -> String {
     let css: BTreeMap<String, &str> = sites
         .iter()
         .filter(|(_, s)| !s.css.trim().is_empty())
-        .map(|(site, s)| {
-            (
-                site.trim_end_matches('.').to_ascii_lowercase(),
-                s.css.as_str(),
-            )
-        })
+        .filter_map(|(site, s)| Some((normalize_site(site)?, s.css.as_str())))
         .collect();
     if css.is_empty() {
         return String::new();
@@ -154,6 +161,24 @@ mod tests {
         assert_eq!(host_of("http://[::1]:8080/").as_deref(), Some("[::1]"));
         assert_eq!(host_of("about:blank"), None);
         assert_eq!(host_of("file:///tmp/x.html"), None);
+    }
+
+    #[test]
+    fn sites_normalize_like_hosts() {
+        assert_eq!(
+            normalize_site("Bücher.DE.").as_deref(),
+            Some("xn--bcher-kva.de")
+        );
+        assert_eq!(
+            normalize_site("Example.com").as_deref(),
+            Some("example.com")
+        );
+        assert_eq!(normalize_site("[::1]").as_deref(), Some("[::1]"));
+        assert_eq!(normalize_site(""), None);
+        assert_eq!(normalize_site("a b.com"), None);
+        // A normalized entry matches the URL the browser reports.
+        let s = sites(&[("xn--bcher-kva.de", Some(false), "")]);
+        assert_eq!(matching(&s, "https://bücher.de/").len(), 1);
     }
 
     #[test]

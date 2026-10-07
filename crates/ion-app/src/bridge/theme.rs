@@ -364,13 +364,18 @@ impl qobject::ThemeEngine {
             .theme
             .sites
             .iter()
-            .map(|(site, theme)| {
-                let site = site.trim_end_matches('.').to_ascii_lowercase();
+            .filter_map(|(site, theme)| {
+                let Some(site) = ion_theme::sites::normalize_site(site) else {
+                    eprintln!(
+                        "ion: config: ignoring [theme.sites] entry {site:?}: not a host name"
+                    );
+                    return None;
+                };
                 let theme = SiteTheme {
                     darken: theme.darken,
                     css: theme.css.clone(),
                 };
-                (site, theme)
+                Some((site, theme))
             })
             .collect();
         if sites == self.sites {
