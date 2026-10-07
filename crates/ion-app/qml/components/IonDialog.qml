@@ -51,7 +51,6 @@ Dialog {
             implicitHeight: Theme.urlBarHeight
             leftPadding: Theme.spacing * 3
             rightPadding: Theme.spacing * 3
-            focusPolicy: Qt.NoFocus
 
             contentItem: Text {
                 text: button.text
@@ -65,6 +64,9 @@ Dialog {
                 color: button.primary ? Theme.accent
                      : button.down ? Theme.surfaceRaised : button.hovered ? Theme.surfaceHover : Theme.surfaceRaised
                 opacity: button.primary && button.down ? 0.85 : 1
+                // Keyboard focus (Tab) shows as a ring, like the focused URL bar.
+                border.width: button.visualFocus ? Theme.hairline * 2 : 0
+                border.color: button.primary ? Theme.text : Theme.accent
             }
         }
     }
