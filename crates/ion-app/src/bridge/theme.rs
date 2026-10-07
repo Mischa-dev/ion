@@ -141,6 +141,9 @@ pub struct ThemeEngineRust {
     /// The system's light/dark when pages follow it, so they re-apply when
     /// it changes.
     page_system_dark: Option<bool>,
+    /// The palette's darkness pages were last told about: per-site
+    /// `darken = true` depends on it whatever `theme.pages` is.
+    page_dark: Option<bool>,
     site_css_script: QString,
     /// `[theme.sites]`, with site names lower-cased.
     sites: BTreeMap<String, SiteTheme>,
@@ -185,6 +188,7 @@ impl Default for ThemeEngineRust {
             // Not a valid scheme, so the first reload always sets it.
             page_scheme: -1,
             page_system_dark: None,
+            page_dark: None,
             site_css_script: QString::default(),
             sites: BTreeMap::new(),
             config_subscription: None,
@@ -234,9 +238,19 @@ impl ThemeEngineRust {
         if page_scheme != self.page_scheme {
             qobject::set_web_color_scheme(page_scheme);
         }
-        let state = (page_scheme, darken, system_dark);
-        let old = (self.page_scheme, self.darken_pages, self.page_system_dark);
-        (self.page_scheme, self.darken_pages, self.page_system_dark) = state;
+        let state = (page_scheme, darken, system_dark, Some(self.dark));
+        let old = (
+            self.page_scheme,
+            self.darken_pages,
+            self.page_system_dark,
+            self.page_dark,
+        );
+        (
+            self.page_scheme,
+            self.darken_pages,
+            self.page_system_dark,
+            self.page_dark,
+        ) = state;
         state != old
     }
 
