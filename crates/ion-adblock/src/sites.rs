@@ -27,8 +27,12 @@ fn normalize(host: &str) -> String {
     }
 }
 
+/// Whether `domain` is a suffix listed in the public suffix list, like `com`,
+/// `co.uk` or `github.io`. Hosts the list doesn't know, such as `localhost`
+/// or an intranet name, are not.
 fn is_public_suffix(domain: &str) -> bool {
-    !domain.contains('.') || psl::suffix_str(domain) == Some(domain)
+    psl::suffix(domain.as_bytes())
+        .is_some_and(|s| s.is_known() && s.as_bytes() == domain.as_bytes())
 }
 
 /// Sites where blocking is off. Turning a site off also covers its subdomains,
@@ -144,6 +148,10 @@ mod tests {
         assert_eq!(site_of("https://www.com/").as_deref(), Some("www.com"));
         assert_eq!(site_of("https://www.co.uk/").as_deref(), Some("www.co.uk"));
         assert_eq!(
+            site_of("http://www.localhost/").as_deref(),
+            Some("localhost")
+        );
+        assert_eq!(
             site_of("https://www.bbc.co.uk/").as_deref(),
             Some("bbc.co.uk")
         );
@@ -210,6 +218,10 @@ mod tests {
         assert!(s.set_enabled("someone.github.io", false));
         assert!(!s.is_enabled("someone.github.io"));
         assert!(s.is_enabled("other.github.io"));
+        // Local and intranet hosts are not public suffixes.
+        assert!(s.set_enabled("localhost", false));
+        assert!(!s.is_enabled("localhost"));
+        assert!(s.set_enabled("intranet", false));
         // Nor sneaked in through the saved file.
         let parsed = SiteSettings::parse("github.io\nexample.com\n");
         assert_eq!(parsed.disabled_sites().collect::<Vec<_>>(), ["example.com"]);
