@@ -87,6 +87,59 @@ pub struct AgentProfile {
     pub rules: Vec<ConfigRule>,
 }
 
+impl AgentProfile {
+    /// A profile from config text. `rules` are (action pattern, site pattern,
+    /// effect). Sites and rules that don't parse are left out and described
+    /// in the returned warnings, prefixed with `agents.<id>`.
+    pub fn from_config(
+        id: &str,
+        name: &str,
+        trust: TrustLevel,
+        trusted_sites: &[String],
+        connectors: &[String],
+        rules: &[(String, String, Effect)],
+    ) -> (AgentProfile, Vec<String>) {
+        let mut warnings = Vec::new();
+        let trusted_sites = trusted_sites
+            .iter()
+            .filter_map(|s| {
+                let pattern = SitePattern::parse(s);
+                if pattern.is_none() {
+                    warnings.push(format!("agents.{id}.trustedSites: {s:?} is not a site"));
+                }
+                pattern
+            })
+            .collect();
+        let rules = rules
+            .iter()
+            .enumerate()
+            .filter_map(|(i, (action, site, effect))| {
+                let what = What::parse(action);
+                let pattern = SitePattern::parse(site);
+                if what.is_none() {
+                    warnings.push(format!("agents.{id}.rules[{i}]: unknown action {action:?}"));
+                }
+                if pattern.is_none() {
+                    warnings.push(format!("agents.{id}.rules[{i}]: {site:?} is not a site"));
+                }
+                Some(ConfigRule {
+                    what: what?,
+                    site: pattern?,
+                    effect: *effect,
+                })
+            })
+            .collect();
+        let profile = AgentProfile {
+            name: name.to_owned(),
+            trust,
+            trusted_sites,
+            connectors: connectors.to_vec(),
+            rules,
+        };
+        (profile, warnings)
+    }
+}
+
 /// The name people see for an agent: its profile name, "Ion Agent" for the
 /// built-in agent, or the id.
 pub fn display_name(id: &str, profile: Option<&AgentProfile>) -> String {
@@ -947,6 +1000,37 @@ mod tests {
         policy.end_session();
         assert_eq!(policy.user_rules().len(), 1);
         assert!(!policy.is_stopped());
+    }
+
+    #[test]
+    fn profiles_from_config_skip_what_does_not_parse() {
+        let (profile, warnings) = AgentProfile::from_config(
+            "ion",
+            "",
+            TrustLevel::TrustedSites,
+            &["github.com".into(), "a/b".into()],
+            &["github".into()],
+            &[
+                ("submit".into(), "example.com".into(), Effect::Deny),
+                ("hack".into(), "*".into(), Effect::Allow),
+                ("tier:read".into(), "".into(), Effect::Allow),
+            ],
+        );
+        assert_eq!(
+            profile.trusted_sites,
+            [SitePattern::Domain("github.com".into())]
+        );
+        assert_eq!(profile.connectors, ["github"]);
+        assert_eq!(
+            profile.rules,
+            [ConfigRule {
+                what: What::Action(Action::Submit),
+                site: SitePattern::Domain("example.com".into()),
+                effect: Effect::Deny,
+            }]
+        );
+        assert_eq!(warnings.len(), 3, "{warnings:?}");
+        assert!(warnings[0].starts_with("agents.ion.trustedSites"));
     }
 
     #[test]

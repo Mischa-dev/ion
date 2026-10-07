@@ -52,6 +52,13 @@ pub const COMMANDS: &[Command] = &[
     command("reload", "Reload page", "refresh", "Ctrl+R"),
     command("back", "Go back", "history previous", "Alt+Left"),
     command("forward", "Go forward", "history next", "Alt+Right"),
+    command(
+        "stop-agents",
+        "Stop all agents",
+        "ai halt pause safety",
+        "Ctrl+Shift+Escape",
+    ),
+    command("resume-agents", "Resume agents", "ai start safety", ""),
     command("quit", "Quit Ion", "exit close window", "Ctrl+Q"),
 ];
 

@@ -86,6 +86,8 @@ Popup {
         case "reload": view?.reload(); break
         case "back": view?.goBack(); break
         case "forward": view?.goForward(); break
+        case "stop-agents": Safety.stopAgents(); break
+        case "resume-agents": Safety.resumeAgents(); break
         case "quit": Qt.quit(); break
         default: console.warn("CommandPalette: unknown command", id)
         }
