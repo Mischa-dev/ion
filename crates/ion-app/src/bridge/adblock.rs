@@ -318,6 +318,8 @@ impl qobject::Adblock {
                 // Nothing to compile; stop blocking with the removed lists.
                 self.as_mut().rust_mut().shield.clear_blocker();
                 self.as_mut().set_ready(false);
+                self.as_mut().set_last_updated(0.0);
+                self.as_mut().rust_mut().refresh_error.clear();
             } else {
                 self.as_mut().spawn_refresh(false, false);
             }
