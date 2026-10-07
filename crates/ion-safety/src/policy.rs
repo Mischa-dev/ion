@@ -200,6 +200,9 @@ pub enum HardLimit {
     ProtectedPage,
     /// A site action without a site: a bug in the caller, refused.
     MissingSite,
+    /// A site on an action that isn't about one (listing tabs, connectors):
+    /// refused, so a made-up site can't borrow that site's trust.
+    UnexpectedSite,
     /// An action on a tab without the tab: refused, so taking a tab back
     /// can't be sidestepped.
     MissingTab,
@@ -264,6 +267,9 @@ impl fmt::Display for Reason {
             Reason::HardLimit {
                 limit: HardLimit::MissingSite,
             } => f.write_str("The request didn't say which site it was for"),
+            Reason::HardLimit {
+                limit: HardLimit::UnexpectedSite,
+            } => f.write_str("The request named a site for something that isn't about one"),
             Reason::HardLimit {
                 limit: HardLimit::MissingTab,
             } => f.write_str("The request didn't say which tab it was for"),
@@ -470,6 +476,9 @@ impl Policy {
         if request.action.needs_site() && request.site.is_none() {
             return deny_hard(HardLimit::MissingSite);
         }
+        if !request.action.needs_site() && request.site.is_some() {
+            return deny_hard(HardLimit::UnexpectedSite);
+        }
         if request.action.needs_tab() && request.tab.is_none() {
             return deny_hard(HardLimit::MissingTab);
         }
@@ -651,6 +660,23 @@ mod tests {
                 .verdict,
             Verdict::Allow
         );
+    }
+
+    #[test]
+    fn site_less_actions_refuse_a_site() {
+        let mut trusted = profile(TrustLevel::TrustedSites);
+        trusted.trusted_sites = vec![SitePattern::parse("github.com").unwrap()];
+        trusted.connectors = vec!["github".into()];
+        let policy = policy_with("ion", trusted);
+        for action in [Action::ListTabs, Action::UseConnector("github".into())] {
+            let d = policy.decide_agent(&req("ion", action, GH));
+            assert_eq!(
+                d.reason,
+                Reason::HardLimit {
+                    limit: HardLimit::UnexpectedSite
+                }
+            );
+        }
     }
 
     #[test]

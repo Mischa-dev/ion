@@ -86,7 +86,8 @@ the "why was this blocked?" text in the UI.
      trust. Reading them is denied too.
    - An action about a site must name the site, and an action on a tab must
      name the tab (so taking a tab back can't be sidestepped); requests that
-     don't are refused.
+     don't are refused. Actions not about a site (listing tabs, connectors)
+     must not name one, so a made-up site can't borrow a trusted site's trust.
    - Agent and connector ids must be plain identifiers (`[A-Za-z0-9._-]`, at
      most 64 characters), because prompts show them.
 2. **Stop and take-over** (deny): when the global stop is engaged, every agent
