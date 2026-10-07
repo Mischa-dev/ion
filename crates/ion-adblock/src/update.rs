@@ -129,8 +129,8 @@ pub fn load(store: &Store, lists: &[FilterList]) -> Option<Blocker> {
 /// Guards against saving a captive portal page or an error page as a list.
 /// Any text is a valid filter pattern, so this looks at the shape instead:
 /// no HTML or JSON, and at least half of the non-comment lines look like
-/// rules (network filters have no spaces; cosmetic rules have `##`; hosts
-/// entries start with an IP address). Headers and comments are optional.
+/// rules (network filters are URL patterns without spaces; cosmetic rules
+/// have `##`; hosts entries start with an IP address). Headers and comments are optional.
 fn looks_like_filter_list(text: &str) -> bool {
     let start = text.trim_start();
     if start.starts_with(['<', '{']) {
@@ -175,7 +175,12 @@ fn is_rule(line: &str) -> bool {
     let mut words = line.split_whitespace();
     let first = words.next().unwrap_or("");
     let is_hosts_entry = first.parse::<std::net::IpAddr>().is_ok() && words.next().is_some();
-    is_hosts_entry || is_cosmetic(line) || !line.contains(char::is_whitespace)
+    if is_hosts_entry || is_cosmetic(line) {
+        return true;
+    }
+    // Network filters are URL patterns: no spaces, and some URL or filter
+    // syntax. A bare word like `Unauthorized` is an error body, not a rule.
+    !line.contains(char::is_whitespace) && line.contains(['.', '/', '|', '^', '$', '*', '='])
 }
 
 #[cfg(test)]

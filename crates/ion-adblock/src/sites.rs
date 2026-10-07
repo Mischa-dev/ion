@@ -46,6 +46,7 @@ impl SiteSettings {
             .map(|line| line.split('#').next().unwrap_or("").trim())
             .filter(|line| !line.is_empty())
             .map(normalize)
+            .filter(|site| !is_public_suffix(site))
             .collect();
         Self { disabled }
     }
@@ -90,8 +91,13 @@ impl SiteSettings {
 
     /// Switch blocking on or off for `site`. Switching a subdomain back on
     /// also clears a switch on its parent domain, since that one covered it.
-    pub fn set_enabled(&mut self, site: &str, enabled: bool) {
+    /// Public suffixes like `github.io` can't be switched off, since that
+    /// would switch off every site under them; returns false for those.
+    pub fn set_enabled(&mut self, site: &str, enabled: bool) -> bool {
         let site = normalize(site);
+        if !enabled && is_public_suffix(&site) {
+            return false;
+        }
         if enabled {
             let covering: Vec<String> = suffixes(&site)
                 .filter(|s| self.disabled.contains(*s))
@@ -103,6 +109,7 @@ impl SiteSettings {
         } else {
             self.disabled.insert(site);
         }
+        true
     }
 
     pub fn disabled_sites(&self) -> impl Iterator<Item = &str> {
@@ -192,5 +199,19 @@ mod tests {
         s.set_enabled("example.com", false);
         s.save(&path).unwrap();
         assert_eq!(SiteSettings::load(&path).unwrap(), s);
+    }
+
+    #[test]
+    fn public_suffixes_cannot_be_switched_off() {
+        let mut s = SiteSettings::default();
+        assert!(!s.set_enabled("github.io", false));
+        assert!(!s.set_enabled("co.uk", false));
+        assert!(s.is_enabled("someone.github.io"));
+        assert!(s.set_enabled("someone.github.io", false));
+        assert!(!s.is_enabled("someone.github.io"));
+        assert!(s.is_enabled("other.github.io"));
+        // Nor sneaked in through the saved file.
+        let parsed = SiteSettings::parse("github.io\nexample.com\n");
+        assert_eq!(parsed.disabled_sites().collect::<Vec<_>>(), ["example.com"]);
     }
 }

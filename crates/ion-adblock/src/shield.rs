@@ -62,13 +62,13 @@ impl Shield {
     }
 
     /// Switch blocking on or off for the site of `page_url`. Returns false
-    /// (and changes nothing) for pages without a site, like `about:blank`.
+    /// (and changes nothing) for pages without a site, like `about:blank`,
+    /// and when switching off a public suffix like `github.io`.
     pub fn set_enabled_on(&mut self, page_url: &str, enabled: bool) -> bool {
         let Some(site) = site_of(page_url) else {
             return false;
         };
-        self.sites.set_enabled(&site, enabled);
-        true
+        self.sites.set_enabled(&site, enabled)
     }
 
     /// Requests blocked on the current page of `page_url`'s site.
