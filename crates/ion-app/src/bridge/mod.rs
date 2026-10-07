@@ -4,6 +4,7 @@
 //! this directory automatically; only the `mod` line below is shared.
 
 pub mod basics;
+pub mod config;
 pub mod downloads;
 pub mod omnibox;
 pub mod webengine;

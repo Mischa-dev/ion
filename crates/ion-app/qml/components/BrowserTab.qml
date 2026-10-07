@@ -45,5 +45,9 @@ WebEngineView {
         omnibox: tabOmnibox
         onOpenInNewTab: target => view.openInNewTab(target)
     }
-    Omnibox { id: tabOmnibox }
+    Omnibox {
+        id: tabOmnibox
+        searchEngineName: Config.searchEngineName
+        searchTemplate: Config.searchTemplate
+    }
 }

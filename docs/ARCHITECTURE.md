@@ -68,3 +68,5 @@ Shared files with small, append-only edits: root `Cargo.toml`,
   declared inside `BrowserTab.qml`; window-wide pieces (downloads panel,
   fullscreen) sit next to the view stack in `Main.qml`. Zoom levels are saved
   per site to `zoom.txt` in Ion's data directory.
+- Settings come from `ion-config` (layered TOML, live reload, `programs.ion`
+  home-manager module); see [CONFIG.md](CONFIG.md).

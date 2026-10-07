@@ -11,12 +11,21 @@ publish = false
 [workspace.dependencies]
 ion-core = { path = "crates/ion-core" }
 ion-basics = { path = "crates/ion-basics" }
+ion-config = { path = "crates/ion-config" }
 
 cxx = "1.0"
 cxx-qt = "0.10"
 cxx-qt-lib = { version = "0.10", features = ["qt_gui", "qt_qml"] }
 cxx-qt-build = "0.10"
 url = "2.5"
+
+# ion-config
+notify = "8"
+serde = { version = "1", features = ["derive"] }
+serde_ignored = "0.1"
+tempfile = "3"
+toml = "1"
+toml_edit = "0.25"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "warn"
