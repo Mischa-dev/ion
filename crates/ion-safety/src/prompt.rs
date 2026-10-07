@@ -57,6 +57,11 @@ pub struct Prompt {
     /// The answers offered, with their button labels, in display order; the
     /// last is the primary button.
     pub choices: Vec<(Choice, String)>,
+    /// How many times the request's tab had closed when the prompt was
+    /// made. Tab ids come back when a closed tab is reopened, so this is
+    /// what tells a prompt from the tab's earlier life apart.
+    #[serde(default)]
+    pub tab_generation: u32,
 }
 
 /// How a page is named in prompts.
@@ -104,6 +109,7 @@ impl Prompt {
                 (Choice::Allow, "Allow".to_owned()),
             ],
             subject: Subject::Site(request),
+            tab_generation: 0,
         }
     }
 
@@ -134,6 +140,7 @@ impl Prompt {
             text,
             choices,
             subject: Subject::Agent(request),
+            tab_generation: 0,
         }
     }
 

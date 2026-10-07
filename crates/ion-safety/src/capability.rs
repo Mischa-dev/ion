@@ -222,6 +222,15 @@ impl Action {
     pub fn needs_site(&self) -> bool {
         !matches!(self, Action::ListTabs | Action::UseConnector(_))
     }
+
+    /// Whether the action works on an existing tab and so needs one in its
+    /// request (so taking a tab back can't be sidestepped by leaving it out).
+    pub fn needs_tab(&self) -> bool {
+        !matches!(
+            self,
+            Action::ListTabs | Action::OpenTab | Action::UseConnector(_) | Action::ReadCredentials
+        )
+    }
 }
 
 impl fmt::Display for Action {
@@ -319,5 +328,9 @@ mod tests {
         assert_eq!(Action::ReadCredentials.tier(), Tier::Forbidden);
         assert!(!Action::ListTabs.needs_site());
         assert!(Action::Navigate.needs_site());
+        assert!(Action::Interact.needs_tab());
+        assert!(Action::Submit.needs_tab());
+        assert!(!Action::OpenTab.needs_tab());
+        assert!(!Action::ListTabs.needs_tab());
     }
 }

@@ -147,6 +147,9 @@ pub enum HardLimit {
     ProtectedPage,
     /// A site action without a site: a bug in the caller, refused.
     MissingSite,
+    /// An action on a tab without the tab: refused, so taking a tab back
+    /// can't be sidestepped.
+    MissingTab,
 }
 
 /// Why a decision came out the way it did.
@@ -191,6 +194,9 @@ impl fmt::Display for Reason {
             Reason::HardLimit {
                 limit: HardLimit::MissingSite,
             } => f.write_str("The request didn't say which site it was for"),
+            Reason::HardLimit {
+                limit: HardLimit::MissingTab,
+            } => f.write_str("The request didn't say which tab it was for"),
             Reason::Stopped => f.write_str("All agents are stopped"),
             Reason::Paused => f.write_str("This agent is paused"),
             Reason::TakenOver => f.write_str("You took this tab back"),
@@ -384,6 +390,9 @@ impl Policy {
         if request.action.needs_site() && request.site.is_none() {
             return deny_hard(HardLimit::MissingSite);
         }
+        if request.action.needs_tab() && request.tab.is_none() {
+            return deny_hard(HardLimit::MissingTab);
+        }
         if request
             .site
             .as_ref()
@@ -562,6 +571,27 @@ mod tests {
                 .verdict,
             Verdict::Allow
         );
+    }
+
+    #[test]
+    fn tab_actions_need_a_tab() {
+        let mut policy = policy_with("ion", profile(TrustLevel::Full));
+        policy.set_taken_over(1, true);
+        let mut no_tab = req("ion", Action::Interact, GH);
+        no_tab.tab = None;
+        let d = policy.decide_agent(&no_tab);
+        assert_eq!(
+            d.reason,
+            Reason::HardLimit {
+                limit: HardLimit::MissingTab
+            }
+        );
+        let mut open = req("ion", Action::OpenTab, GH);
+        open.tab = None;
+        assert_eq!(policy.decide_agent(&open).verdict, Verdict::Allow);
+        let mut list = req("ion", Action::ListTabs, None);
+        list.tab = None;
+        assert_eq!(policy.decide_agent(&list).verdict, Verdict::Allow);
     }
 
     #[test]

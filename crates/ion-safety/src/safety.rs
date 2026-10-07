@@ -1,7 +1,7 @@
 //! [`Safety`]: the policy plus remembered rules, prompts and the activity log,
 //! behind one object.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::io;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -62,9 +62,9 @@ fn system_clock() -> u64 {
 
 pub struct Safety {
     policy: Policy,
-    /// Tabs that have closed. Tab ids are never reused, so a prompt for one
-    /// of these can only be stale.
-    closed_tabs: BTreeSet<u64>,
+    /// How many times each tab has closed. A reopened tab keeps its id, so
+    /// prompts remember this count to tell its lives apart.
+    tab_closures: BTreeMap<u64, u32>,
     store: Option<RuleStore>,
     audit: Option<AuditLog>,
     clock: Clock,
@@ -81,7 +81,7 @@ impl Safety {
     pub fn in_memory() -> Safety {
         Safety {
             policy: Policy::new(),
-            closed_tabs: BTreeSet::new(),
+            tab_closures: BTreeMap::new(),
             store: None,
             audit: None,
             clock: Box::new(system_clock),
@@ -98,7 +98,7 @@ impl Safety {
         audit.set_retention_days(retention_days);
         let mut safety = Safety {
             policy: Policy::new(),
-            closed_tabs: BTreeSet::new(),
+            tab_closures: BTreeMap::new(),
             store: None,
             audit: Some(audit),
             clock: Box::new(system_clock),
@@ -174,7 +174,11 @@ impl Safety {
     /// pages ask often, and the answers are what matter.
     pub fn request_site(&self, request: SiteRequest) -> Outcome {
         let decision = self.policy.decide_site(&request);
-        let prompt = (decision.verdict == Verdict::Ask).then(|| Prompt::for_site(request));
+        let generation = self.tab_generation(request.tab);
+        let prompt = (decision.verdict == Verdict::Ask).then(|| Prompt {
+            tab_generation: generation,
+            ..Prompt::for_site(request)
+        });
         Outcome { decision, prompt }
     }
 
@@ -185,25 +189,34 @@ impl Safety {
         entry.verdict = Some(decision.verdict);
         entry.reason = Some(decision.reason.to_string());
         self.log(entry);
+        let generation = self.tab_generation(request.tab);
         let prompt = (decision.verdict == Verdict::Ask).then(|| {
             let name = self.policy.display_name(&request.agent);
-            Prompt::for_agent(request, &name)
+            Prompt {
+                tab_generation: generation,
+                ..Prompt::for_agent(request, &name)
+            }
         });
         Outcome { decision, prompt }
     }
 
-    /// Why an answer to a prompt about `subject` no longer counts: its tab
-    /// closed, or (for agents) all agents were stopped, the agent paused or
-    /// the tab taken back while the prompt was up.
-    fn overridden(&self, subject: &Subject) -> Option<Reason> {
-        let tab = match subject {
+    fn tab_generation(&self, tab: Option<u64>) -> u32 {
+        tab.and_then(|t| self.tab_closures.get(&t).copied())
+            .unwrap_or(0)
+    }
+
+    /// Why an answer to `prompt` no longer counts: its tab closed, or (for
+    /// agents) all agents were stopped, the agent paused or the tab taken
+    /// back while the prompt was up.
+    fn overridden(&self, prompt: &Prompt) -> Option<Reason> {
+        let tab = match &prompt.subject {
             Subject::Agent(request) => request.tab,
             Subject::Site(request) => request.tab,
         };
-        if tab.is_some_and(|t| self.closed_tabs.contains(&t)) {
+        if tab.is_some() && self.tab_generation(tab) != prompt.tab_generation {
             return Some(Reason::TabClosed);
         }
-        let Subject::Agent(request) = subject else {
+        let Subject::Agent(request) = &prompt.subject else {
             return None;
         };
         let decision = self.policy.decide_agent(request);
@@ -225,7 +238,7 @@ impl Safety {
     pub fn answer(&mut self, prompt: &Prompt, choice: Choice) -> Result<Verdict, AnswerError> {
         let now = self.now();
         let (mut verdict, mut rule) = prompt.resolve(choice, now).ok_or(AnswerError::NotOffered)?;
-        let overridden = self.overridden(&prompt.subject);
+        let overridden = self.overridden(prompt);
         if overridden.is_some() {
             verdict = Verdict::Deny;
             rule = None;
@@ -313,7 +326,7 @@ impl Safety {
     }
 
     pub fn tab_closed(&mut self, tab: u64) {
-        self.closed_tabs.insert(tab);
+        *self.tab_closures.entry(tab).or_default() += 1;
         self.policy.tab_closed(tab);
     }
 
@@ -650,6 +663,13 @@ mod tests {
         assert_eq!(safety.answer(&site, Choice::Allow), Ok(Verdict::Deny));
         assert_eq!(safety.answer(&agent, Choice::Allow), Ok(Verdict::Deny));
         assert!(safety.policy().user_rules().is_empty());
+
+        // Reopened with the same id: new prompts count again.
+        let site = safety
+            .request_site(camera("https://meet.example"))
+            .prompt
+            .unwrap();
+        assert_eq!(safety.answer(&site, Choice::Allow), Ok(Verdict::Allow));
     }
 
     #[test]
