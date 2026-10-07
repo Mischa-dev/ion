@@ -57,8 +57,9 @@ Popup {
     }
 
     // Opened from the palette, which hands focus back as it closes; take it
-    // afterwards so Escape reaches this popup.
-    onOpened: Qt.callLater(() => content.forceActiveFocus())
+    // afterwards so Escape reaches this popup. The first browser gets it, so
+    // Enter imports straight away.
+    onOpened: Qt.callLater(() => (rows.itemAt(0) ?? content).forceActiveFocus(Qt.TabFocusReason))
 
     contentItem: ColumnLayout {
         id: content
@@ -85,34 +86,44 @@ Popup {
         }
 
         Repeater {
+            id: rows
             model: root.sources
 
-            delegate: Rectangle {
+            // Buttons, so Tab and arrows reach them and Enter or Space imports.
+            delegate: AbstractButton {
                 id: row
 
                 required property string modelData
 
                 Layout.fillWidth: true
                 implicitHeight: Theme.tabHeight + Theme.spacing * 2
-                radius: Theme.radius
-                color: mouse.containsMouse ? Theme.surfaceHover : Theme.surfaceRaised
+                leftPadding: Theme.spacing * 2
+                rightPadding: Theme.spacing * 2
+                focusPolicy: Qt.StrongFocus
+                text: qsTr("Import from %1").arg(modelData)
+                onClicked: root.importFrom(modelData)
 
-                Text {
-                    anchors.fill: parent
-                    anchors.leftMargin: Theme.spacing * 2
-                    verticalAlignment: Text.AlignVCenter
-                    text: qsTr("Import from %1").arg(row.modelData)
+                Keys.onReturnPressed: clicked()
+                Keys.onEnterPressed: clicked()
+                Keys.onUpPressed: nextItemInFocusChain(false).forceActiveFocus(Qt.BacktabFocusReason)
+                Keys.onDownPressed: nextItemInFocusChain(true).forceActiveFocus(Qt.TabFocusReason)
+
+                contentItem: Text {
+                    text: row.text
                     color: Theme.text
                     font.pixelSize: Theme.fontSize
+                    verticalAlignment: Text.AlignVCenter
+                    elide: Text.ElideRight
                 }
 
-                MouseArea {
-                    id: mouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.importFrom(row.modelData)
+                background: Rectangle {
+                    radius: Theme.radius
+                    color: row.down || row.hovered ? Theme.surfaceHover : Theme.surfaceRaised
+                    border.width: row.activeFocus ? Theme.hairline : 0
+                    border.color: Theme.accent
                 }
+
+                HoverHandler { cursorShape: Qt.PointingHandCursor }
             }
         }
 
