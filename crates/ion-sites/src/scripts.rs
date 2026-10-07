@@ -13,10 +13,9 @@
 //! - `*.user.css` files: style sheets for every page, or only for the
 //!   `@match` patterns listed in a leading `/* ==UserStyle== … */` block.
 
-use std::collections::BTreeMap;
 use std::path::Path;
 
-use ion_config::{Config, Site};
+use ion_config::Config;
 
 /// When a script runs in the page's lifetime.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,29 +56,6 @@ pub struct Script {
     pub source: String,
     pub run_at: RunAt,
     pub world: World,
-}
-
-/// The per-site CSS from `[sites]` as scripts, one per site with CSS.
-pub fn site_styles(sites: &BTreeMap<String, Site>) -> Vec<Script> {
-    sites
-        .iter()
-        .filter(|(_, site)| !site.css.trim().is_empty())
-        .map(|(key, site)| {
-            let key = key.trim().trim_end_matches('.').to_ascii_lowercase();
-            let host = key.strip_prefix("*.").unwrap_or(&key);
-            let matches = if host == "*" {
-                Vec::new()
-            } else {
-                vec![format!("*://{host}/*"), format!("*://*.{host}/*")]
-            };
-            Script {
-                name: format!("ion-site-css:{host}"),
-                source: style_script(&matches, &site.css),
-                run_at: RunAt::DocumentStart,
-                world: World::Isolated,
-            }
-        })
-        .collect()
 }
 
 /// A script that adds `css` to pages matching `matches` (every page when empty).
@@ -230,7 +206,6 @@ pub fn all_scripts(config: &Config, dir: Option<&Path>) -> (Vec<Script>, Vec<Str
     if config.keyboard.vim {
         scripts.push(keyboard_mode());
     }
-    scripts.extend(site_styles(&config.sites));
     let mut warnings = Vec::new();
     if let Some(dir) = dir {
         let (files, problems) = load_dir(dir);
@@ -243,40 +218,6 @@ pub fn all_scripts(config: &Config, dir: Option<&Path>) -> (Vec<Script>, Vec<Str
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn site_css_becomes_a_matched_style_script() {
-        let mut sites = BTreeMap::new();
-        sites.insert(
-            "Example.com".to_owned(),
-            Site {
-                css: "body { color: \"red\" }\n</style>".into(),
-                ..Site::default()
-            },
-        );
-        sites.insert("js-only.org".to_owned(), Site::default());
-        let scripts = site_styles(&sites);
-        assert_eq!(scripts.len(), 1);
-        let s = &scripts[0];
-        assert_eq!(s.name, "ion-site-css:example.com");
-        assert!(s.source.contains("// @match *://example.com/*\n"));
-        assert!(s.source.contains("// @match *://*.example.com/*\n"));
-        assert!(s.source.contains(r#""body { color: \"red\" }\n</style>""#));
-        assert_eq!(s.run_at, RunAt::DocumentStart);
-    }
-
-    #[test]
-    fn wildcard_site_css_has_no_match_lines() {
-        let mut sites = BTreeMap::new();
-        sites.insert(
-            "*".to_owned(),
-            Site {
-                css: "a {}".into(),
-                ..Site::default()
-            },
-        );
-        assert!(!site_styles(&sites)[0].source.contains("@match"));
-    }
 
     #[test]
     fn global_privacy_control_follows_config() {

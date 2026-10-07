@@ -67,15 +67,7 @@ mod tests {
     fn sites(entries: &[(&str, Option<bool>)]) -> BTreeMap<String, Site> {
         entries
             .iter()
-            .map(|(k, js)| {
-                (
-                    (*k).to_owned(),
-                    Site {
-                        javascript: *js,
-                        ..Site::default()
-                    },
-                )
-            })
+            .map(|(k, js)| ((*k).to_owned(), Site { javascript: *js }))
             .collect()
     }
 

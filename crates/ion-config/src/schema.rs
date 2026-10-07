@@ -73,9 +73,6 @@ pub struct Site {
     /// Run JavaScript on the site.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub javascript: Option<bool>,
-    /// Style sheet added to the site's pages.
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub css: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -189,6 +186,13 @@ pub struct Theme {
     pub palette: Option<PathBuf>,
     /// What web pages see of the theme.
     pub pages: PageTheming,
+    /// Give page scrollbars, form controls and text selection Ion's colors,
+    /// unless the page styles them itself.
+    pub page_controls: bool,
+    /// Per-site theming, keyed by site (`example.com` also covers its
+    /// subdomains; the most specific entry wins).
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub sites: BTreeMap<String, SiteTheme>,
 }
 
 impl Default for Theme {
@@ -198,6 +202,8 @@ impl Default for Theme {
             name: "auto".into(),
             palette: None,
             pages: PageTheming::default(),
+            page_controls: true,
+            sites: BTreeMap::new(),
         }
     }
 }
@@ -216,6 +222,19 @@ pub enum ThemeSource {
     /// A palette file named by `theme.palette` (default
     /// `<config dir>/palette.toml`).
     Manual,
+}
+
+/// Theming for one site.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct SiteTheme {
+    /// Darken the site under a dark theme (`true`) or never (`false`); unset
+    /// follows `theme.pages`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub darken: Option<bool>,
+    /// CSS added to the site's pages.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub css: String,
 }
 
 /// How web pages follow the theme.
@@ -417,6 +436,10 @@ mod tests {
             [theme]
             source = "dms"
 
+            [theme.sites."example.com"]
+            darken = false
+            css = "body { max-width: 50em }"
+
             [ui]
             density = "compact"
             cornerRadius = 8
@@ -435,11 +458,15 @@ mod tests {
 
             [sites."example.com"]
             javascript = false
-            css = "body { font-size: 120% }"
             "#,
         )
         .unwrap();
         assert_eq!(config.theme.source, ThemeSource::Dms);
+        assert_eq!(config.theme.sites["example.com"].darken, Some(false));
+        assert_eq!(
+            config.theme.sites["example.com"].css,
+            "body { max-width: 50em }"
+        );
         assert_eq!(config.ui.density, Density::Compact);
         assert_eq!(config.ui.tabs, TabLayout::Vertical);
         assert_eq!(config.bangs["gh"], "https://github.com/search?q={}");

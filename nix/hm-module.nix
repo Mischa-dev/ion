@@ -139,6 +139,23 @@ in
                 "darken"
               ])
               "What web pages see: the theme's light/dark (`match`), the system's, or `match` plus darkening pages without a dark style.";
+          pageControls = setting types.bool "Give web page scrollbars, checkboxes and text selection the theme's colors, unless the page styles them itself.";
+          sites = mkOption {
+            type = types.attrsOf (
+              types.submodule {
+                options = {
+                  darken = setting types.bool "Darken this site under a dark theme (true) or never (false); unset follows `theme.pages`.";
+                  css = setting types.lines "CSS added to this site's pages.";
+                };
+              }
+            );
+            default = { };
+            example = {
+              "example.com".css = "body { max-width: 50em; margin: auto }";
+              "github.com".darken = false;
+            };
+            description = "Per-site theming, keyed by site. A site also covers its subdomains; the most specific entry wins.";
+          };
         };
 
         bangs = mkOption {
@@ -173,18 +190,14 @@ in
             types.submodule {
               options = {
                 javascript = setting types.bool "Run JavaScript on the site.";
-                css = setting types.lines "Style sheet added to the site's pages.";
               };
             }
           );
           default = { };
           example = {
-            "example.com" = {
-              javascript = false;
-              css = "body { max-width: 50em; margin: auto; }";
-            };
+            "example.com".javascript = false;
           };
-          description = "Per-site settings keyed by host; a host also covers its subdomains, `*` covers every site.";
+          description = "Per-site settings keyed by host (site CSS is `theme.sites`); a host also covers its subdomains, `*` covers every site.";
         };
 
         agents = mkOption {
