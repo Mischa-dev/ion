@@ -521,6 +521,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ion-safety"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "url",
+]
+
+[[package]]
 name = "ion-session"
 version = "0.1.0"
 dependencies = [
