@@ -116,12 +116,9 @@ in
           lists = setting (types.listOf types.str) "Filter lists, by well-known name or URL.";
         };
 
-        extensions = mkOption {
-          type = types.listOf (types.coercedTo types.package toString types.str);
-          default = [ ];
-          example = lib.literalExpression ''[ "''${pkgs.fetchzip { url = "…"; hash = "…"; }}" ]'';
-          description = "Unpacked Chrome extension folders (Manifest V3) to load at startup.";
-        };
+        extensions =
+          setting (types.listOf (types.coercedTo types.package toString types.str))
+            "Unpacked Chrome extension folders (Manifest V3), or packages that build one, to load at startup.";
 
         keyboard = {
           vim = setting types.bool "Vim-style keys and link hints in pages.";
