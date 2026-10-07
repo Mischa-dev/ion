@@ -99,7 +99,7 @@ pub mod qobject {
 
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, SystemTime};
 
 use cxx_qt::casting::Upcast;
@@ -110,6 +110,12 @@ use ion_adblock::{Blocker, FilterList, RequestInfo, ResourceType, Shield, SiteSe
 
 /// How often the worker checks whether lists went stale while Ion runs.
 const RECHECK_EVERY: Duration = Duration::from_secs(6 * 60 * 60);
+
+/// Held by a worker from downloading lists until its result is queued for the
+/// UI thread. Workers never interleave writing lists with compiling them, so
+/// an engine is never cached under the key of lists it wasn't built from, and
+/// results reach the UI thread in the order their lists hit the disk.
+static REFRESHING: Mutex<()> = Mutex::new(());
 
 pub struct AdblockRust {
     enabled: bool,
@@ -255,13 +261,13 @@ impl qobject::Adblock {
                 if thread.queue(|obj| obj.set_updating(true)).is_err() {
                     return;
                 }
+                let guard = REFRESHING.lock().unwrap_or_else(PoisonError::into_inner);
                 let lists = shared_lists.lock().map(|l| l.clone()).unwrap_or_default();
                 let refreshed = refresh(&cache_dir, &lists, false, have_blocker);
                 have_blocker |= refreshed.blocker.is_some();
-                if thread
-                    .queue(move |obj| obj.finish_refresh(refreshed))
-                    .is_err()
-                {
+                let queued = thread.queue(move |obj| obj.finish_refresh(refreshed));
+                drop(guard);
+                if queued.is_err() {
                     return;
                 }
                 std::thread::sleep(RECHECK_EVERY);
@@ -335,6 +341,7 @@ impl qobject::Adblock {
         self.as_mut().set_updating(true);
         let thread = self.qt_thread();
         std::thread::spawn(move || {
+            let _guard = REFRESHING.lock().unwrap_or_else(PoisonError::into_inner);
             let refreshed = refresh(&cache_dir, &lists, force, have_blocker);
             let _ = thread.queue(move |obj| obj.finish_refresh(refreshed));
         });

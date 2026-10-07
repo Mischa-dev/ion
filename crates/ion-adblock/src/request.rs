@@ -15,6 +15,7 @@ pub enum ResourceType {
     Xhr,
     Ping,
     WebSocket,
+    CspReport,
     Other,
 }
 
@@ -34,6 +35,7 @@ impl ResourceType {
             8 => Self::Media,
             13 | 21 => Self::Xhr,
             14 => Self::Ping,
+            16 => Self::CspReport,
             254 => Self::WebSocket,
             _ => Self::Other,
         }
@@ -53,6 +55,7 @@ impl ResourceType {
             Self::Xhr => "xmlhttprequest",
             Self::Ping => "ping",
             Self::WebSocket => "websocket",
+            Self::CspReport => "csp_report",
             Self::Other => "other",
         }
     }
@@ -94,6 +97,8 @@ mod tests {
         assert_eq!(ResourceType::from_webengine(13), ResourceType::Xhr);
         assert_eq!(ResourceType::from_webengine(19), ResourceType::MainFrame);
         assert_eq!(ResourceType::from_webengine(254), ResourceType::WebSocket);
+        assert_eq!(ResourceType::from_webengine(16), ResourceType::CspReport);
+        assert_eq!(ResourceType::CspReport.filter_type(), "csp_report");
         assert_eq!(ResourceType::from_webengine(6), ResourceType::Other);
         assert_eq!(ResourceType::from_webengine(255), ResourceType::Other);
     }
