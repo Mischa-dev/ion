@@ -1,6 +1,7 @@
 //! The ordered list of open tabs.
 
 use crate::session::{SavedTab, SavedWorkspace, Session};
+use unicode_segmentation::UnicodeSegmentation;
 
 /// Stable identity of a tab for as long as it is open. Indices shift as tabs
 /// open, close and move; ids do not.
@@ -20,7 +21,18 @@ pub struct Workspace {
     pub name: String,
     /// A `#rrggbb` color, or empty for the theme's accent.
     pub color: String,
+    /// A short label shown instead of the color dot, usually an emoji, or
+    /// empty.
+    pub icon: String,
 }
+
+/// Longest workspace icon kept, in user-perceived characters (grapheme
+/// clusters), so a multi-part emoji counts once and is never cut in half.
+pub const WORKSPACE_ICON_MAX_CHARS: usize = 8;
+
+/// Longest workspace icon kept, in bytes. One character can hold any number of
+/// combining marks, so the character cap alone does not bound the size.
+pub const WORKSPACE_ICON_MAX_BYTES: usize = 256;
 
 /// How many closed tabs "reopen closed tab" remembers.
 pub const CLOSED_TABS_KEPT: usize = 25;
@@ -82,11 +94,25 @@ impl Default for TabList {
                 id: 0,
                 name: DEFAULT_WORKSPACE_NAME.to_owned(),
                 color: String::new(),
+                icon: String::new(),
             }],
             empty_workspace: 0,
             last_current: Vec::new(),
         }
     }
+}
+
+/// A workspace icon trimmed and cut to [`WORKSPACE_ICON_MAX_CHARS`] whole
+/// characters and [`WORKSPACE_ICON_MAX_BYTES`] bytes.
+fn clamp_icon(icon: &str) -> String {
+    let mut kept = String::new();
+    for g in icon.trim().graphemes(true).take(WORKSPACE_ICON_MAX_CHARS) {
+        if kept.len() + g.len() > WORKSPACE_ICON_MAX_BYTES {
+            break;
+        }
+        kept.push_str(g);
+    }
+    kept
 }
 
 impl TabList {
@@ -105,6 +131,7 @@ impl TabList {
                     id: w.id,
                     name: w.name.clone(),
                     color: w.color.clone(),
+                    icon: clamp_icon(&w.icon),
                 })
                 .collect();
             list.empty_workspace = list.workspaces[0].id;
@@ -146,6 +173,7 @@ impl TabList {
                     id: w.id,
                     name: w.name.clone(),
                     color: w.color.clone(),
+                    icon: w.icon.clone(),
                 })
                 .collect(),
             ..Session::default()
@@ -466,6 +494,7 @@ impl TabList {
             id,
             name,
             color: color.to_owned(),
+            icon: String::new(),
         });
         id
     }
@@ -489,6 +518,21 @@ impl TabList {
         match self.workspaces.iter_mut().find(|w| w.id == id) {
             Some(w) if w.color != color => {
                 w.color = color.to_owned();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Change a workspace's icon (trimmed, at most
+    /// [`WORKSPACE_ICON_MAX_CHARS`] whole characters and
+    /// [`WORKSPACE_ICON_MAX_BYTES`] bytes; empty shows the color dot).
+    /// False if there is no such workspace or the icon is unchanged.
+    pub fn set_workspace_icon(&mut self, id: WorkspaceId, icon: &str) -> bool {
+        let icon = clamp_icon(icon);
+        match self.workspaces.iter_mut().find(|w| w.id == id) {
+            Some(w) if w.icon != icon => {
+                w.icon = icon;
                 true
             }
             _ => false,
@@ -839,6 +883,19 @@ mod tests {
         assert!(!l.rename_workspace(work, "Work"));
         assert!(!l.rename_workspace(work, "  "));
         assert!(l.set_workspace_color(work, "#ff0000"));
+        assert!(l.set_workspace_icon(work, " 🚀 "));
+        assert_eq!(l.workspace(work).unwrap().icon, "🚀");
+        assert!(!l.set_workspace_icon(work, "🚀"));
+        assert!(l.set_workspace_icon(work, "abcdefghijk"));
+        assert_eq!(l.workspace(work).unwrap().icon, "abcdefgh");
+        // A family emoji is seven scalars but one character: kept whole.
+        let family = "👨\u{200d}👩\u{200d}👧\u{200d}👦";
+        assert!(l.set_workspace_icon(work, &format!("{family}{family}")));
+        assert_eq!(l.workspace(work).unwrap().icon, format!("{family}{family}"));
+        // One character stuffed with combining marks is dropped, not kept whole.
+        let zalgo = format!("a{}b", "\u{301}".repeat(1000));
+        assert!(l.set_workspace_icon(work, &zalgo));
+        assert_eq!(l.workspace(work).unwrap().icon, "");
         assert!(l.move_workspace(work, 0));
         assert_eq!(l.workspaces()[0].id, work);
         l.open_in(work, 1, "w", "", false);
@@ -852,6 +909,7 @@ mod tests {
     fn workspaces_survive_a_session_round_trip() {
         let mut l = list(&["a"]);
         let work = l.add_workspace("Work", "#336699");
+        l.set_workspace_icon(work, "💼");
         l.open_in(work, 1, "w", "", true);
         let session = l.to_session();
         let json = session.to_json();
@@ -863,6 +921,11 @@ mod tests {
         let mut odd = session.clone();
         odd.tabs[1].workspace = 42;
         assert_eq!(TabList::from_session(&odd).rows_in(0), [0, 1]);
+        // Hand-edited oversized icons are cut down on load.
+        let mut big = session.clone();
+        big.workspaces[1].icon = "x".repeat(100);
+        let restored = TabList::from_session(&big);
+        assert_eq!(restored.workspace(work).unwrap().icon, "xxxxxxxx");
         // Old files without workspaces load into the default one.
         let old = Session::from_json(r#"{"tabs":[{"url":"a"}]}"#).unwrap();
         assert_eq!(TabList::from_session(&old).workspaces().len(), 1);

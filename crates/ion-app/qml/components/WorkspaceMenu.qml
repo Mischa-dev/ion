@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import Ion
 
 // Workspace actions behind the workspace button of the tab strips: switch,
-// create, rename, recolor and delete workspaces.
+// create, rename, recolor, set an icon for and delete workspaces.
 Item {
     id: root
 
@@ -49,7 +49,7 @@ Item {
             model: root.workspaces
             delegate: IonMenuItem {
                 required property var modelData
-                text: modelData.name
+                text: modelData.icon.length > 0 ? modelData.icon + "  " + modelData.name : modelData.name
                 checkable: true
                 checked: modelData.id === Tabs.workspace
                 onTriggered: Tabs.switchWorkspace(modelData.id)
@@ -70,6 +70,10 @@ Item {
                 nameDialog.renaming = true
                 nameDialog.open()
             }
+        }
+        IonMenuItem {
+            text: qsTr("Icon…")
+            onTriggered: iconDialog.open()
         }
 
         IonMenu {
@@ -106,19 +110,24 @@ Item {
         property bool renaming: false
         // The tab to move into the new workspace, or -1.
         property int moveRow: -1
+        // The workspace being renamed, fixed when the dialog opens so switching
+        // workspaces behind it does not change which one is edited.
+        property var target: null
 
         title: renaming ? qsTr("Rename workspace") : qsTr("New workspace")
         standardButtons: Dialog.Ok | Dialog.Cancel
 
         onAboutToShow: {
-            nameField.text = renaming ? (root.current?.name ?? "") : ""
+            target = root.current
+            nameField.text = renaming ? (target?.name ?? "") : ""
             nameField.selectAll()
             nameField.forceActiveFocus()
         }
         onAccepted: {
             const name = nameField.text.trim()
             if (renaming) {
-                Tabs.renameWorkspace(Tabs.workspace, name)
+                if (target)
+                    Tabs.renameWorkspace(target.id, name)
             } else {
                 // New workspaces take the next color in the list.
                 const colors = Theme.workspaceColors
@@ -152,22 +161,67 @@ Item {
     }
 
     IonDialog {
+        id: iconDialog
+        palette: root.palette
+
+        title: qsTr("Workspace icon")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+
+        // The workspace being edited, fixed when the dialog opens.
+        property var target: null
+
+        onAboutToShow: {
+            target = root.current
+            iconField.text = target?.icon ?? ""
+            iconField.selectAll()
+            iconField.forceActiveFocus()
+        }
+        onAccepted: if (target) Tabs.setWorkspaceIcon(target.id, iconField.text)
+
+        ColumnLayout {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            spacing: Theme.spacing * 2
+
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: Theme.textMuted
+                text: qsTr("An emoji or a few letters, shown instead of the color dot. Leave empty for the dot.")
+            }
+            IonTextField {
+                id: iconField
+                Layout.fillWidth: true
+                // No maximumLength: it counts UTF-16 units and would cut emoji
+                // apart. Tabs.setWorkspaceIcon caps whole characters instead.
+                placeholderText: qsTr("For example 💼")
+                onAccepted: iconDialog.accept()
+            }
+        }
+    }
+
+    IonDialog {
         id: deleteDialog
         palette: root.palette
 
         title: qsTr("Delete workspace")
         standardButtons: Dialog.Ok | Dialog.Cancel
 
-        onAccepted: Tabs.deleteWorkspace(Tabs.workspace)
+        // The workspace to delete, fixed when the dialog opens.
+        property var target: null
+
+        onAboutToShow: target = root.current
+        onAccepted: if (target) Tabs.deleteWorkspace(target.id)
 
         Label {
             anchors.left: parent.left
             anchors.right: parent.right
             wrapMode: Text.WordWrap
+            textFormat: Text.PlainText
             text: {
-                const tabs = root.current?.tabs ?? 0
+                const tabs = deleteDialog.target?.tabs ?? 0
                 return qsTr("Delete “%1” and close its %n tab(s)? Closed tabs can be reopened one by one.", "", tabs)
-                    .arg(root.current?.name ?? "")
+                    .arg(deleteDialog.target?.name ?? "")
             }
         }
     }

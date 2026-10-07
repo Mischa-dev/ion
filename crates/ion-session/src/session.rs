@@ -33,6 +33,9 @@ pub struct SavedWorkspace {
     /// A `#rrggbb` color, or empty for the theme's accent.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub color: String,
+    /// A short label shown instead of the color dot, usually an emoji.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub icon: String,
 }
 
 /// A snapshot of one window's tabs.
