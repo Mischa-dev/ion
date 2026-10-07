@@ -74,6 +74,8 @@ check:
 | Focus address bar | Cmd+L | `Main.qml` |
 | Reload | Cmd+R | `Main.qml` (`StandardKey.Refresh`) |
 | Back / forward | Cmd+[ / Cmd+], Cmd+Left / Cmd+Right | `Main.qml` (`StandardKey.Back/Forward`) |
+| Reopen closed tab | Cmd+Shift+T | `Main.qml` |
+| Go to tab 1–8 / last | Cmd+1…Cmd+8 / Cmd+9 | `Main.qml` |
 | Quit | Cmd+Q | `Main.qml` and the native app menu |
 | Next / previous tab | Control+Tab / Control+Shift+Tab, Cmd+Shift+] / [, Cmd+Option+Right / Left | `PlatformIntegration.qml` |
 

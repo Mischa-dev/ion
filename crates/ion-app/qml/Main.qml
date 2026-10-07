@@ -8,7 +8,15 @@ ApplicationWindow {
     id: window
 
     readonly property string homeUrl: Config.homePage
-    readonly property var currentView: views.count > 0 ? views.itemAt(tabs.currentIndex) : null
+    readonly property bool verticalTabs: Config.tabLayout === "vertical"
+    // Bumped whenever the view stack gains or loses a view, so `currentView`
+    // re-evaluates even when the count and current index happen to stay the same.
+    property int viewsRevision: 0
+    readonly property var currentView: {
+        window.viewsRevision
+        const index = Tabs.currentIndex
+        return index >= 0 && index < views.count ? views.itemAt(index) : null
+    }
 
     width: 1280
     height: 820
@@ -24,33 +32,32 @@ ApplicationWindow {
     // Set in Component.onCompleted: instance() is null until the prototype is complete.
     property WebEngineProfile profile: null
 
-    // Tab state lives here; TabStrip and the view stack both read it.
-    ListModel {
-        id: tabs
-        property int currentIndex: 0
+    // Tabs live in the Rust `Tabs` model (bridge/tabs.rs), which also saves them
+    // so the next start reopens them. These helpers return the new tab's view.
+    function openTab(target, activate) {
+        return views.itemAt(Tabs.openTab(target ? target.toString() : "", activate !== false))
     }
 
-    function openTab(target, activate) {
-        tabs.append({ title: "", initialUrl: target ? target.toString() : "" })
-        if (activate !== false)
-            tabs.currentIndex = tabs.count - 1
-        return views.itemAt(tabs.count - 1)
+    // Tabs a page opens (links with target=_blank, window.open) go next to it.
+    function openPageTab(activate) {
+        return views.itemAt(Tabs.openTabNextToCurrent("", activate))
     }
 
     function closeTab(index) {
-        if (index < 0 || index >= tabs.count)
+        if (index < 0 || index >= Tabs.count)
             return
-        if (tabs.count === 1) {
+        // Closing the last tab closes the window; the tab stays in the saved
+        // session so the next start brings it back.
+        if (Tabs.count === 1) {
             Qt.quit()
             return
         }
-        if (index < tabs.currentIndex || (index === tabs.currentIndex && index === tabs.count - 1))
-            tabs.currentIndex -= 1
-        tabs.remove(index)
+        Tabs.closeTab(index)
     }
 
-    function cycleTab(step) {
-        tabs.currentIndex = (tabs.currentIndex + step + tabs.count) % tabs.count
+    function newTab() {
+        window.openTab("")
+        window.focusUrlBar()
     }
 
     function focusUrlBar() {
@@ -60,13 +67,42 @@ ApplicationWindow {
 
     Component.onCompleted: {
         profile = profilePrototype.instance()
-        // URLs on the command line (`ion %U` from the desktop file) open as tabs.
+        if (Config.value("general.restoreSession"))
+            Tabs.restoreLastSession()
+        // URLs on the command line (`ion %U` from the desktop file) open as new
+        // tabs after the restored ones; the first one becomes current.
         const urls = Qt.application.arguments.slice(1).filter(arg => !arg.startsWith("-"))
-        if (urls.length === 0)
+        urls.forEach((arg, i) => openTab(urlBarResolver.resolve(arg), i === 0))
+        if (Tabs.count === 0)
             openTab(homeUrl)
-        for (const arg of urls)
-            openTab(urlBarResolver.resolve(arg), false)
-        tabs.currentIndex = 0
+    }
+
+    // Save tabs shortly after they change, and history less eagerly; both are
+    // written once more on quit.
+    Timer {
+        id: sessionSaveTimer
+        interval: 1000
+        onTriggered: Tabs.saveSession()
+    }
+    Timer {
+        id: historySaveTimer
+        interval: 5000
+        onTriggered: History.save()
+    }
+    Connections {
+        target: Tabs
+        function onSessionChanged() { sessionSaveTimer.restart() }
+    }
+    Connections {
+        target: History
+        function onChanged() { historySaveTimer.restart() }
+    }
+    Connections {
+        target: Qt.application
+        function onAboutToQuit() {
+            Tabs.saveSession()
+            History.save()
+        }
     }
 
     Omnibox {
@@ -82,14 +118,13 @@ ApplicationWindow {
 
         TabStrip {
             Layout.fillWidth: true
-            tabs: tabs
-            currentIndex: tabs.currentIndex
-            onActivated: index => tabs.currentIndex = index
+            visible: !window.verticalTabs
+            tabs: Tabs
+            currentIndex: Tabs.currentIndex
+            onActivated: index => Tabs.activate(index)
             onCloseRequested: index => window.closeTab(index)
-            onNewTabRequested: {
-                window.openTab("")
-                window.focusUrlBar()
-            }
+            onNewTabRequested: window.newTab()
+            onMenuRequested: anchor => sessionMenu.open(anchor)
         }
 
         NavigationBar {
@@ -99,36 +134,107 @@ ApplicationWindow {
         }
     }
 
-    StackLayout {
+    SessionMenu { id: sessionMenu }
+
+    RowLayout {
         anchors.fill: parent
-        currentIndex: tabs.currentIndex
+        spacing: 0
 
-        Repeater {
-            id: views
-            model: tabs
+        VerticalTabStrip {
+            Layout.fillHeight: true
+            visible: window.verticalTabs
+            tabs: Tabs
+            currentIndex: Tabs.currentIndex
+            onActivated: index => Tabs.activate(index)
+            onCloseRequested: index => window.closeTab(index)
+            onNewTabRequested: window.newTab()
+            onMenuRequested: anchor => sessionMenu.open(anchor)
+        }
 
-            delegate: BrowserTab {
-                required property int index
-                required property string initialUrl
+        // One web view per tab, stacked; only the current one is visible.
+        Item {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
 
-                profile: window.profile
-                url: initialUrl.length > 0 ? initialUrl : "about:blank"
+            Repeater {
+                id: views
+                model: Tabs
 
-                onTitleChanged: tabs.setProperty(index, "title", title)
-                onNewTabRequested: request => {
-                    const background = request.destination === WebEngineNewWindowRequest.InNewBackgroundTab
-                    request.openIn(window.openTab("", !background))
+                onItemAdded: window.viewsRevision++
+                onItemRemoved: window.viewsRevision++
+
+                delegate: BrowserTab {
+                    id: view
+
+                    required property int index
+                    readonly property bool current: index === Tabs.currentIndex
+                    // Background tabs restored from a session load when first shown.
+                    property bool deferred: false
+
+                    function loadSavedUrl() {
+                        const target = Tabs.urlAt(index)
+                        if (target.length > 0)
+                            url = target
+                    }
+
+                    anchors.fill: parent
+                    visible: current
+                    profile: window.profile
+
+                    Component.onCompleted: {
+                        deferred = Tabs.restoring && !current
+                        if (!deferred)
+                            loadSavedUrl()
+                    }
+                    onCurrentChanged: {
+                        if (current && deferred) {
+                            deferred = false
+                            loadSavedUrl()
+                        }
+                    }
+
+                    onUrlChanged: {
+                        if (!deferred)
+                            Tabs.setUrl(index, url.toString())
+                    }
+                    onTitleChanged: {
+                        if (deferred)
+                            return
+                        Tabs.setTitle(index, title)
+                        History.updateTitle(url.toString(), title)
+                    }
+                    onLoadingChanged: info => {
+                        if (info.status === WebEngineView.LoadSucceededStatus)
+                            History.recordVisit(info.url.toString(), title)
+                    }
+                    onNewTabRequested: request => {
+                        const background = request.destination === WebEngineNewWindowRequest.InNewBackgroundTab
+                        request.openIn(window.openPageTab(!background))
+                    }
                 }
             }
         }
     }
 
     // Keyboard shortcuts. "Ctrl" maps to Cmd on macOS automatically.
-    Shortcut { sequences: [StandardKey.AddTab]; onActivated: { window.openTab(""); window.focusUrlBar() } }
-    Shortcut { sequences: [StandardKey.Close]; onActivated: window.closeTab(tabs.currentIndex) }
+    Shortcut { sequences: [StandardKey.AddTab]; onActivated: window.newTab() }
+    Shortcut { sequences: [StandardKey.Close]; onActivated: window.closeTab(Tabs.currentIndex) }
+    Shortcut { sequence: "Ctrl+Shift+T"; onActivated: Tabs.reopenClosedTab() }
     Shortcut { sequences: ["Ctrl+L", "Alt+D", "F6"]; onActivated: window.focusUrlBar() }
-    Shortcut { sequences: ["Ctrl+Tab", "Ctrl+PgDown"]; onActivated: window.cycleTab(1) }
-    Shortcut { sequences: ["Ctrl+Shift+Tab", "Ctrl+PgUp"]; onActivated: window.cycleTab(-1) }
+    Shortcut { sequences: ["Ctrl+Tab", "Ctrl+PgDown"]; onActivated: Tabs.cycle(1) }
+    Shortcut { sequences: ["Ctrl+Shift+Tab", "Ctrl+PgUp"]; onActivated: Tabs.cycle(-1) }
+    Shortcut { sequence: "Ctrl+Shift+PgDown"; onActivated: Tabs.moveTab(Tabs.currentIndex, Tabs.currentIndex + 1) }
+    Shortcut { sequence: "Ctrl+Shift+PgUp"; onActivated: Tabs.moveTab(Tabs.currentIndex, Tabs.currentIndex - 1) }
+    // Ctrl+1…8 pick a tab by position, Ctrl+9 the last one.
+    Shortcut { sequence: "Ctrl+1"; onActivated: Tabs.activate(0) }
+    Shortcut { sequence: "Ctrl+2"; onActivated: Tabs.activate(1) }
+    Shortcut { sequence: "Ctrl+3"; onActivated: Tabs.activate(2) }
+    Shortcut { sequence: "Ctrl+4"; onActivated: Tabs.activate(3) }
+    Shortcut { sequence: "Ctrl+5"; onActivated: Tabs.activate(4) }
+    Shortcut { sequence: "Ctrl+6"; onActivated: Tabs.activate(5) }
+    Shortcut { sequence: "Ctrl+7"; onActivated: Tabs.activate(6) }
+    Shortcut { sequence: "Ctrl+8"; onActivated: Tabs.activate(7) }
+    Shortcut { sequence: "Ctrl+9"; onActivated: Tabs.activate(Tabs.count - 1) }
     Shortcut { sequences: [StandardKey.Refresh, "Ctrl+R"]; onActivated: window.currentView?.reload() }
     Shortcut { sequences: [StandardKey.Back]; onActivated: window.currentView?.goBack() }
     Shortcut { sequences: [StandardKey.Forward]; onActivated: window.currentView?.goForward() }

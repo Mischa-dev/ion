@@ -7,7 +7,7 @@ import Ion
 Item {
     id: root
 
-    // The ApplicationWindow from Main.qml (openTab, cycleTab).
+    // The ApplicationWindow from Main.qml (openTab).
     required property var window
 
     readonly property bool macOS: Qt.platform.os === "osx"
@@ -36,11 +36,11 @@ Item {
     Shortcut {
         enabled: root.macOS
         sequences: ["Meta+Tab", "Ctrl+}", "Ctrl+Alt+Right"]
-        onActivated: root.window.cycleTab(1)
+        onActivated: Tabs.cycle(1)
     }
     Shortcut {
         enabled: root.macOS
         sequences: ["Meta+Shift+Tab", "Ctrl+{", "Ctrl+Alt+Left"]
-        onActivated: root.window.cycleTab(-1)
+        onActivated: Tabs.cycle(-1)
     }
 }
