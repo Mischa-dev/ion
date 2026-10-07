@@ -234,6 +234,7 @@ ApplicationWindow {
 
     header: ColumnLayout {
         spacing: 0
+        visible: !fullScreen.active
 
         TabStrip {
             Layout.fillWidth: true
@@ -256,6 +257,7 @@ ApplicationWindow {
             id: navBar
             Layout.fillWidth: true
             view: window.currentView
+            downloads: downloads
             onBookmarkToggled: window.toggleBookmark()
         }
     }
@@ -272,7 +274,7 @@ ApplicationWindow {
             Layout.fillHeight: true
             // Above the page, which an expanded collapsed sidebar covers.
             z: 1
-            visible: window.verticalTabs
+            visible: window.verticalTabs && !fullScreen.active
             collapsed: {
                 Config.revision
                 return Config.value("ui.collapseSidebar") === true
@@ -344,7 +346,8 @@ ApplicationWindow {
                     onTitleChanged: {
                         if (deferred)
                             return
-                        Tabs.setTitle(index, title)
+                        // The new-tab page has no title of its own; the strip says "New Tab".
+                        Tabs.setTitle(index, showNewTabPage && Basics.isNewTabUrl(url) ? "" : title)
                         History.updateTitle(url.toString(), title)
                     }
                     onIconChanged: {
@@ -357,11 +360,25 @@ ApplicationWindow {
                     }
                     onNewTabRequested: request => {
                         const background = request.destination === WebEngineNewWindowRequest.InNewBackgroundTab
-                        request.openIn(window.openPageTab(!background))
+                        const tab = window.openPageTab(!background)
+                        tab.showNewTabPage = false
+                        request.openIn(tab)
                     }
+                    onOpenInNewTab: target => window.openTab(target, false)
                 }
             }
         }
+    }
+
+    DownloadsPanel { id: downloads; profile: window.profile }
+    NotificationToasts { profile: window.profile }
+    FullScreenController {
+        id: fullScreen
+        window: window
+        view: window.currentView
+        // Esc leaves page fullscreen; an open downloads panel would make the
+        // two Esc shortcuts ambiguous so neither fired.
+        onPageActiveChanged: if (pageActive) downloads.close()
     }
 
     // Keyboard shortcuts. "Ctrl" maps to Cmd on macOS automatically.
@@ -389,6 +406,9 @@ ApplicationWindow {
     Shortcut { sequences: [StandardKey.Back]; onActivated: window.currentView?.goBack() }
     Shortcut { sequences: [StandardKey.Forward]; onActivated: window.currentView?.goForward() }
     Shortcut { sequences: [StandardKey.Quit]; onActivated: Qt.quit() }
+    Shortcut { sequences: [StandardKey.ZoomIn, "Ctrl+="]; onActivated: window.currentView?.zoomIn() }
+    Shortcut { sequences: [StandardKey.ZoomOut]; onActivated: window.currentView?.zoomOut() }
+    Shortcut { sequences: ["Ctrl+0"]; onActivated: window.currentView?.resetZoom() }
     Shortcut { sequence: "Ctrl+D"; onActivated: window.toggleBookmark() }
     Shortcut { sequence: "Ctrl+Alt+R"; onActivated: window.currentView?.reader.toggle() }
     Shortcut {
