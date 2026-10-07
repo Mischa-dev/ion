@@ -7,6 +7,7 @@ Item {
     id: root
 
     property var view   // BrowserTab, may be null (tabs restored but not shown yet)
+    property string savedIcon   // the icon saved with the session, for unloaded tabs
 
     readonly property bool loading: view?.loading ?? false
     readonly property bool hasIcon: favicon.status === Image.Ready
@@ -18,7 +19,10 @@ Item {
         id: favicon
         anchors.fill: parent
         visible: !root.loading
-        source: root.view?.icon ?? ""
+        source: {
+            const live = root.view?.icon?.toString() ?? ""
+            return live.length > 0 ? live : root.savedIcon
+        }
         sourceSize.width: Theme.iconSize
         sourceSize.height: Theme.iconSize
         fillMode: Image.PreserveAspectFit

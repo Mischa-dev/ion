@@ -150,6 +150,11 @@ pub mod qobject {
         #[cxx_name = "setTitle"]
         fn set_title(self: Pin<&mut Tabs>, index: i32, title: &QString);
 
+        /// The tab's favicon URL as its web view reports it.
+        #[qinvokable]
+        #[cxx_name = "setIcon"]
+        fn set_icon(self: Pin<&mut Tabs>, index: i32, icon: &QString);
+
         #[qinvokable]
         #[cxx_name = "urlAt"]
         fn url_at(self: &Tabs, index: i32) -> QString;
@@ -201,6 +206,7 @@ use ion_session::{Session, SessionStore, TabList};
 const ROLE_ID: i32 = 0x0100; // Qt::UserRole
 const ROLE_URL: i32 = ROLE_ID + 1;
 const ROLE_TITLE: i32 = ROLE_ID + 2;
+const ROLE_ICON: i32 = ROLE_ID + 3;
 
 pub struct TabsRust {
     list: TabList,
@@ -242,6 +248,7 @@ impl qobject::Tabs {
             ROLE_ID => QVariant::from(&(tab.id as i32)),
             ROLE_URL => QVariant::from(&QString::from(tab.url.as_str())),
             ROLE_TITLE => QVariant::from(&QString::from(tab.title.as_str())),
+            ROLE_ICON => QVariant::from(&QString::from(tab.icon.as_str())),
             _ => QVariant::default(),
         }
     }
@@ -251,6 +258,7 @@ impl qobject::Tabs {
         roles.insert(ROLE_ID, QByteArray::from("tabId"));
         roles.insert(ROLE_URL, QByteArray::from("url"));
         roles.insert(ROLE_TITLE, QByteArray::from("title"));
+        roles.insert(ROLE_ICON, QByteArray::from("icon"));
         roles
     }
 
@@ -393,6 +401,15 @@ impl qobject::Tabs {
             .set_title(i, &title.to_string())
         {
             self.notify_row(index, ROLE_TITLE);
+        }
+    }
+
+    fn set_icon(mut self: Pin<&mut Self>, index: i32, icon: &QString) {
+        let Some(i) = to_index(index, self.list.len()) else {
+            return;
+        };
+        if self.as_mut().rust_mut().list.set_icon(i, &icon.to_string()) {
+            self.notify_row(index, ROLE_ICON);
         }
     }
 

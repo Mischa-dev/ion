@@ -221,6 +221,10 @@ ApplicationWindow {
                         Tabs.setTitle(index, title)
                         History.updateTitle(url.toString(), title)
                     }
+                    onIconChanged: {
+                        if (!deferred)
+                            Tabs.setIcon(index, icon.toString())
+                    }
                     onLoadingChanged: info => {
                         if (info.status === WebEngineView.LoadSucceededStatus)
                             History.recordVisit(info.url.toString(), title)
