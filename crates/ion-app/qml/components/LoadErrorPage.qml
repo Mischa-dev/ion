@@ -32,6 +32,14 @@ Rectangle {
     visible: false
     color: Theme.background
 
+    // Keeps clicks and scrolling off the page underneath.
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.AllButtons
+        hoverEnabled: true
+        onWheel: wheel => wheel.accepted = true
+    }
+
     Column {
         anchors.centerIn: parent
         width: Math.min(parent.width - Theme.spacing * 8, Theme.readableWidth)

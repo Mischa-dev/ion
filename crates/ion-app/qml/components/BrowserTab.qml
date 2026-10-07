@@ -157,6 +157,8 @@ WebEngineView {
     LoadErrorPage {
         id: loadError
         anchors.fill: parent
-        onRetry: view.reload()
+        // The failed load never became the current page, so reload() would
+        // load the page before it.
+        onRetry: view.url = pageUrl
     }
 }

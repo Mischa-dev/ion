@@ -110,7 +110,7 @@ pub fn describe(domain: ErrorDomain, code: i32, url: &str, message: &str) -> Opt
         ),
         BLOCKED_BY_CLIENT => page(
             format!("{site} was blocked"),
-            "Ion's content blocker stopped this page from loading.",
+            "Ion or one of your extensions stopped this page from loading.",
         ),
         _ => {
             let detail = if message.trim().is_empty() {
