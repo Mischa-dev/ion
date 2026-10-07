@@ -121,8 +121,21 @@ use ion_adblock::{
 
 /// How often the worker checks whether lists went stale while Ion runs.
 const RECHECK_EVERY: Duration = Duration::from_secs(60 * 60);
-/// User-Agent client hint headers Chromium sends without being asked.
-const CLIENT_HINTS: &[&str] = &["Sec-CH-UA", "Sec-CH-UA-Mobile", "Sec-CH-UA-Platform"];
+/// User-Agent client hint headers: the three Chromium always sends and the
+/// ones a site can ask for with `Accept-CH`.
+const CLIENT_HINTS: &[&str] = &[
+    "Sec-CH-UA",
+    "Sec-CH-UA-Mobile",
+    "Sec-CH-UA-Platform",
+    "Sec-CH-UA-Arch",
+    "Sec-CH-UA-Bitness",
+    "Sec-CH-UA-Form-Factors",
+    "Sec-CH-UA-Full-Version",
+    "Sec-CH-UA-Full-Version-List",
+    "Sec-CH-UA-Model",
+    "Sec-CH-UA-Platform-Version",
+    "Sec-CH-UA-WoW64",
+];
 
 /// Held by a worker from downloading lists until its result is queued for the
 /// UI thread. Workers never interleave writing lists with compiling them, so
