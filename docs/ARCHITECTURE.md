@@ -19,12 +19,13 @@ nix/
   qt.nix                  the Qt modules Ion uses, merged for cxx-qt-build
 crates/
   ion-core/               shared core: app constants, URL-bar input resolution
+  ion-session/            tab list, saved and named sessions, browsing history
   ion-app/                the binary (`ion`)
     build.rs              auto-discovers bridges, C++ shims and QML files
     src/main.rs           startup: QtWebEngine init, app, QML engine
     src/bridge/           one cxx-qt QObject per file, exposed to QML as `import Ion`
     cpp/                  small C++ shims for QtWebEngine APIs
-    qml/Main.qml          window, tab model, shortcuts
+    qml/Main.qml          window, web view stack, shortcuts
     qml/Theme.qml         design tokens singleton (colors, radius, density, motion)
     qml/components/       UI pieces (TabStrip, NavigationBar, UrlBar, BrowserTab…)
 packaging/                desktop file, later the macOS bundle bits
@@ -54,8 +55,16 @@ Shared files with small, append-only edits: root `Cargo.toml`,
 
 ## Where things stand
 
-- Tabs live in a QML `ListModel` in `Main.qml`. The sessions work moves them
-  into a Rust model so they can be saved, restored and driven by agents.
+- Tabs live in the Rust `Tabs` singleton (`bridge/tabs.rs`, a list model over
+  `ion_session::TabList`). Anything that opens, closes, moves or switches tabs
+  calls its invokables; `Main.qml` keeps one web view per row and reports URL
+  and title changes back. The open tabs are saved to
+  `<data dir>/sessions/last.json` and restored at startup; restored background
+  tabs load when first shown. Named sessions live next to it in `named/`.
+- `History` (`bridge/history.rs`) records finished page loads in
+  `<data dir>/history.json`; `History.search(query, limit)` returns JSON for the
+  command palette. The data dir is `$ION_DATA_DIR`, else
+  `~/.local/share/ion` (XDG) or `~/Library/Application Support/Ion`.
 - `Theme.qml`'s colors come from `ThemeEngine` (`crates/ion-theme`): built-in
   themes, DMS or manual palette files (live reloaded) and the system accent.
   `Theme.qml` binds them to the `[theme]` config section; see

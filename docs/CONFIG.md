@@ -40,7 +40,8 @@ source = "builtin"           # "builtin" | "dms" | "system" | "manual"
 name = "auto"                # "auto" follows light/dark mode; or "dark", "light",
                              # "catppuccin-mocha", "catppuccin-latte", "nord", or
                              # a palette file in ~/.config/ion/themes/<name>.toml
-# palette = "/path/to/palette.toml"   # for "manual" (and "dms" to override its path)
+# palette = "/path/to/palette.toml"   # "manual" defaults to ~/.config/ion/palette.toml,
+                                      # "dms" to ~/.config/ion/dms-palette.toml
 
 [bangs]                      # your own, on top of Ion's built-in set
 # gh = "https://github.com/search?q={}"

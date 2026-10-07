@@ -479,7 +479,9 @@ dependencies = [
  "cxx-qt-lib",
  "ion-config",
  "ion-core",
+ "ion-session",
  "ion-theme",
+ "serde_json",
 ]
 
 [[package]]
@@ -499,6 +501,14 @@ name = "ion-core"
 version = "0.1.0"
 dependencies = [
  "url",
+]
+
+[[package]]
+name = "ion-session"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

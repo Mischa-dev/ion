@@ -44,7 +44,8 @@ pub mod qobject {
         // themeIds: what a theme picker can offer (built-ins, then installed files).
         #[qproperty(QStringList, theme_ids, cxx_name = "themeIds", READ, NOTIFY = palette_changed)]
         // error: why the configured theme could not be used; empty when it was.
-        #[qproperty(QString, error, READ, NOTIFY = palette_changed)]
+        // Its own signal, so a handler fires once per new error.
+        #[qproperty(QString, error, READ, NOTIFY)]
         type ThemeEngine = super::ThemeEngineRust;
 
         #[qsignal]
@@ -212,13 +213,18 @@ impl qobject::ThemeEngine {
             // mid-edit should not flash the UI back to the default theme.
             Err(e) => Some(e.to_string()),
         };
-        rust.error = QString::from(error.unwrap_or_default().as_str());
+        let error = QString::from(error.unwrap_or_default().as_str());
+        let error_changed = rust.error != error;
+        rust.error = error;
         rust.theme_ids = dirs
             .theme_ids()
             .iter()
             .map(|id| QString::from(id.as_str()))
             .collect();
-        self.palette_changed();
+        self.as_mut().palette_changed();
+        if error_changed {
+            self.error_changed();
+        }
     }
 
     /// Watch `path` for changes (or stop watching). Returns an error message

@@ -153,7 +153,8 @@ pub enum ThemeSource {
     Dms,
     /// System accent color and light/dark mode.
     System,
-    /// A palette file named by `theme.palette`.
+    /// A palette file named by `theme.palette` (default
+    /// `<config dir>/palette.toml`).
     Manual,
 }
 
@@ -220,9 +221,6 @@ impl Config {
                 ));
             }
         }
-        if self.theme.source == ThemeSource::Manual && self.theme.palette.is_none() {
-            problems.push("theme.source is \"manual\" but theme.palette is not set".into());
-        }
         problems
     }
 }
@@ -273,8 +271,10 @@ mod tests {
         let mut config = Config::default();
         config.search.template = "https://example.com/".into();
         config.ui.animations.speed = 0.0;
+        // Manual without a palette is fine: it falls back to
+        // `<config dir>/palette.toml`.
         config.theme.source = ThemeSource::Manual;
-        assert_eq!(config.check().len(), 3);
+        assert_eq!(config.check().len(), 2);
     }
 
     #[test]
