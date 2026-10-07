@@ -58,6 +58,9 @@ pub mod qobject {
         #[qproperty(f64, last_updated, cxx_name = "lastUpdated")]
         #[qproperty(QString, error)]
         #[qproperty(i32, revision)]
+        /// Bumped whenever `pageCss` and `genericCss` may answer differently:
+        /// new lists, no lists, or the global switch.
+        #[qproperty(i32, filters_revision, cxx_name = "filtersRevision")]
         #[namespace = "ion"]
         type Adblock = super::AdblockRust;
     }
@@ -152,6 +155,7 @@ pub struct AdblockRust {
     last_updated: f64,
     error: QString,
     revision: i32,
+    filters_revision: i32,
 
     shield: Shield,
     /// The lists `adblock.lists` names; shared with the background refresher.
@@ -181,6 +185,7 @@ impl Default for AdblockRust {
             last_updated: 0.0,
             error: QString::default(),
             revision: 0,
+            filters_revision: 0,
             shield: Shield::new(sites),
             lists: Arc::default(),
             unknown_lists: Vec::new(),
@@ -335,6 +340,7 @@ impl qobject::Adblock {
             rust.enabled = enabled;
             rust.shield.set_enabled(enabled);
             self.as_mut().enabled_changed();
+            self.as_mut().filters_changed();
         }
 
         let (lists, unknown) = ion_adblock::lists::resolve(&config.adblock.lists);
@@ -351,8 +357,7 @@ impl qobject::Adblock {
         if changed && !initial {
             if self.current_lists().is_empty() {
                 // Nothing to compile; stop blocking with the removed lists.
-                self.as_mut().rust_mut().shield.clear_blocker();
-                self.as_mut().set_ready(false);
+                self.as_mut().clear_blocker();
                 self.as_mut().set_last_updated(0.0);
                 self.as_mut().rust_mut().refresh_error.clear();
             } else {
@@ -399,6 +404,18 @@ impl qobject::Adblock {
     fn install(mut self: Pin<&mut Self>, blocker: Blocker) {
         self.as_mut().rust_mut().shield.set_blocker(blocker);
         self.as_mut().set_ready(true);
+        self.as_mut().filters_changed();
+    }
+
+    fn clear_blocker(mut self: Pin<&mut Self>) {
+        self.as_mut().rust_mut().shield.clear_blocker();
+        self.as_mut().set_ready(false);
+        self.as_mut().filters_changed();
+    }
+
+    fn filters_changed(mut self: Pin<&mut Self>) {
+        let next = self.filters_revision.wrapping_add(1);
+        self.as_mut().set_filters_revision(next);
     }
 
     /// Install a blocker compiled from the cache while its downloads run.
@@ -419,8 +436,7 @@ impl qobject::Adblock {
         } else if refreshed.built {
             // The configured lists couldn't be downloaded and none is cached;
             // don't keep blocking with the lists they replaced.
-            self.as_mut().rust_mut().shield.clear_blocker();
-            self.as_mut().set_ready(false);
+            self.as_mut().clear_blocker();
         }
         // Read from the cache for exactly these lists; zero means none is cached.
         self.as_mut().set_last_updated(refreshed.last_updated);

@@ -15,29 +15,40 @@ Item {
     // Rescans after a load, in ms; ads often arrive after the page.
     readonly property var rescanDelays: [1000, 3000, 8000]
     property int rescans: 0
-    // Whether the current page got its site-specific style sheet at creation.
-    property bool prepared: false
+    // The URL and filter revision the current page's site-specific style
+    // sheet was made for; it is replaced when either no longer matches.
+    property string preparedFor: ""
 
     visible: false
 
-    // A constructed style sheet: unlike a <style> element it isn't subject to
-    // the page's Content Security Policy, and it needs no <html> element, so
-    // it works at document creation too.
-    function styleScript(css) {
-        return "(function (css) {"
-            + " var sheet = new CSSStyleSheet();"
-            + " sheet.replaceSync(css);"
-            + " document.adoptedStyleSheets = document.adoptedStyleSheets.concat([sheet]);"
-            + "})(" + JSON.stringify(css) + ");"
+    function key(url) {
+        return Adblock.filtersRevision + " " + url
+    }
+
+    // Set (or, with `append`, extend) one of Ion's style sheets on the page.
+    // Constructed sheets aren't subject to the page's Content Security Policy
+    // and need no <html> element, so this works at document creation too.
+    function sheetScript(kind, css, append) {
+        return "(function (kind, css, append) {"
+            + " var ion = window.__ionAdblock || (window.__ionAdblock = { sheets: {}, text: {} });"
+            + " if (append) css = (ion.text[kind] || '') + css;"
+            + " var old = ion.sheets[kind];"
+            + " var sheets = document.adoptedStyleSheets.filter(function (s) { return s !== old; });"
+            + " delete ion.sheets[kind]; ion.text[kind] = css;"
+            + " if (css) {"
+            + "   var sheet = new CSSStyleSheet(); sheet.replaceSync(css);"
+            + "   ion.sheets[kind] = sheet; sheets.push(sheet);"
+            + " }"
+            + " document.adoptedStyleSheets = sheets;"
+            + "})(" + JSON.stringify(kind) + ", " + JSON.stringify(css) + ", " + append + ");"
     }
 
     // Classes and ids not reported before on this page; `reset` reports all.
     function scanScript(reset) {
         return "(function (reset) {"
-            + " if (reset || !window.__ionAdblockSeen)"
-            + "   window.__ionAdblockSeen = { c: new Set(), i: new Set() };"
-            + " var seen = window.__ionAdblockSeen;"
-            + " var classes = [], ids = [];"
+            + " var ion = window.__ionAdblock || (window.__ionAdblock = { sheets: {}, text: {} });"
+            + " if (reset || !ion.seen) ion.seen = { c: new Set(), i: new Set() };"
+            + " var seen = ion.seen, classes = [], ids = [];"
             + " var els = document.querySelectorAll('[class],[id]');"
             + " for (var k = 0; k < els.length; k++) {"
             + "   var e = els[k];"
@@ -48,7 +59,11 @@ Item {
             + "   }"
             + " }"
             + " return { classes: classes, ids: ids };"
-            + "})(" + (reset ? "true" : "false") + ");"
+            + "})(" + reset + ");"
+    }
+
+    function run(script) {
+        root.view.runJavaScript(script, WebEngineScript.ApplicationWorld)
     }
 
     // Register the page's style sheet before the new document is created.
@@ -56,24 +71,27 @@ Item {
         const scripts = root.view.userScripts
         for (const old of scripts.find("ion-adblock"))
             scripts.remove(old)
+        root.preparedFor = root.key(url)
         const css = Adblock.pageCss(url)
-        root.prepared = css !== ""
-        if (!root.prepared)
+        if (css === "")
             return
         const script = WebEngine.script()
         script.name = "ion-adblock"
-        script.sourceCode = root.styleScript(css)
+        script.sourceCode = root.sheetScript("page", css, false)
         script.injectionPoint = WebEngineScript.DocumentCreation
         script.worldId = WebEngineScript.ApplicationWorld
         scripts.insert(script)
     }
 
-    // The site-specific style sheet for a page that is already there.
-    function applyPageCss() {
-        const css = Adblock.pageCss(root.view.url)
-        root.prepared = css !== ""
-        if (root.prepared)
-            root.view.runJavaScript(root.styleScript(css), WebEngineScript.ApplicationWorld)
+    // Bring a loaded page's site-specific sheet up to date, e.g. after a
+    // redirect to another site or a list update.
+    function refreshPageSheet() {
+        const url = root.view.url.toString()
+        if (root.preparedFor === root.key(url))
+            return false
+        root.preparedFor = root.key(url)
+        root.run(root.sheetScript("page", Adblock.pageCss(url), false))
+        return true
     }
 
     function scan(reset) {
@@ -83,7 +101,7 @@ Item {
                 return
             const css = Adblock.genericCss(url, found.classes, found.ids)
             if (css !== "" && root.view.url === url)
-                root.view.runJavaScript(root.styleScript(css), WebEngineScript.ApplicationWorld)
+                root.run(root.sheetScript("generic", css, true))
         })
     }
 
@@ -95,8 +113,7 @@ Item {
                 root.prepare(info.url)
             } else if (info.status === WebEngineView.LoadSucceededStatus) {
                 root.rescans = 0
-                if (!root.prepared)
-                    root.applyPageCss()
+                root.refreshPageSheet()
                 root.scan(false)
                 rescan.interval = root.rescanDelays[0]
                 rescan.start()
@@ -104,16 +121,17 @@ Item {
         }
     }
 
-    // Lists that finish loading after the page did: apply them to it now,
-    // scanning every class and id again since earlier scans matched nothing.
+    // New lists, no lists or the global switch: redo the loaded page with
+    // the current rules. A page still loading catches up when it finishes.
     Connections {
         target: Adblock
-        function onReadyChanged() {
-            // A page still loading gets them when it finishes.
-            if (!Adblock.ready || root.view.loading || root.view.url.toString() === "")
+        function onFiltersRevisionChanged() {
+            if (root.view.loading || root.view.url.toString() === "")
                 return
-            root.applyPageCss()
-            root.scan(true)
+            if (root.refreshPageSheet()) {
+                root.run(root.sheetScript("generic", "", false))
+                root.scan(true)
+            }
         }
     }
 
