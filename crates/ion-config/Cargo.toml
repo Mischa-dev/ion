@@ -1,0 +1,20 @@
+[package]
+name = "ion-config"
+description = "Layered TOML configuration for the Ion browser: schema, overrides, live reload"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+notify.workspace = true
+serde.workspace = true
+serde_ignored.workspace = true
+toml.workspace = true
+toml_edit.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

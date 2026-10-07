@@ -12,7 +12,11 @@ Item {
 
     readonly property bool macOS: Qt.platform.os === "osx"
 
-    Omnibox { id: resolver }
+    Omnibox {
+        id: resolver
+        searchEngineName: Config.searchEngineName
+        searchTemplate: Config.searchTemplate
+    }
 
     Connections {
         target: Platform

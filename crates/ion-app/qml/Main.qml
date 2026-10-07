@@ -7,7 +7,7 @@ import Ion
 ApplicationWindow {
     id: window
 
-    readonly property string homeUrl: "https://duckduckgo.com/"
+    readonly property string homeUrl: Config.homePage
     readonly property var currentView: views.count > 0 ? views.itemAt(tabs.currentIndex) : null
 
     width: 1280
@@ -21,7 +21,8 @@ ApplicationWindow {
         id: profilePrototype
         storageName: "Default"
     }
-    readonly property WebEngineProfile profile: profilePrototype.instance()
+    // Set in Component.onCompleted: instance() is null until the prototype is complete.
+    property WebEngineProfile profile: null
 
     // Tab state lives here; TabStrip and the view stack both read it.
     ListModel {
@@ -58,6 +59,7 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
+        profile = profilePrototype.instance()
         // URLs on the command line (`ion %U` from the desktop file) open as tabs.
         const urls = Qt.application.arguments.slice(1).filter(arg => !arg.startsWith("-"))
         if (urls.length === 0)
@@ -67,7 +69,11 @@ ApplicationWindow {
         tabs.currentIndex = 0
     }
 
-    Omnibox { id: urlBarResolver }
+    Omnibox {
+        id: urlBarResolver
+        searchEngineName: Config.searchEngineName
+        searchTemplate: Config.searchTemplate
+    }
 
     PlatformIntegration { window: window }
 
@@ -123,7 +129,7 @@ ApplicationWindow {
     Shortcut { sequences: ["Ctrl+L", "Alt+D", "F6"]; onActivated: window.focusUrlBar() }
     Shortcut { sequences: ["Ctrl+Tab", "Ctrl+PgDown"]; onActivated: window.cycleTab(1) }
     Shortcut { sequences: ["Ctrl+Shift+Tab", "Ctrl+PgUp"]; onActivated: window.cycleTab(-1) }
-    Shortcut { sequences: [StandardKey.Refresh]; onActivated: window.currentView?.reload() }
+    Shortcut { sequences: [StandardKey.Refresh, "Ctrl+R"]; onActivated: window.currentView?.reload() }
     Shortcut { sequences: [StandardKey.Back]; onActivated: window.currentView?.goBack() }
     Shortcut { sequences: [StandardKey.Forward]; onActivated: window.currentView?.goForward() }
     Shortcut { sequences: [StandardKey.Quit]; onActivated: Qt.quit() }

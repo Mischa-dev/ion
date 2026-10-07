@@ -66,3 +66,5 @@ Shared files with small, append-only edits: root `Cargo.toml`,
 - `ion_core::navigation::Omnibox` decides between address and search. Bangs and
   commands plug in as earlier steps in `Omnibox::resolve`.
 - The browser profile is persistent (`storageName: "Default"`).
+- Settings come from `ion-config` (layered TOML, live reload, `programs.ion`
+  home-manager module); see [CONFIG.md](CONFIG.md).
