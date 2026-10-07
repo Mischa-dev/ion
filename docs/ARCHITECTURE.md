@@ -72,9 +72,10 @@ Shared files with small, append-only edits: root `Cargo.toml`,
   `<data dir>/history.json`; `History.search(query, limit)` returns JSON for the
   command palette. The data dir is `$ION_DATA_DIR`, else
   `~/.local/share/ion` (XDG) or `~/Library/Application Support/Ion`.
-- `Theme.qml` holds static tokens. The theming work drives them from Rust
-  (built-in themes, DMS palette file, system accent) without changing the
-  components that read them.
+- `Theme.qml`'s colors come from `ThemeEngine` (`crates/ion-theme`): built-in
+  themes, DMS or manual palette files (live reloaded) and the system accent.
+  `Theme.qml` binds them to the `[theme]` config section; see
+  `crates/ion-theme/README.md`. Sizes and motion tokens are still static.
 - `ion_core::navigation::Omnibox` decides between address and search. Extra
   stages implement `InputStep` and run first; `ion_bangs::BangTable` is one.
   Config feeds user bangs through `BangTable::apply`.

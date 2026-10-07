@@ -1,0 +1,15 @@
+name = "Ion Light"
+scheme = "light"
+
+[colors]
+background = "#e9e7e0"
+surface = "#f6f5f1"
+surface_raised = "#dedbd2"
+surface_hover = "#d3d0c5"
+border = "#d3d0c5"
+text = "#1f1f28"
+text_muted = "#64635c"
+accent = "#3d5fa8"
+danger = "#c4374a"
+warning = "#a96b00"
+success = "#3f7a28"

@@ -123,7 +123,8 @@ impl Default for Animations {
 #[serde(default, rename_all = "camelCase")]
 pub struct Theme {
     pub source: ThemeSource,
-    /// Built-in theme to use with `source = "builtin"`.
+    /// Theme id to use with `source = "builtin"`; `"auto"` follows the
+    /// system's light/dark mode.
     pub name: String,
     /// Palette file for `source = "manual"` or `"dms"` (DMS has a default path
     /// of its own when this is unset).
@@ -135,7 +136,7 @@ impl Default for Theme {
     fn default() -> Self {
         Self {
             source: ThemeSource::default(),
-            name: "dark".into(),
+            name: "auto".into(),
             palette: None,
         }
     }
@@ -152,7 +153,8 @@ pub enum ThemeSource {
     Dms,
     /// System accent color and light/dark mode.
     System,
-    /// A palette file named by `theme.palette`.
+    /// A palette file named by `theme.palette` (default
+    /// `<config dir>/palette.toml`).
     Manual,
 }
 
@@ -220,9 +222,6 @@ impl Config {
                 ));
             }
         }
-        if self.theme.source == ThemeSource::Manual && self.theme.palette.is_none() {
-            problems.push("theme.source is \"manual\" but theme.palette is not set".into());
-        }
         problems
     }
 }
@@ -273,8 +272,10 @@ mod tests {
         let mut config = Config::default();
         config.search.template = "https://example.com/".into();
         config.ui.animations.speed = 0.0;
+        // Manual without a palette is fine: it falls back to
+        // `<config dir>/palette.toml`.
         config.theme.source = ThemeSource::Manual;
-        assert_eq!(config.check().len(), 3);
+        assert_eq!(config.check().len(), 2);
     }
 
     #[test]
