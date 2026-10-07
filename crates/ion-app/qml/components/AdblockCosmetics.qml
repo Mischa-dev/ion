@@ -26,7 +26,8 @@ Item {
     }
 
     // How often Ion's sheets are put back if the page replaced the adopted
-    // sheet list (it is shared with the page's world), in ms.
+    // sheet list or emptied a sheet (both are shared with the page's world),
+    // in ms.
     readonly property int keepInterval: 1000
 
     // Set (or, with `append`, extend) one of Ion's style sheets on the page.
@@ -34,10 +35,14 @@ Item {
     // and need no <html> element, so this works at document creation too.
     function sheetScript(kind, css, append) {
         return "(function (kind, css, append) {"
-            + " var ion = window.__ionAdblock || (window.__ionAdblock = { sheets: {}, text: {} });"
+            + " var ion = window.__ionAdblock || (window.__ionAdblock = { sheets: {}, text: {}, rules: {} });"
             + " if (!ion.keeper) ion.keeper = setInterval(function () {"
             + "   var list = document.adoptedStyleSheets, missing = [];"
-            + "   for (var k in ion.sheets) if (list.indexOf(ion.sheets[k]) < 0) missing.push(ion.sheets[k]);"
+            + "   for (var k in ion.sheets) {"
+            + "     var s = ion.sheets[k];"
+            + "     if (s.cssRules.length !== ion.rules[k]) s.replaceSync(ion.text[k]);"
+            + "     if (list.indexOf(s) < 0) missing.push(s);"
+            + "   }"
             + "   if (missing.length) document.adoptedStyleSheets = list.concat(missing);"
             + " }, " + root.keepInterval + ");"
             + " if (append) css = (ion.text[kind] || '') + css;"
@@ -46,7 +51,7 @@ Item {
             + " delete ion.sheets[kind]; ion.text[kind] = css;"
             + " if (css) {"
             + "   var sheet = new CSSStyleSheet(); sheet.replaceSync(css);"
-            + "   ion.sheets[kind] = sheet; sheets.push(sheet);"
+            + "   ion.sheets[kind] = sheet; ion.rules[kind] = sheet.cssRules.length; sheets.push(sheet);"
             + " }"
             + " document.adoptedStyleSheets = sheets;"
             + "})(" + JSON.stringify(kind) + ", " + JSON.stringify(css) + ", " + append + ");"
@@ -55,7 +60,7 @@ Item {
     // Classes and ids not reported before on this page; `reset` reports all.
     function scanScript(reset) {
         return "(function (reset) {"
-            + " var ion = window.__ionAdblock || (window.__ionAdblock = { sheets: {}, text: {} });"
+            + " var ion = window.__ionAdblock || (window.__ionAdblock = { sheets: {}, text: {}, rules: {} });"
             + " if (reset || !ion.seen) ion.seen = { c: new Set(), i: new Set() };"
             + " var seen = ion.seen, classes = [], ids = [];"
             + " var els = document.querySelectorAll('[class],[id]');"
