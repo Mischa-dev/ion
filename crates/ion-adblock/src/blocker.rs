@@ -55,7 +55,7 @@ impl Blocker {
                 rule_types: RuleTypes::NetworkOnly,
                 ..ParseOptions::default()
             };
-            set.add_filter_list(text.to_owned(), options);
+            set.add_filter_list(crate::directives::preprocess(text), options);
         }
         Self {
             engine: Engine::new_with_filter_set(set),
@@ -208,6 +208,13 @@ mod tests {
             ResourceType::Xhr,
         );
         assert_eq!(blocker.check(&clean), Verdict::Allow);
+    }
+
+    #[test]
+    fn firefox_only_exceptions_do_not_apply() {
+        let list = "||ads.example^\n!#if env_firefox\n@@||ads.example^\n!#endif\n";
+        let blocker = Blocker::from_lists([list]);
+        assert!(blocker.should_block(&script("https://ads.example/x.js")));
     }
 
     #[test]
