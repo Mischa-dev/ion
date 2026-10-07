@@ -93,7 +93,7 @@ ApplicationWindow {
     function toggleBookmark() {
         const view = window.currentView
         if (view)
-            Bookmarks.toggle(view.url.toString(), view.title)
+            Bookmarks.toggle(view.displayUrl.toString(), view.title)
     }
 
     function showExtensions() {
@@ -327,9 +327,9 @@ ApplicationWindow {
                         }
                     }
 
-                    onUrlChanged: {
+                    onDisplayUrlChanged: {
                         if (!deferred)
-                            Tabs.setUrl(index, url.toString())
+                            Tabs.setUrl(index, displayUrl.toString())
                     }
                     onTitleChanged: {
                         if (deferred)
@@ -390,7 +390,7 @@ ApplicationWindow {
     Shortcut { sequence: "Ctrl+7"; onActivated: Tabs.activateNth(6) }
     Shortcut { sequence: "Ctrl+8"; onActivated: Tabs.activateNth(7) }
     Shortcut { sequence: "Ctrl+9"; onActivated: Tabs.activateNth(-1) }
-    Shortcut { sequences: [StandardKey.Refresh, "Ctrl+R"]; onActivated: window.currentView?.reload() }
+    Shortcut { sequences: [StandardKey.Refresh, "Ctrl+R"]; onActivated: window.currentView?.reloadPage() }
     Shortcut { sequences: [StandardKey.Back]; onActivated: window.currentView?.goBack() }
     Shortcut { sequences: [StandardKey.Forward]; onActivated: window.currentView?.goForward() }
     Shortcut { sequences: [StandardKey.Quit]; onActivated: Qt.quit() }

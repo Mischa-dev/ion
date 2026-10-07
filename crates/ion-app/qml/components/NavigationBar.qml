@@ -43,13 +43,13 @@ Rectangle {
             glyph: loading ? "✕" : "↻"
             tip: loading ? qsTr("Stop") : qsTr("Reload")
             enabled: bar.view !== null
-            onClicked: loading ? bar.view.stop() : bar.view.reload()
+            onClicked: loading ? bar.view.stop() : bar.view.reloadPage()
         }
 
         UrlBar {
             id: urlBar
             Layout.fillWidth: true
-            currentUrl: bar.view?.url ?? ""
+            currentUrl: bar.view?.displayUrl ?? ""
             onNavigate: target => {
                 if (bar.view)
                     bar.view.url = target
@@ -70,7 +70,7 @@ Rectangle {
             onClicked: bar.view.reader.toggle()
         }
         IconButton {
-            readonly property string pageUrl: (bar.view?.url ?? "").toString()
+            readonly property string pageUrl: (bar.view?.displayUrl ?? "").toString()
             // Reading revision makes the binding re-run when bookmarks change.
             readonly property bool bookmarked: Bookmarks.revision >= 0 && Bookmarks.contains(pageUrl)
             glyph: bookmarked ? "★" : "☆"

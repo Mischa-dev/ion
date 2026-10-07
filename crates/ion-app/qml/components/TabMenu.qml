@@ -50,7 +50,7 @@ IonMenu {
 
     IonMenuItem {
         text: qsTr("Reload")
-        onTriggered: root.view?.reload()
+        onTriggered: root.view?.reloadPage()
     }
     IonMenuItem {
         text: qsTr("Duplicate")

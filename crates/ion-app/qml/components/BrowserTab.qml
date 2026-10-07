@@ -93,6 +93,19 @@ WebEngineView {
             zoomFactor = Zoom.factorFor(url)
     }
     onNewWindowRequested: request => view.newTabRequested(request)
+    // The address the tab stands for: while the error page shows, the one
+    // that failed, since the page before it is still the current one.
+    readonly property url displayUrl: loadError.visible ? loadError.pageUrl : url
+
+    // Reloads, or retries the failed address while the error page shows
+    // (reload() would load the page before it). Use instead of reload().
+    function reloadPage() {
+        if (loadError.visible)
+            url = loadError.pageUrl
+        else
+            reload()
+    }
+
     // Keyboard focus belongs to the error page while it covers the view.
     onActiveFocusChanged: if (activeFocus && loadError.visible) loadError.takeFocus()
 
@@ -160,8 +173,6 @@ WebEngineView {
     LoadErrorPage {
         id: loadError
         anchors.fill: parent
-        // The failed load never became the current page, so reload() would
-        // load the page before it.
-        onRetry: view.url = pageUrl
+        onRetry: view.reloadPage()
     }
 }

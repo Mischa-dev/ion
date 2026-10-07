@@ -95,7 +95,7 @@ Menu {
         switch (id) {
         case "back": v.goBack(); break
         case "forward": v.goForward(); break
-        case "reload": v.reload(); break
+        case "reload": v.reloadPage(); break
         case "openLinkInNewTab": v.triggerWebAction(WebEngineView.OpenLinkInNewTab); break
         case "copyLink": v.triggerWebAction(WebEngineView.CopyLinkToClipboard); break
         case "saveLink": v.triggerWebAction(WebEngineView.DownloadLinkToDisk); break

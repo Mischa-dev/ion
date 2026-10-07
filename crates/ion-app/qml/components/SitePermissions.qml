@@ -176,7 +176,7 @@ IconButton {
                 DialogButton {
                     text: qsTr("Reload")
                     onClicked: {
-                        control.view?.reload()
+                        control.view?.reloadPage()
                         panel.close()
                     }
                 }
