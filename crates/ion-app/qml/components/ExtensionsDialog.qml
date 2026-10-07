@@ -150,7 +150,7 @@ Popup {
                         }
                     }
 
-                    Switch {
+                    IonSwitch {
                         checked: row.modelData.isEnabled
                         onToggled: {
                             root.browser.profile.extensionManager.setExtensionEnabled(row.modelData, checked)
