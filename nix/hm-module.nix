@@ -33,6 +33,44 @@ let
       lib.mapAttrs (_: v: if builtins.isAttrs v && !lib.isDerivation v then clean v else v) attrs
     );
 
+  # One agent's trust settings (`agents.<id>`); see docs/SAFETY.md.
+  agentType = types.submodule {
+    options = {
+      name = setting types.str "Name shown in prompts and the activity log.";
+      trust = setting (types.enum [
+        "ask"
+        "trustedSites"
+        "full"
+        "custom"
+      ]) "How much the agent may do without asking.";
+      trustedSites = setting (types.listOf types.str) "Sites a `trustedSites` agent acts on freely.";
+      connectors = setting (types.listOf types.str) "Connectors the agent may use without asking.";
+      rules = setting (types.listOf (
+        types.submodule {
+          options = {
+            action = mkOption {
+              type = types.str;
+              description = "An action id, `tier:<tier>`, or `*`.";
+            };
+            site = mkOption {
+              type = types.str;
+              default = "*";
+              description = "A domain, an origin, or `*`.";
+            };
+            effect = mkOption {
+              type = types.enum [
+                "allow"
+                "ask"
+                "deny"
+              ];
+              description = "What the rule decides.";
+            };
+          };
+        }
+      )) "Rules for this agent, most specific wins.";
+    };
+  };
+
   settings = clean (
     removeAttrs cfg [
       "enable"
@@ -59,6 +97,7 @@ in
         general = {
           homePage = setting types.str "Page opened at startup when there is nothing to restore.";
           restoreSession = setting types.bool "Reopen the previous session's tabs on start.";
+          suspendTabsAfter = setting types.ints.unsigned "Unload background tabs unseen for this many minutes (0 = never).";
         };
 
         search = {
@@ -76,6 +115,7 @@ in
             "horizontal"
             "vertical"
           ]) "Tab strip layout.";
+          collapseSidebar = setting types.bool "With vertical tabs, show only favicons until the sidebar is hovered.";
           animations = {
             enable = setting types.bool "Whether the interface animates.";
             speed = setting (types.addCheck types.number (x: x > 0)) "Animation speed multiplier.";
@@ -91,6 +131,14 @@ in
           ]) "Where Ion's palette comes from.";
           name = setting types.str "Built-in theme to use with `source = \"builtin\"`.";
           palette = setting types.str "Palette file for the `manual` and `dms` sources.";
+          pages =
+            setting
+              (types.enum [
+                "match"
+                "system"
+                "darken"
+              ])
+              "What web pages see: the theme's light/dark (`match`), the system's, or `match` plus darkening pages without a dark style.";
         };
 
         bangs = mkOption {
@@ -105,6 +153,23 @@ in
         adblock = {
           enable = setting types.bool "Whether to block ads and trackers.";
           lists = setting (types.listOf types.str) "Filter lists, by well-known name or URL.";
+        };
+
+        agents = mkOption {
+          default = { };
+          example = {
+            claude-code.trust = "full";
+            mcp.enable = true;
+          };
+          description = "Agents' trust, by agent id, and Ion's MCP server (`agents.mcp`).";
+          type = types.submodule {
+            freeformType = types.attrsOf agentType;
+            options.mcp.enable = setting types.bool "Serve Ion's browser tools to outside agents over localhost MCP.";
+          };
+        };
+
+        safety = {
+          auditRetentionDays = setting types.ints.positive "Days of agent activity log kept.";
         };
 
         shortcuts = mkOption {

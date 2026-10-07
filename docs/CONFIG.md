@@ -24,6 +24,7 @@ optional; these are the defaults.
 [general]
 homePage = "https://duckduckgo.com/"
 restoreSession = true
+suspendTabsAfter = 30        # minutes before an unseen background tab is unloaded; 0 = never
 
 [search]
 engine = "DuckDuckGo"
@@ -33,6 +34,7 @@ template = "https://duckduckgo.com/?q={}"
 density = "comfortable"      # "comfortable" | "compact"
 cornerRadius = 8
 tabs = "horizontal"          # "horizontal" | "vertical"
+collapseSidebar = false      # vertical tabs: show only favicons until hovered
 animations = { enable = true, speed = 1.0 }
 
 [theme]
@@ -42,6 +44,10 @@ name = "auto"                # "auto" follows light/dark mode; or "dark", "light
                              # a palette file in ~/.config/ion/themes/<name>.toml
 # palette = "/path/to/palette.toml"   # "manual" defaults to ~/.config/ion/palette.toml,
                                       # "dms" to ~/.config/ion/dms-palette.toml
+pages = "match"              # what web pages see: "match" gives them the theme's
+                             # light/dark (prefers-color-scheme), "system" the
+                             # system's; "darken" is "match" plus darkening pages
+                             # that have no dark style when the theme is dark
 
 [bangs]                      # your own, on top of Ion's built-in set
 # gh = "https://github.com/search?q={}"   # adds or replaces !gh

@@ -6,16 +6,19 @@
 //!
 //! - [`palette`]: the token set and the TOML palette file format.
 //! - [`builtin`]: themes compiled into Ion.
+//! - [`pages`]: how web pages follow the theme.
 //! - [`source`]: built-in, DMS, system and manual sources.
 //! - [`watch`]: file watching for live reload.
 
 pub mod builtin;
 pub mod color;
+pub mod pages;
 pub mod palette;
 pub mod source;
 pub mod watch;
 
 pub use color::Color;
+pub use pages::PageTheming;
 pub use palette::{Palette, Scheme};
 pub use source::{Dirs, SystemAppearance, ThemeSource};
 pub use watch::FileWatcher;
