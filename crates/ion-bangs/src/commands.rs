@@ -151,7 +151,7 @@ pub const COMMANDS: &[Command] = &[
         "stop-agents",
         "Stop all agents",
         "ai halt pause safety",
-        "Ctrl+Shift+Escape",
+        "Ctrl+Shift+.",
     ),
     command("resume-agents", "Resume agents", "ai start safety", ""),
     command("quit", "Quit Ion", "exit close window", "Ctrl+Q"),
