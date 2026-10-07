@@ -71,6 +71,11 @@ WebEngineView {
     // Ion's when this tab's first load starts. Later loads don't reset it.
     property bool pageSchemeRestored: false
     onLoadingChanged: info => {
+        // Ion's own error page replaces Chromium's (settings.errorPageEnabled).
+        if (info.status === WebEngineView.LoadFailedStatus)
+            loadError.showFor(info)
+        else if (info.status === WebEngineView.LoadStartedStatus)
+            loadError.visible = false
         if (!pageSchemeRestored && info.status === WebEngineView.LoadStartedStatus) {
             pageSchemeRestored = true
             Theme.engine.applyPageScheme()
@@ -99,5 +104,13 @@ WebEngineView {
         function onPageSchemeChanged() {
             view.applyPageTheme()
         }
+    }
+
+    // Failed loads show LoadErrorPage, in Ion's colors, not Chromium's page.
+    settings.errorPageEnabled: false
+    LoadErrorPage {
+        id: loadError
+        anchors.fill: parent
+        onRetry: view.reload()
     }
 }

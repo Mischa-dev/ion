@@ -8,6 +8,7 @@ pub mod bookmarks;
 pub mod config;
 pub mod extensions;
 pub mod history;
+pub mod load_error;
 pub mod omnibox;
 pub mod palette;
 pub mod platform;
