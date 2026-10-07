@@ -112,6 +112,19 @@ ApplicationWindow {
             currentView.forceActiveFocus()
     }
 
+    // Delete what `[privacy] clearOnExit` lists.
+    function clearOnExit() {
+        const items = Privacy.clearOnExit()
+        if (items.includes("cookies"))
+            Privacy.clearCookies(window.profile)
+        if (items.includes("cache"))
+            window.profile.clearHttpCache()
+        if (items.includes("history")) {
+            History.clear()
+            History.save()
+        }
+    }
+
     function focusUrlBar() {
         navBar.urlBar.forceActiveFocus()
         navBar.urlBar.selectAll()
@@ -121,6 +134,8 @@ ApplicationWindow {
         profile = profilePrototype.instance()
         Adblock.attach(window.profile)
         Privacy.apply(window.profile)
+        // Again at start, in case the last quit was cut short.
+        clearOnExit()
         // Chrome extensions from config and Ion's extensions folder.
         const extensionManager = window.profile.extensionManager
         if (extensionManager) {
@@ -137,13 +152,14 @@ ApplicationWindow {
             openTab(homeUrl)
     }
 
-    // Extensions load switched off; turn on each one that loaded cleanly.
-    // Switching one off in the Extensions dialog lasts until Ion restarts.
+    // Extensions load switched off; turn on each one that loaded cleanly,
+    // unless it was switched off in the Extensions dialog.
     Connections {
         target: window.profile?.extensionManager ?? null
         ignoreUnknownSignals: true
         function onLoadFinished(extension) {
-            if (extension.isLoaded && !extension.isEnabled && extension.error.length === 0)
+            if (extension.isLoaded && !extension.isEnabled && extension.error.length === 0
+                    && !Extensions.isDisabled(extension.path.toString()))
                 window.profile.extensionManager.setExtensionEnabled(extension, true)
         }
     }
@@ -195,6 +211,7 @@ ApplicationWindow {
         function onAboutToQuit() {
             Tabs.saveSession()
             History.save()
+            window.clearOnExit()
         }
     }
 

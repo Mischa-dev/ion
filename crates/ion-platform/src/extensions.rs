@@ -6,6 +6,7 @@
 //! `extensions` folder in the data directory. QtWebEngine runs Manifest V3
 //! only, so older extensions are reported instead of loaded.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 /// An extension folder to load, or why one can't be.
@@ -67,6 +68,48 @@ pub fn discover(configured: &[String], folder: Option<&Path>, home: Option<&Path
         .collect()
 }
 
+/// Extensions the person switched off in the Extensions dialog, by folder,
+/// kept in `extensions.json` in the data directory so they stay off.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Disabled(BTreeSet<String>);
+
+impl Disabled {
+    /// Read `file`; missing or unreadable means none are off.
+    pub fn load(file: &Path) -> Self {
+        let set = std::fs::read_to_string(file)
+            .ok()
+            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+            .and_then(|v| v.get("disabled").cloned())
+            .and_then(|v| serde_json::from_value::<BTreeSet<String>>(v).ok())
+            .unwrap_or_default();
+        Self(set)
+    }
+
+    pub fn save(&self, file: &Path) -> std::io::Result<()> {
+        if let Some(parent) = file.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let text = serde_json::to_string_pretty(&serde_json::json!({ "disabled": self.0 }))
+            .map_err(std::io::Error::other)?;
+        let tmp = file.with_extension("json.tmp");
+        std::fs::write(&tmp, text)?;
+        std::fs::rename(tmp, file)
+    }
+
+    pub fn contains(&self, path: &str) -> bool {
+        self.0.contains(path)
+    }
+
+    /// Switch `path` off (`true`) or back on. Returns whether anything changed.
+    pub fn set(&mut self, path: &str, disabled: bool) -> bool {
+        if disabled {
+            self.0.insert(path.to_owned())
+        } else {
+            self.0.remove(path)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -119,5 +162,22 @@ mod tests {
     #[test]
     fn missing_folder_is_fine() {
         assert!(discover(&[], Some(Path::new("/nonexistent/ion")), None).is_empty());
+    }
+
+    #[test]
+    fn disabled_extensions_round_trip() {
+        let dir = std::env::temp_dir().join(format!("ion-ext-disabled-{}", std::process::id()));
+        let file = dir.join("extensions.json");
+        assert_eq!(Disabled::load(&file), Disabled::default());
+        let mut disabled = Disabled::default();
+        assert!(disabled.set("/x/one", true));
+        assert!(!disabled.set("/x/one", true));
+        disabled.save(&file).unwrap();
+        let loaded = Disabled::load(&file);
+        assert!(loaded.contains("/x/one"));
+        let mut loaded = loaded;
+        assert!(loaded.set("/x/one", false));
+        assert!(!loaded.contains("/x/one"));
+        std::fs::remove_dir_all(dir).ok();
     }
 }

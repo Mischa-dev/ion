@@ -439,6 +439,20 @@ impl qobject::Adblock {
                 &QString::from("1"),
             );
         }
+        if !blocked {
+            let page = if first_party.is_empty() {
+                &url
+            } else {
+                &first_party
+            };
+            if let Some(agent) = super::sites::user_agent_for(page) {
+                qobject::set_request_header(
+                    info.as_mut(),
+                    &QString::from("User-Agent"),
+                    &QString::from(agent.as_str()),
+                );
+            }
+        }
         match verdict {
             Verdict::Allow => {}
             Verdict::Block => {

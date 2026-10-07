@@ -7,6 +7,11 @@
 
 #[cxx_qt::bridge]
 pub mod qobject {
+    unsafe extern "C++" {
+        include!("cxx-qt-lib/qstringlist.h");
+        type QStringList = cxx_qt_lib::QStringList;
+    }
+
     #[namespace = "ion"]
     unsafe extern "C++" {
         include!("ion-app/cpp/privacy.h");
@@ -30,6 +35,12 @@ pub mod qobject {
         #[qinvokable]
         unsafe fn apply(self: &Privacy, profile: *mut QObject) -> bool;
 
+        /// What `[privacy] clearOnExit` asks to delete: some of `cookies`,
+        /// `cache` and `history`.
+        #[qinvokable]
+        #[cxx_name = "clearOnExit"]
+        fn clear_on_exit(self: &Privacy) -> QStringList;
+
         /// Delete every cookie in `profile`, signing out of all sites.
         #[qinvokable]
         #[cxx_name = "clearCookies"]
@@ -41,6 +52,16 @@ pub mod qobject {
 pub struct PrivacyRust;
 
 impl qobject::Privacy {
+    fn clear_on_exit(&self) -> cxx_qt_lib::QStringList {
+        let config = ion_config::global().config();
+        config
+            .privacy
+            .clear_on_exit
+            .iter()
+            .map(|data| cxx_qt_lib::QString::from(data.as_str()))
+            .collect()
+    }
+
     /// # Safety
     /// `profile` must be null or a live QObject.
     unsafe fn apply(&self, profile: *mut qobject::QObject) -> bool {
