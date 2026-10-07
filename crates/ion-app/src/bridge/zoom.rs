@@ -59,20 +59,10 @@ pub struct ZoomRust {
     sites: Option<SiteZoom>,
 }
 
-/// `zoom.txt` in Ion's data directory (`$XDG_DATA_HOME/ion` on Linux,
-/// `~/Library/Application Support/Ion` on macOS).
+/// `zoom.txt` in Ion's data directory, the same one sessions and history use
+/// (`ION_DATA_DIR` wins over the platform default).
 fn store_path() -> Option<PathBuf> {
-    let home = std::env::var_os("HOME").map(PathBuf::from);
-    let dir = if cfg!(target_os = "macos") {
-        home?.join("Library/Application Support/Ion")
-    } else {
-        std::env::var_os("XDG_DATA_HOME")
-            .map(PathBuf::from)
-            .filter(|p| p.is_absolute())
-            .or_else(|| home.map(|h| h.join(".local/share")))?
-            .join("ion")
-    };
-    Some(dir.join("zoom.txt"))
+    Some(ion_session::paths::data_dir()?.join("zoom.txt"))
 }
 
 impl ZoomRust {

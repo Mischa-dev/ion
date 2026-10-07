@@ -213,7 +213,8 @@ impl Config {
             ));
         }
         for (name, template) in &self.bangs {
-            if !template.contains("{}") {
+            // An empty template removes a built-in bang.
+            if !template.is_empty() && !template.contains("{}") {
                 problems.push(format!(
                     "bangs.{name} {template:?} has no {{}} for the query"
                 ));

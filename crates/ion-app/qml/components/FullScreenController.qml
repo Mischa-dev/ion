@@ -22,7 +22,10 @@ Item {
     property int restoreVisibility: Window.Windowed
 
     function enter() {
-        if (window.visibility !== Window.FullScreen)
+        // Remember the state from before the first of page and window
+        // fullscreen, so a window that was already fullscreen (the macOS green
+        // button, the window manager) stays fullscreen when both end.
+        if (!(pageActive && windowActive))
             restoreVisibility = window.visibility
         window.showFullScreen()
     }

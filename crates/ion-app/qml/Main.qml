@@ -111,6 +111,9 @@ ApplicationWindow {
         searchTemplate: Config.searchTemplate
     }
 
+    // Command palette (Ctrl/Cmd+K).
+    CommandPalette { id: palette; browser: window }
+
     header: ColumnLayout {
         spacing: 0
         visible: !fullScreen.active
@@ -250,4 +253,8 @@ ApplicationWindow {
     Shortcut { sequences: [StandardKey.ZoomIn, "Ctrl+="]; onActivated: window.currentView?.zoomIn() }
     Shortcut { sequences: [StandardKey.ZoomOut]; onActivated: window.currentView?.zoomOut() }
     Shortcut { sequences: ["Ctrl+0"]; onActivated: window.currentView?.resetZoom() }
+    Shortcut {
+        sequence: { Config.revision; return Config.value("shortcuts.palette") || "Ctrl+K" }
+        onActivated: palette.show()
+    }
 }

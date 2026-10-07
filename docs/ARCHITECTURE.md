@@ -21,6 +21,7 @@ crates/
   ion-core/               shared core: app constants, URL-bar input resolution
   ion-basics/             downloads, per-site zoom, permission prompts, find,
                           context menu and new-tab page logic
+  ion-bangs/              !bangs and the command palette's ranking
   ion-session/            tab list, saved and named sessions, browsing history
   ion-app/                the binary (`ion`)
     build.rs              auto-discovers bridges, C++ shims and QML files
@@ -70,8 +71,12 @@ Shared files with small, append-only edits: root `Cargo.toml`,
 - `Theme.qml` holds static tokens. The theming work drives them from Rust
   (built-in themes, DMS palette file, system accent) without changing the
   components that read them.
-- `ion_core::navigation::Omnibox` decides between address and search. Bangs and
-  commands plug in as earlier steps in `Omnibox::resolve`.
+- `ion_core::navigation::Omnibox` decides between address and search. Extra
+  stages implement `InputStep` and run first; `ion_bangs::BangTable` is one.
+  Config feeds user bangs through `BangTable::apply`.
+- The Ctrl/Cmd+K palette ranks tabs, history, sessions, commands and bangs in
+  `ion_bangs::palette`; commands are
+  listed in `ion_bangs::commands` and carried out in `CommandPalette.qml`.
 - The browser profile is persistent (`storageName: "Default"`).
 - Per-tab UI (find bar, permission prompt, context menu, new-tab page) is
   declared inside `BrowserTab.qml`; window-wide pieces (downloads panel,
