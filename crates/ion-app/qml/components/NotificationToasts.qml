@@ -78,9 +78,11 @@ ColumnLayout {
             }
 
             Timer {
-                // Long enough to read a sentence; hovering keeps it open.
+                // Long enough to read a sentence; hovering keeps it open. It
+                // waits while Ion is in the background and starts over when
+                // the window is active again, so a toast isn't missed.
                 interval: Theme.toastMs
-                running: !toastMouse.containsMouse
+                running: !toastMouse.containsMouse && Window.active
                 onTriggered: toasts.close(toast.notification)
             }
 

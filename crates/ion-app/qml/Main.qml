@@ -100,6 +100,11 @@ ApplicationWindow {
         extensionsDialog.show()
     }
 
+    // Window fullscreen, the same as F11: hides the toolbars too.
+    function toggleFullScreen() {
+        fullScreen.toggleWindow()
+    }
+
     function showImport() {
         importDialog.show()
     }

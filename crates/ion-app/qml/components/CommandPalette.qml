@@ -144,7 +144,7 @@ Popup {
                 Qt.openUrlExternally("file://" + Sites.directory)
             break
         case "fullscreen":
-            browser.visibility = browser.visibility === Window.FullScreen ? Window.Windowed : Window.FullScreen
+            browser.toggleFullScreen()
             break
         case "toggle-adblock":
             if (view && Adblock.setEnabledOn(view.url, !Adblock.isEnabledOn(view.url)))
