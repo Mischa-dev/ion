@@ -8,8 +8,8 @@ import QtQuick
 MouseArea {
     id: area
 
-    required property ListView list   // the strip's tab list
-    required property int index       // the tab's row
+    required property ListView list   // the strip's tab list; delegates have `row`
+    required property int index       // the tab's row in the model
 
     readonly property bool dragging: dragActive
     property bool dragActive: false
@@ -47,10 +47,12 @@ MouseArea {
                 return
             dragActive = true
         }
+        // The list may show a filtered view of the model: the delegate under
+        // the pointer knows its model row.
         const p = mapToItem(list.contentItem, mouse.x, mouse.y)
-        const target = list.indexAt(p.x, p.y)
-        if (target >= 0 && target !== index)
-            area.moveRequested(index, target)
+        const target = list.itemAtIndex(list.indexAt(p.x, p.y))
+        if (target && target.row !== index)
+            area.moveRequested(index, target.row)
     }
 
     onReleased: dragActive = false
