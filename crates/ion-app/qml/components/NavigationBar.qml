@@ -53,10 +53,12 @@ Rectangle {
             onNavigate: target => {
                 if (bar.view)
                     bar.view.url = target
+                // No view yet (startup is waiting on a cache clear): the tab
+                // loads this when its view is created.
                 else if (Tabs.currentIndex >= 0)
-                    // No view yet (startup is waiting on a cache clear); the
-                    // tab loads this when its view is created.
                     Tabs.setUrl(Tabs.currentIndex, target.toString())
+                else
+                    Tabs.openTab(target.toString(), true)
             }
             onFinished: {
                 if (bar.view)
