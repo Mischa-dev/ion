@@ -379,13 +379,20 @@ impl Policy {
 
     /// Add a rule the person made. `Once` rules are never stored. An existing
     /// rule for the same who, what and site is replaced.
-    pub fn add_user_rule(&mut self, rule: Rule) {
+    /// Returns whether the rules kept across restarts changed: a forever
+    /// rule was added, or one was replaced by a shorter-lived answer.
+    pub fn add_user_rule(&mut self, rule: Rule) -> bool {
         if rule.lifetime == Lifetime::Once {
-            return;
+            return false;
         }
-        self.user_rules
-            .retain(|r| !(r.who == rule.who && r.what == rule.what && r.site == rule.site));
+        let mut changed = rule.lifetime == Lifetime::Forever;
+        self.user_rules.retain(|r| {
+            let same = r.who == rule.who && r.what == rule.what && r.site == rule.site;
+            changed |= same && r.lifetime == Lifetime::Forever;
+            !same
+        });
         self.user_rules.push(rule);
+        changed
     }
 
     /// Remove the user rules `keep` returns false for. Returns how many went.
@@ -536,7 +543,7 @@ impl Policy {
                 Ask
             });
         };
-        if site.host().is_none() {
+        if !site.is_distinct() {
             return Decision::new(Ask, Reason::LocalPage);
         }
         match level {

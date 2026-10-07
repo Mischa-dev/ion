@@ -39,14 +39,15 @@ pub mod qobject {
         fn site_decision(self: &Safety, permission_type: i32, origin: &QUrl, tab: i32) -> QString;
 
         /// The prompt for that request as JSON: `{"text": "...", "choices":
-        /// [{"id": "deny", "label": "Block"}, ...]}`, primary choice last.
-        /// Empty when there is nothing to ask.
+        /// [{"id": "deny", "label": "Block"}, ...], "generation": 0}`,
+        /// primary choice last. Empty when there is nothing to ask.
         #[qinvokable]
         #[cxx_name = "sitePrompt"]
         fn site_prompt(self: &Safety, permission_type: i32, origin: &QUrl, tab: i32) -> QString;
 
-        /// Record the person's answer (`choice` is a choice id from
-        /// `sitePrompt`). Returns true if the request should be granted.
+        /// Record the person's answer (`choice` is a choice id and
+        /// `generation` the generation from the `sitePrompt` shown). Returns
+        /// true if the request should be granted.
         #[qinvokable]
         #[cxx_name = "answerSite"]
         fn answer_site(
@@ -54,6 +55,7 @@ pub mod qobject {
             permission_type: i32,
             origin: &QUrl,
             tab: i32,
+            generation: i32,
             choice: &QString,
         ) -> bool;
 
@@ -205,20 +207,34 @@ impl qobject::Safety {
             .map(|(choice, label)| json!({ "id": choice.id(), "label": label }))
             .collect();
         QString::from(
-            json!({ "text": prompt.text, "choices": choices })
-                .to_string()
-                .as_str(),
+            json!({
+                "text": prompt.text,
+                "choices": choices,
+                "generation": prompt.tab_generation,
+            })
+            .to_string()
+            .as_str(),
         )
     }
 
-    fn answer_site(&self, permission_type: i32, origin: &QUrl, tab: i32, choice: &QString) -> bool {
+    fn answer_site(
+        &self,
+        permission_type: i32,
+        origin: &QUrl,
+        tab: i32,
+        generation: i32,
+        choice: &QString,
+    ) -> bool {
+        let Ok(generation) = u32::try_from(generation) else {
+            return false;
+        };
         let Some(choice) = Choice::from_id(&choice.to_string()) else {
             return false;
         };
         let Some(request) = site_request(permission_type, origin, tab) else {
             return false;
         };
-        ion_safety::global().answer_site(request, choice) == Ok(Verdict::Allow)
+        ion_safety::global().answer_site(request, generation, choice) == Ok(Verdict::Allow)
     }
 
     fn site_permissions_json(&self) -> QString {

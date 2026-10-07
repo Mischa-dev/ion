@@ -46,10 +46,11 @@ impl Origin {
     }
 
     /// Whether pages with this origin can be told apart from each other:
-    /// false for hostless origins (`file:`, `data:`, `about:`), which stand
-    /// for every such page, so an answer for one is never remembered for all.
+    /// false for local and network files (`file:///…`, `file://server/…`)
+    /// and hostless origins (`data:`, `about:`), which stand for many pages,
+    /// so an answer for one is never remembered for all.
     pub fn is_distinct(&self) -> bool {
-        self.host.is_some()
+        self.host.is_some() && self.scheme != "file"
     }
 
     /// The host as people read it: `www.` dropped. `None` without a host.
@@ -94,7 +95,8 @@ pub enum SitePattern {
     /// Every site, and requests with no site at all (connectors, tab lists).
     Any,
     /// A host and all of its subdomains, any scheme and port: `github.com`
-    /// covers `https://gist.github.com`. IP addresses match only themselves.
+    /// covers `https://gist.github.com`. IP addresses match only themselves,
+    /// and file shares (`file://server/…`) never match.
     Domain(String),
     /// Exactly one origin.
     Origin(Origin),
@@ -127,8 +129,8 @@ impl SitePattern {
     /// its subdomains, or the exact origin for pages without a host.
     pub fn for_origin_host(origin: &Origin) -> SitePattern {
         match origin.host() {
-            Some(host) => SitePattern::Domain(host.to_owned()),
-            None => SitePattern::Origin(origin.clone()),
+            Some(host) if origin.is_distinct() => SitePattern::Domain(host.to_owned()),
+            _ => SitePattern::Origin(origin.clone()),
         }
     }
 
@@ -139,6 +141,7 @@ impl SitePattern {
             (SitePattern::Any, _) => true,
             (_, None) => false,
             (SitePattern::Origin(o), Some(site)) => o == site,
+            (SitePattern::Domain(_), Some(site)) if site.scheme() == "file" => false,
             (SitePattern::Domain(d), Some(site)) => site.host().is_some_and(|host| {
                 host == d
                     || (host.parse::<IpAddr>().is_err()
@@ -250,6 +253,19 @@ mod tests {
     }
 
     #[test]
+    fn files_are_never_distinct() {
+        assert!(origin("https://a.example").is_distinct());
+        assert!(!origin("file:///home/me/a.html").is_distinct());
+        let share = origin("file://server/share/a.html");
+        assert!(!share.is_distinct());
+        assert_eq!(
+            SitePattern::for_origin_host(&share),
+            SitePattern::Origin(share.clone())
+        );
+        assert!(!origin("data:text/plain,x").is_distinct());
+    }
+
+    #[test]
     fn display_host_drops_www() {
         assert_eq!(
             origin("https://www.example.com").display_host(),
@@ -285,6 +301,7 @@ mod tests {
         assert!(!gh.matches(Some(&origin("https://notgithub.com"))));
         assert!(!gh.matches(Some(&origin("https://github.com.evil.example"))));
         assert!(!gh.matches(Some(&origin("file:///github.com"))));
+        assert!(!gh.matches(Some(&origin("file://github.com/share/a.html"))));
         assert!(!gh.matches(None));
     }
 

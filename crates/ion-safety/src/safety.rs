@@ -104,9 +104,9 @@ impl Safety {
             clock: Box::new(system_clock),
         };
         match store.load() {
-            Ok(rules) => rules
-                .into_iter()
-                .for_each(|r| safety.policy.add_user_rule(r)),
+            Ok(rules) => rules.into_iter().for_each(|r| {
+                safety.policy.add_user_rule(r);
+            }),
             Err(e) => {
                 eprintln!("ion: can't read {}: {e}", store.path().display());
                 match store.set_aside() {
@@ -255,36 +255,36 @@ impl Safety {
         entry.detail = Some(choice.id().to_owned());
         self.log(entry);
         if let Some(rule) = rule {
-            let forever = rule.lifetime == Lifetime::Forever;
-            self.policy.add_user_rule(rule);
-            if forever {
+            if self.policy.add_user_rule(rule) {
                 self.save();
             }
         }
         Ok(verdict)
     }
 
-    /// The person answered the site prompt shown for `request`. The prompt
-    /// is rebuilt from the request; if another answer decided the request
-    /// while it was up (the same prompt in a second tab), a "Block" is still
-    /// honored and remembered, and any other choice gets the current verdict.
+    /// The person answered the site prompt shown for `request`, made when
+    /// the tab's generation was `tab_generation` (from the shown prompt). The
+    /// prompt is rebuilt from the request: if the tab closed since, the
+    /// answer denies; if another answer decided the request while it was up
+    /// (the same prompt in a second tab), a "Block" is still honored and
+    /// remembered, and any other choice gets the current verdict.
     pub fn answer_site(
         &mut self,
         request: SiteRequest,
+        tab_generation: u32,
         choice: Choice,
     ) -> Result<Verdict, AnswerError> {
         let outcome = self.request_site(request.clone());
-        match outcome.prompt {
-            Some(prompt) => self.answer(&prompt, choice),
-            None if choice == Choice::Deny => {
-                let prompt = Prompt {
-                    tab_generation: self.tab_generation(request.tab),
-                    ..Prompt::for_site(request)
-                };
-                self.answer(&prompt, choice)
-            }
-            None => Ok(outcome.decision.verdict),
-        }
+        let prompt = match outcome.prompt {
+            Some(prompt) => prompt,
+            None if choice == Choice::Deny => Prompt::for_site(request),
+            None => return Ok(outcome.decision.verdict),
+        };
+        let prompt = Prompt {
+            tab_generation,
+            ..prompt
+        };
+        self.answer(&prompt, choice)
     }
 
     /// Record what an agent did.
@@ -457,20 +457,56 @@ mod tests {
         let meet = "https://meet.example";
         // The same prompt is up in two tabs; the first allows.
         assert_eq!(
-            safety.answer_site(camera(meet), Choice::Allow),
+            safety.answer_site(camera(meet), 0, Choice::Allow),
             Ok(Verdict::Allow)
         );
         let mut other_tab = camera(meet);
         other_tab.tab = Some(2);
         assert_eq!(
-            safety.answer_site(other_tab.clone(), Choice::AllowOnce),
+            safety.answer_site(other_tab.clone(), 0, Choice::AllowOnce),
             Ok(Verdict::Allow)
         );
         assert_eq!(
-            safety.answer_site(other_tab, Choice::Deny),
+            safety.answer_site(other_tab, 0, Choice::Deny),
             Ok(Verdict::Deny)
         );
         assert_eq!(safety.request_site(camera(meet)).verdict(), Verdict::Deny);
+    }
+
+    #[test]
+    fn site_answers_after_the_tab_closed_deny() {
+        let mut safety = Safety::in_memory().with_clock(|| NOW);
+        let meet = "https://meet.example";
+        let shown = safety.request_site(camera(meet)).prompt.unwrap();
+        safety.tab_closed(1);
+        assert_eq!(
+            safety.answer_site(camera(meet), shown.tab_generation, Choice::Allow),
+            Ok(Verdict::Deny)
+        );
+        assert_eq!(safety.request_site(camera(meet)).verdict(), Verdict::Ask);
+    }
+
+    #[test]
+    fn replacing_a_saved_rule_with_a_session_one_saves() {
+        let dir = test_dir("safety-replace");
+        let gh = "https://github.com";
+        {
+            let mut safety = Safety::open(&dir, 30).with_clock(|| NOW);
+            let first = safety
+                .request_agent(agent_req(Action::Submit, gh))
+                .prompt
+                .unwrap();
+            let second = first.clone();
+            assert_eq!(safety.answer(&first, Choice::Allow), Ok(Verdict::Allow));
+            assert_eq!(safety.answer(&second, Choice::Deny), Ok(Verdict::Deny));
+        }
+        let safety = Safety::open(&dir, 30).with_clock(|| NOW);
+        assert_eq!(
+            safety
+                .request_agent(agent_req(Action::Submit, gh))
+                .verdict(),
+            Verdict::Ask
+        );
     }
 
     #[test]

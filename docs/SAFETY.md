@@ -151,8 +151,10 @@ and the choices allowed for it:
 Answers become rules with the matching lifetime and source `user`. "Allow on
 this site" for an agent covers read and act on that host and its subdomains;
 "Always allow" for commit covers that one action there. Local files, `data:`
-and `about:` pages have no host, so every such page shares one origin; for
-them only "Allow once" is offered, to sites and agents alike. `blob:` and `filesystem:` URLs take the
+and `about:` pages have no host, so every such page shares one origin, and
+network files (`file://server/…`) stand for a whole share; for all of them
+only "Allow once" is offered, to sites and agents alike, and site patterns
+like `server` never match files. `blob:` and `filesystem:` URLs take the
 origin of the page that made them. "Don't
 allow" on an agent prompt is remembered for the session only **(default)**,
 so a misclick does not silently cripple an agent forever; site blocks are
