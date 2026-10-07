@@ -72,6 +72,29 @@ pub mod qobject {
         #[cxx_name = "forgetSite"]
         fn forget_site(self: &Safety, url: &QUrl) -> i32;
 
+        /// What the person chose for the page at `url`, for the toolbar's
+        /// site permissions panel: `[{"type": 2, "allowed": true}, ...]`
+        /// with `type` a `WebEnginePermission.PermissionType`.
+        #[qinvokable]
+        #[cxx_name = "sitePermissionsFor"]
+        fn site_permissions_for(self: &Safety, url: &QUrl) -> QString;
+
+        /// Remember Allow or Block for one permission of the page at `url`.
+        /// Returns false for pages that can't remember (local files).
+        #[qinvokable]
+        #[cxx_name = "setSitePermission"]
+        fn set_site_permission(
+            self: &Safety,
+            url: &QUrl,
+            permission_type: i32,
+            allowed: bool,
+        ) -> bool;
+
+        /// Forget one permission of the page at `url` so it asks again.
+        #[qinvokable]
+        #[cxx_name = "forgetSitePermission"]
+        fn forget_site_permission(self: &Safety, url: &QUrl, permission_type: i32) -> bool;
+
         /// Drop tab-scoped answers and take-overs for a closed tab.
         #[qinvokable]
         #[cxx_name = "tabClosed"]
@@ -259,6 +282,38 @@ impl qobject::Safety {
             .map_or(0, |o| ion_safety::global().forget_site(&o))
             .try_into()
             .unwrap_or(i32::MAX)
+    }
+
+    fn site_permissions_for(&self, url: &QUrl) -> QString {
+        let list: Vec<_> = Origin::parse(&url.to_string())
+            .map(|origin| ion_safety::global().site_permissions_for(&origin))
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(capability, effect)| {
+                json!({ "type": capability.to_qt(), "allowed": effect == Effect::Allow })
+            })
+            .collect();
+        QString::from(serde_json::Value::from(list).to_string().as_str())
+    }
+
+    fn set_site_permission(&self, url: &QUrl, permission_type: i32, allowed: bool) -> bool {
+        let (Some(origin), Some(capability)) = (
+            Origin::parse(&url.to_string()),
+            SiteCapability::from_qt(permission_type),
+        ) else {
+            return false;
+        };
+        ion_safety::global().set_site_permission(&origin, capability, allowed)
+    }
+
+    fn forget_site_permission(&self, url: &QUrl, permission_type: i32) -> bool {
+        let (Some(origin), Some(capability)) = (
+            Origin::parse(&url.to_string()),
+            SiteCapability::from_qt(permission_type),
+        ) else {
+            return false;
+        };
+        ion_safety::global().forget_site_permission(&origin, capability)
     }
 
     fn tab_closed(&self, tab: i32) {

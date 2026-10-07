@@ -4,6 +4,8 @@
 //! every request QtWebEngine makes (on the UI thread) goes through
 //! [`ion_adblock::Shield::decide`]. Filter lists are refreshed on a worker
 //! thread and the compiled engine is handed back to the UI thread.
+//! `pageCss` and `genericCss` give `AdblockCosmetics.qml` the element-hiding
+//! style sheets for a page.
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -12,6 +14,8 @@ pub mod qobject {
         type QString = cxx_qt_lib::QString;
         include!("cxx-qt-lib/qurl.h");
         type QUrl = cxx_qt_lib::QUrl;
+        include!("cxx-qt-lib/qstringlist.h");
+        type QStringList = cxx_qt_lib::QStringList;
         include!(<QtCore/QObject>);
         type QObject = cxx_qt::QObject;
 
@@ -60,6 +64,9 @@ pub mod qobject {
         #[qproperty(f64, last_updated, cxx_name = "lastUpdated")]
         #[qproperty(QString, error)]
         #[qproperty(i32, revision)]
+        /// Bumped whenever `pageCss` and `genericCss` may answer differently:
+        /// new lists, no lists, the global switch or a per-site switch.
+        #[qproperty(i32, filters_revision, cxx_name = "filtersRevision")]
         #[namespace = "ion"]
         type Adblock = super::AdblockRust;
     }
@@ -97,6 +104,29 @@ pub mod qobject {
         #[cxx_name = "siteOf"]
         fn site_of(self: &Adblock, url: &QUrl) -> QString;
 
+        /// CSS hiding the ad elements the lists name for the page at `url`;
+        /// empty when blocking is off there.
+        #[qinvokable]
+        #[cxx_name = "pageCss"]
+        fn page_css(self: &Adblock, url: &QUrl) -> QString;
+
+        /// CSS hiding elements with these classes and ids that generic rules
+        /// (`##.ad-banner`) name; the page collects them from its DOM.
+        #[qinvokable]
+        #[cxx_name = "genericCss"]
+        fn generic_css(
+            self: &Adblock,
+            url: &QUrl,
+            classes: &QStringList,
+            ids: &QStringList,
+        ) -> QString;
+
+        /// Whether generic rules apply on the page at `url`, so its classes
+        /// and ids are worth collecting for `genericCss`.
+        #[qinvokable]
+        #[cxx_name = "genericActive"]
+        fn generic_active(self: &Adblock, url: &QUrl) -> bool;
+
         /// Download every filter list now, even if the cached copies are fresh.
         #[qinvokable]
         #[cxx_name = "updateLists"]
@@ -113,7 +143,7 @@ use std::time::{Duration, SystemTime};
 
 use cxx_qt::casting::Upcast;
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::{QString, QUrl};
+use cxx_qt_lib::{QString, QStringList, QUrl};
 use ion_adblock::update::{self, HttpFetch};
 use ion_adblock::{
     Blocker, FilterList, RequestInfo, ResourceType, Shield, SiteSettings, Store, Verdict,
@@ -152,6 +182,7 @@ pub struct AdblockRust {
     last_updated: f64,
     error: QString,
     revision: i32,
+    filters_revision: i32,
 
     shield: Shield,
     /// The lists `adblock.lists` names; shared with the background refresher.
@@ -181,6 +212,7 @@ impl Default for AdblockRust {
             last_updated: 0.0,
             error: QString::default(),
             revision: 0,
+            filters_revision: 0,
             shield: Shield::new(sites),
             lists: Arc::default(),
             unknown_lists: Vec::new(),
@@ -335,6 +367,7 @@ impl qobject::Adblock {
             rust.enabled = enabled;
             rust.shield.set_enabled(enabled);
             self.as_mut().enabled_changed();
+            self.as_mut().filters_changed();
         }
 
         let (lists, unknown) = ion_adblock::lists::resolve(&config.adblock.lists);
@@ -351,8 +384,7 @@ impl qobject::Adblock {
         if changed && !initial {
             if self.current_lists().is_empty() {
                 // Nothing to compile; stop blocking with the removed lists.
-                self.as_mut().rust_mut().shield.clear_blocker();
-                self.as_mut().set_ready(false);
+                self.as_mut().clear_blocker();
                 self.as_mut().set_last_updated(0.0);
                 self.as_mut().rust_mut().refresh_error.clear();
             } else {
@@ -399,6 +431,18 @@ impl qobject::Adblock {
     fn install(mut self: Pin<&mut Self>, blocker: Blocker) {
         self.as_mut().rust_mut().shield.set_blocker(blocker);
         self.as_mut().set_ready(true);
+        self.as_mut().filters_changed();
+    }
+
+    fn clear_blocker(mut self: Pin<&mut Self>) {
+        self.as_mut().rust_mut().shield.clear_blocker();
+        self.as_mut().set_ready(false);
+        self.as_mut().filters_changed();
+    }
+
+    fn filters_changed(mut self: Pin<&mut Self>) {
+        let next = self.filters_revision.wrapping_add(1);
+        self.as_mut().set_filters_revision(next);
     }
 
     /// Install a blocker compiled from the cache while its downloads run.
@@ -419,8 +463,7 @@ impl qobject::Adblock {
         } else if refreshed.built {
             // The configured lists couldn't be downloaded and none is cached;
             // don't keep blocking with the lists they replaced.
-            self.as_mut().rust_mut().shield.clear_blocker();
-            self.as_mut().set_ready(false);
+            self.as_mut().clear_blocker();
         }
         // Read from the cache for exactly these lists; zero means none is cached.
         self.as_mut().set_last_updated(refreshed.last_updated);
@@ -526,7 +569,29 @@ impl qobject::Adblock {
         }
         let next = self.revision.wrapping_add(1);
         self.as_mut().set_revision(next);
+        // Other tabs on this site update their hiding sheets.
+        self.as_mut().filters_changed();
         true
+    }
+
+    fn page_css(&self, url: &QUrl) -> QString {
+        QString::from(self.shield.page_css(&url.to_string()).as_str())
+    }
+
+    fn generic_active(&self, url: &QUrl) -> bool {
+        self.shield.generic_active(&url.to_string())
+    }
+
+    fn generic_css(&self, url: &QUrl, classes: &QStringList, ids: &QStringList) -> QString {
+        let strings =
+            |list: &QStringList| -> Vec<String> { list.iter().map(|s| s.to_string()).collect() };
+        let (classes, ids) = (strings(classes), strings(ids));
+        let css = self.shield.generic_css(
+            &url.to_string(),
+            classes.iter().map(String::as_str),
+            ids.iter().map(String::as_str),
+        );
+        QString::from(css.as_str())
     }
 
     fn site_of(&self, url: &QUrl) -> QString {

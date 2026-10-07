@@ -1,5 +1,6 @@
 //! The compiled filter engine.
 
+use std::collections::HashSet;
 use std::fmt;
 
 use adblock::Engine;
@@ -44,15 +45,13 @@ impl std::error::Error for DeserializeError {}
 
 impl Blocker {
     /// Compile the given filter list texts, each either in Adblock Plus syntax
-    /// or a hosts file. Unparseable lines are skipped. Only network rules are
-    /// kept: Ion doesn't do cosmetic filtering, so element-hiding rules would
-    /// only cost memory.
+    /// or a hosts file. Unparseable lines are skipped.
     pub fn from_lists<'a>(lists: impl IntoIterator<Item = &'a str>) -> Self {
         let mut set = FilterSet::new(false);
         for text in lists {
             let options = ParseOptions {
                 format: format_of(text),
-                rule_types: RuleTypes::NetworkOnly,
+                rule_types: RuleTypes::All,
                 ..ParseOptions::default()
             };
             set.add_filter_list(crate::directives::preprocess(text), options);
@@ -101,6 +100,101 @@ impl Blocker {
             }
         }
     }
+}
+
+/// The element-hiding (`##`) rules that apply to one page.
+#[derive(Debug, Default)]
+pub struct PageCosmetics {
+    /// Selectors to hide on this page, sorted.
+    pub hide: Vec<String>,
+    /// Whether generic rules (`##.ad`, which apply on every site) are used
+    /// here; false on pages with a `$generichide` exception.
+    pub generic: bool,
+    /// Class and id selectors this page excepts from the generic rules.
+    exceptions: HashSet<String>,
+}
+
+impl Blocker {
+    /// The element-hiding rules specific to the page at `url`.
+    pub fn page_cosmetics(&self, url: &str) -> PageCosmetics {
+        let resources = self.engine.url_cosmetic_resources(url);
+        let mut hide: Vec<String> = resources
+            .hide_selectors
+            .into_iter()
+            .filter(|s| is_safe_selector(s))
+            .collect();
+        hide.sort();
+        PageCosmetics {
+            hide,
+            generic: !resources.generichide,
+            exceptions: resources.exceptions,
+        }
+    }
+
+    /// Generic rules matching any of these classes and ids, which the page
+    /// collects from its DOM. Empty when the page doesn't use generic rules.
+    pub fn generic_selectors<'a>(
+        &self,
+        page: &PageCosmetics,
+        classes: impl IntoIterator<Item = &'a str>,
+        ids: impl IntoIterator<Item = &'a str>,
+    ) -> Vec<String> {
+        if !page.generic {
+            return Vec::new();
+        }
+        let mut selectors: Vec<String> = self
+            .engine
+            .hidden_class_id_selectors(classes, ids, &page.exceptions)
+            .into_iter()
+            .filter(|s| is_safe_selector(s))
+            .collect();
+        selectors.sort();
+        selectors
+    }
+}
+
+/// A style sheet hiding everything `selectors` match. One rule per selector,
+/// so a selector the browser doesn't understand only voids itself.
+pub fn hiding_css(selectors: &[String]) -> String {
+    selectors
+        .iter()
+        .map(|s| format!("{s}{{display:none!important}}\n"))
+        .collect()
+}
+
+/// Selectors go into a style sheet verbatim, so one that could close its rule
+/// and start another, open a comment or swallow the rule's own block is
+/// dropped. Braces, brackets and `/*` are fine inside quoted strings, and CSS
+/// escapes (`.sm\:block`) anywhere; a dangling escape, an unterminated string
+/// or an unclosed `(` or `[` is not.
+fn is_safe_selector(selector: &str) -> bool {
+    let mut quote = None;
+    // `(` and `[` opened outside strings and not yet closed.
+    let mut open = Vec::new();
+    let mut chars = selector.chars().peekable();
+    while let Some(c) = chars.next() {
+        match (c, quote) {
+            ('(' | '[', None) => open.push(c),
+            (')' | ']', None) => {
+                let opener = if c == ')' { '(' } else { '[' };
+                if open.pop() != Some(opener) {
+                    return false;
+                }
+            }
+            ('\\', _) => {
+                if chars.next().is_none() {
+                    return false;
+                }
+            }
+            ('"' | '\'', None) => quote = Some(c),
+            (c, Some(q)) if c == q => quote = None,
+            ('\n' | '\r' | '\x0c', Some(_)) => return false,
+            ('{' | '}', None) => return false,
+            ('/', None) if chars.peek() == Some(&'*') => return false,
+            _ => {}
+        }
+    }
+    !selector.is_empty() && quote.is_none() && open.is_empty()
 }
 
 /// Hosts files (`0.0.0.0 ads.example`) need their own parser; the first rule
@@ -240,5 +334,97 @@ mod tests {
     fn is_send() {
         fn assert_send<T: Send>() {}
         assert_send::<Blocker>();
+    }
+
+    const COSMETIC: &str = "\
+news.example.org##.sponsored
+example.org##div[data-ad]
+##.ad-banner
+###top-ad
+quiet.example.org#@#.ad-banner
+shop.example.org##a{color:red}body
+@@||nogeneric.example.org^$generichide
+";
+
+    #[test]
+    fn page_cosmetics_lists_site_specific_selectors() {
+        let blocker = Blocker::from_lists([COSMETIC]);
+        let page = blocker.page_cosmetics("https://news.example.org/story");
+        assert_eq!(page.hide, [".sponsored", "div[data-ad]"]);
+        assert!(page.generic);
+        assert!(
+            blocker
+                .page_cosmetics("https://other.test/")
+                .hide
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn generic_selectors_match_classes_and_ids_on_the_page() {
+        let blocker = Blocker::from_lists([COSMETIC]);
+        let page = blocker.page_cosmetics("https://news.example.org/");
+        let found = blocker.generic_selectors(&page, ["ad-banner", "content"], ["top-ad"]);
+        assert_eq!(found, ["#top-ad", ".ad-banner"]);
+    }
+
+    #[test]
+    fn generic_exceptions_and_generichide_are_honoured() {
+        let blocker = Blocker::from_lists([COSMETIC]);
+        let quiet = blocker.page_cosmetics("https://quiet.example.org/");
+        assert!(
+            blocker
+                .generic_selectors(&quiet, ["ad-banner"], [])
+                .is_empty()
+        );
+        let nogeneric = blocker.page_cosmetics("https://nogeneric.example.org/");
+        assert!(!nogeneric.generic);
+        assert!(
+            blocker
+                .generic_selectors(&nogeneric, ["ad-banner"], ["top-ad"])
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn escaped_selectors_are_kept() {
+        let blocker = Blocker::from_lists(["##.sm\\:block\nnews.example.org##.lg\\:ad\n"]);
+        let page = blocker.page_cosmetics("https://news.example.org/");
+        assert_eq!(page.hide, [r".lg\:ad"]);
+        let found = blocker.generic_selectors(&page, ["sm:block"], []);
+        assert_eq!(found, [r".sm\:block"]);
+    }
+
+    #[test]
+    fn unsafe_selectors_never_reach_the_style_sheet() {
+        let blocker = Blocker::from_lists([COSMETIC]);
+        let page = blocker.page_cosmetics("https://shop.example.org/");
+        assert!(page.hide.iter().all(|s| !s.contains('{')));
+        assert!(!is_safe_selector("a{color:red}body"));
+        assert!(!is_safe_selector("a/*"));
+        assert!(is_safe_selector("div[data-ad=\"1\"] > .x"));
+        assert!(is_safe_selector(r".sm\:block"));
+        assert!(is_safe_selector(r".a\\"));
+        assert!(!is_safe_selector(r".a\"));
+        assert!(!is_safe_selector(r".a\\\"));
+        assert!(is_safe_selector(r#"[data-ad="<sponsor>"]"#));
+        assert!(is_safe_selector(r#"[title='a{b}/*c']"#));
+        assert!(is_safe_selector(r#"[title="it's"]"#));
+        assert!(!is_safe_selector(r#"[title="a{"#));
+        assert!(!is_safe_selector(r#"[title="a\"]"#));
+        assert!(is_safe_selector(r#"div:not([title=")"]):has(> .ad)"#));
+        assert!(!is_safe_selector("div:not(.ad"));
+        assert!(!is_safe_selector("div[data-ad"));
+        assert!(!is_safe_selector("div:not(.ad])"));
+        assert!(!is_safe_selector(".ad)"));
+    }
+
+    #[test]
+    fn hiding_css_has_one_rule_per_selector() {
+        let css = hiding_css(&[".a".into(), "#b".into()]);
+        assert_eq!(
+            css,
+            ".a{display:none!important}\n#b{display:none!important}\n"
+        );
     }
 }

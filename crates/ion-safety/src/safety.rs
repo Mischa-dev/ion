@@ -7,11 +7,11 @@ use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::audit::{self, AuditLog, Entry, Kind};
-use crate::capability::Action;
+use crate::capability::{Action, SiteCapability};
 use crate::policy::{AgentProfile, AgentRequest, Decision, Policy, Reason, SiteRequest, Verdict};
 use crate::prompt::{Choice, Prompt, Subject};
-use crate::rule::{Lifetime, Rule, Source, Who};
-use crate::site::Origin;
+use crate::rule::{Effect, Lifetime, Rule, Source, What, Who};
+use crate::site::{Origin, SitePattern};
 use crate::store::RuleStore;
 
 /// The answer to a request: a decision, and a prompt to show when it is
@@ -400,6 +400,73 @@ impl Safety {
         rules.iter().filter(|r| self.forget(r)).count()
     }
 
+    /// What the person chose for `origin`, one entry per capability, for the
+    /// toolbar's site permissions panel.
+    pub fn site_permissions_for(&self, origin: &Origin) -> Vec<(SiteCapability, Effect)> {
+        self.site_permissions()
+            .into_iter()
+            .filter(|r| r.site.matches(Some(origin)))
+            .filter_map(|r| match r.what {
+                What::Site(capability) => Some((capability, r.effect)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Remember Allow or Block for `capability` on `origin`, replacing what
+    /// was remembered before, as the panel's switch does. Pages without a
+    /// site of their own (local files, `data:`) can't remember anything, so
+    /// this returns false for them.
+    pub fn set_site_permission(
+        &mut self,
+        origin: &Origin,
+        capability: SiteCapability,
+        allowed: bool,
+    ) -> bool {
+        if !origin.is_distinct() {
+            return false;
+        }
+        let what = What::Site(capability);
+        self.policy.retain_user_rules(|r| {
+            !(r.who == Who::Site && r.what == what && r.site.matches(Some(origin)))
+        });
+        let effect = if allowed { Effect::Allow } else { Effect::Deny };
+        let now = self.now();
+        self.policy.add_user_rule(Rule {
+            who: Who::Site,
+            what,
+            site: SitePattern::Origin(origin.clone()),
+            effect,
+            lifetime: Lifetime::Forever,
+            source: Source::User,
+            created: now,
+        });
+        let mut entry = Entry::new(now, Kind::Answer);
+        entry.capability = Some(capability);
+        entry.target = Some(origin.to_string());
+        entry.verdict = Some(if allowed {
+            Verdict::Allow
+        } else {
+            Verdict::Deny
+        });
+        entry.detail = Some("site permissions panel".to_owned());
+        self.log(entry);
+        self.save();
+        true
+    }
+
+    /// Forget what was remembered for `capability` on `origin`, so the site
+    /// asks again. Returns whether anything was forgotten.
+    pub fn forget_site_permission(&mut self, origin: &Origin, capability: SiteCapability) -> bool {
+        let rules: Vec<Rule> = self
+            .site_permissions()
+            .into_iter()
+            .filter(|r| r.what == What::Site(capability) && r.site.matches(Some(origin)))
+            .cloned()
+            .collect();
+        rules.iter().filter(|r| self.forget(r)).count() > 0
+    }
+
     /// Log entries at or after `since` (unix seconds), oldest first.
     pub fn activity_since(&self, since: u64) -> io::Result<Vec<Entry>> {
         match &self.audit {
@@ -425,7 +492,6 @@ fn agent_entry(time: u64, kind: Kind, request: &AgentRequest) -> Entry {
 mod tests {
     use super::*;
     use crate::audit::test_dir;
-    use crate::capability::SiteCapability;
     use crate::policy::{Reason, TrustLevel};
 
     const NOW: u64 = 1_791_367_200;
@@ -543,6 +609,61 @@ mod tests {
         let safety = Safety::open(&dir, 30);
         assert!(safety.site_permissions().is_empty());
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn the_panel_switches_and_forgets_one_permission() {
+        let dir = test_dir("safety-panel");
+        let meet = origin("https://meet.example");
+        {
+            let mut safety = Safety::open(&dir, 30).with_clock(|| NOW);
+            let prompt = safety
+                .request_site(camera("https://meet.example"))
+                .prompt
+                .unwrap();
+            assert_eq!(safety.answer(&prompt, Choice::Allow), Ok(Verdict::Allow));
+            assert!(safety.set_site_permission(&meet, SiteCapability::Location, true));
+            assert!(safety.set_site_permission(&meet, SiteCapability::Camera, false));
+            let mut stored = safety.site_permissions_for(&meet);
+            stored.sort_by_key(|(c, _)| c.to_qt());
+            assert_eq!(
+                stored,
+                vec![
+                    (SiteCapability::Camera, Effect::Deny),
+                    (SiteCapability::Location, Effect::Allow)
+                ]
+            );
+            assert!(
+                safety
+                    .site_permissions_for(&origin("https://other.example"))
+                    .is_empty()
+            );
+        }
+        let mut safety = Safety::open(&dir, 30).with_clock(|| NOW);
+        assert_eq!(
+            safety
+                .request_site(camera("https://meet.example"))
+                .verdict(),
+            Verdict::Deny
+        );
+        assert!(safety.forget_site_permission(&meet, SiteCapability::Camera));
+        assert!(!safety.forget_site_permission(&meet, SiteCapability::Camera));
+        assert_eq!(
+            safety
+                .request_site(camera("https://meet.example"))
+                .verdict(),
+            Verdict::Ask
+        );
+        assert_eq!(safety.site_permissions_for(&meet).len(), 1);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn the_panel_cannot_remember_for_local_files() {
+        let mut safety = Safety::in_memory();
+        let file = origin("file:///home/me/page.html");
+        assert!(!safety.set_site_permission(&file, SiteCapability::Camera, true));
+        assert!(safety.site_permissions().is_empty());
     }
 
     #[test]
