@@ -10,6 +10,8 @@ pub mod qobject {
     unsafe extern "C++" {
         include!("cxx-qt-lib/qstringlist.h");
         type QStringList = cxx_qt_lib::QStringList;
+        include!("cxx-qt-lib/qstring.h");
+        type QString = cxx_qt_lib::QString;
     }
 
     #[namespace = "ion"]
@@ -21,6 +23,9 @@ pub mod qobject {
 
         #[cxx_name = "deleteAllCookies"]
         unsafe fn delete_all_cookies(profile: *mut QObject) -> bool;
+
+        #[cxx_name = "profileStoragePath"]
+        fn profile_storage_path(storage_name: &QString) -> QString;
     }
 
     extern "RustQt" {
@@ -50,6 +55,28 @@ pub mod qobject {
 
 #[derive(Default)]
 pub struct PrivacyRust;
+
+/// With `history` in `[privacy] clearOnExit`, delete the engine's record of
+/// visited links (which colors links as visited) for the "Default" profile.
+/// QML has no call for it, so this removes the file before the engine opens
+/// it; call once the application name is set and before QML loads.
+pub fn forget_visited_links() {
+    let config = ion_config::global().config();
+    if !config
+        .privacy
+        .clear_on_exit
+        .contains(&ion_config::BrowsingData::History)
+    {
+        return;
+    }
+    let dir = qobject::profile_storage_path(&cxx_qt_lib::QString::from("Default")).to_string();
+    let file = std::path::Path::new(&dir).join("Visited Links");
+    if let Err(err) = std::fs::remove_file(&file) {
+        if err.kind() != std::io::ErrorKind::NotFound {
+            eprintln!("ion: could not delete {}: {err}", file.display());
+        }
+    }
+}
 
 impl qobject::Privacy {
     fn clear_on_exit(&self) -> cxx_qt_lib::QStringList {

@@ -26,6 +26,9 @@ fn main() {
     }
     QGuiApplication::set_desktop_file_name(&QString::from(ion_core::APP_ID));
 
+    // Before the browser profile opens its files.
+    bridge::privacy::forget_visited_links();
+
     // The permission and safety model, before anything can ask it.
     bridge::safety::install();
 

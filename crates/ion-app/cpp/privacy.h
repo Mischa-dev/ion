@@ -2,6 +2,7 @@
 #pragma once
 
 #include <QtCore/QObject>
+#include <QtCore/QString>
 
 namespace ion {
 
@@ -11,5 +12,9 @@ bool setThirdPartyCookiesBlocked(QObject *profile, bool blocked);
 
 // Delete every cookie in a QML WebEngineProfile. False if it is not one.
 bool deleteAllCookies(QObject *profile);
+
+// The folder a persistent WebEngineProfile named `storageName` keeps its data
+// in by default, as Qt documents it for persistentStoragePath.
+QString profileStoragePath(const QString &storageName);
 
 } // namespace ion
