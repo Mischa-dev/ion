@@ -25,7 +25,8 @@ pub mod qobject {
         /// saved session names.
         ///
         /// `action` is `tab` (value: tab index), `open` (value: URL),
-        /// `session` (value: session name), `run` (value: command id) or
+        /// `session` (value: session name), `run` (value: command id), `set`
+        /// (value: `[key, value, key, value, …]` for `Config.set`) or
         /// `complete` (value: new palette input).
         #[qinvokable]
         fn query(
@@ -43,7 +44,7 @@ pub mod qobject {
 use std::sync::{Arc, Mutex};
 
 use cxx_qt_lib::{QList, QMap, QMapPair_QString_QVariant, QString, QStringList, QVariant};
-use ion_bangs::{Action, BangTable, Palette, Sources, TabEntry};
+use ion_bangs::{Action, BangTable, Palette, SettingValue, Sources, TabEntry};
 use ion_config::Config;
 use ion_core::navigation::{Omnibox, SearchEngine};
 
@@ -125,11 +126,16 @@ impl qobject::PaletteSearch {
         let tabs = entries(titles, urls);
         let history = history_entries(&history.to_string());
         let sessions = strings(sessions);
+        let settings = ion_bangs::settings::options(
+            &ion_config::global().config(),
+            ion_theme::builtin::names(),
+        );
         let sources = Sources {
             tabs: &tabs,
             current_tab: usize::try_from(current).ok(),
             history: &history,
             sessions: &sessions,
+            settings: &settings,
         };
 
         let mut rows = QList::<QVariant>::default();
@@ -143,6 +149,19 @@ impl qobject::PaletteSearch {
                     ("session", QVariant::from(&QString::from(name.as_str())))
                 }
                 Action::Run(id) => ("run", QVariant::from(&QString::from(*id))),
+                Action::Set(changes) => {
+                    let mut pairs = QList::<QVariant>::default();
+                    for (key, value) in changes {
+                        pairs.append(QVariant::from(&QString::from(*key)));
+                        pairs.append(match value {
+                            SettingValue::Text(text) => {
+                                QVariant::from(&QString::from(text.as_str()))
+                            }
+                            SettingValue::Flag(flag) => QVariant::from(flag),
+                        });
+                    }
+                    ("set", QVariant::from(&pairs))
+                }
                 Action::Complete(text) => {
                     ("complete", QVariant::from(&QString::from(text.as_str())))
                 }
