@@ -6,7 +6,8 @@ import Ion
 
 // Picks what a page may capture once screen sharing is allowed: a whole
 // screen or one window. Lives inside a BrowserTab; cancelling (Esc, clicking
-// outside, Cancel) tells the page that nothing was shared.
+// outside, Cancel, navigating, switching tabs) tells the page that nothing
+// was shared.
 Popup {
     id: picker
 
@@ -28,9 +29,24 @@ Popup {
     Connections {
         target: picker.view
         function onDesktopMediaRequested(request) {
+            // A tab in the background can't show its picker over another tab.
+            if (!picker.view.visible) {
+                request.cancel()
+                return
+            }
             picker.request = request
             picker.answered = false
             picker.open()
+        }
+        // The popup lives in the window overlay, so it would outlast the page
+        // that asked, or stay up over another tab. Closing cancels the request.
+        function onLoadingChanged(request) {
+            if (request.status === WebEngineView.LoadStartedStatus)
+                picker.close()
+        }
+        function onVisibleChanged() {
+            if (!picker.view.visible)
+                picker.close()
         }
     }
 
