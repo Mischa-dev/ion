@@ -106,6 +106,7 @@ WebEngineView {
     FindBar { view: view }
     PermissionPrompt { view: view }
     ScreenSharePicker { view: view }
+    PageDialog { view: view }
     ContextMenuHandler {
         view: view
         omnibox: tabOmnibox

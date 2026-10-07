@@ -1,11 +1,12 @@
 //! The everyday browser features that decide whether Ion can be a daily
-//! driver: downloads, per-site zoom, permission prompts, find in page, the
-//! page context menu and the new-tab page.
+//! driver: downloads, per-site zoom, permission prompts, page dialogs, find
+//! in page, the page context menu and the new-tab page.
 //!
 //! Like every `ion-*` crate this is Qt-free. `ion-app` adapts it to QML in
 //! `bridge/downloads.rs`, `bridge/zoom.rs` and `bridge/page.rs`.
 
 pub mod context_menu;
+pub mod dialogs;
 pub mod downloads;
 pub mod find;
 pub mod new_tab;

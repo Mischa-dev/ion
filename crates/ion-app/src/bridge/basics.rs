@@ -1,5 +1,5 @@
 //! `Basics` QML singleton: the words and choices behind permission prompts,
-//! find in page, the context menu and the new-tab page, from `ion_basics`.
+//! page dialogs, find in page, the context menu and the new-tab page, from `ion_basics`.
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -30,6 +30,43 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "permissionGlyph"]
         fn permission_glyph(self: &Basics, permission_type: i32) -> QString;
+
+        /// "example.com says", or "Leave this page?" for the unsaved-changes
+        /// check. `dialog_type` is `JavaScriptDialogRequest.DialogType`.
+        #[qinvokable]
+        #[cxx_name = "dialogHeading"]
+        fn dialog_heading(self: &Basics, dialog_type: i32, origin: &QUrl) -> QString;
+
+        /// The accepting button's label ("OK", "Leave").
+        #[qinvokable]
+        #[cxx_name = "dialogAcceptLabel"]
+        fn dialog_accept_label(self: &Basics, dialog_type: i32) -> QString;
+
+        /// The dismissing button's label, or empty when there is none.
+        #[qinvokable]
+        #[cxx_name = "dialogRejectLabel"]
+        fn dialog_reject_label(self: &Basics, dialog_type: i32) -> QString;
+
+        /// The body shown for the unsaved-changes check.
+        #[qinvokable]
+        #[cxx_name = "beforeUnloadMessage"]
+        fn before_unload_message(self: &Basics) -> QString;
+
+        /// Whether the `count`-th dialog since the page loaded offers to
+        /// block the rest.
+        #[qinvokable]
+        #[cxx_name = "offerDialogBlock"]
+        fn offer_dialog_block(self: &Basics, count: i32) -> bool;
+
+        /// "Sign in to example.com" (or to a proxy).
+        #[qinvokable]
+        #[cxx_name = "authHeading"]
+        fn auth_heading(self: &Basics, proxy: bool, url: &QUrl, proxy_host: &QString) -> QString;
+
+        /// The site's realm and a warning for unencrypted connections.
+        #[qinvokable]
+        #[cxx_name = "authDetail"]
+        fn auth_detail(self: &Basics, realm: &QString, url: &QUrl, proxy: bool) -> QString;
 
         /// "3 of 12", "No matches", or empty.
         #[qinvokable]
@@ -79,7 +116,7 @@ pub mod qobject {
 
 use cxx_qt_lib::{QString, QStringList, QUrl};
 use ion_basics::new_tab::{self, Shortcut};
-use ion_basics::{context_menu, find, permissions};
+use ion_basics::{context_menu, dialogs, find, permissions};
 
 pub struct BasicsRust {
     shortcut_count: i32,
@@ -116,6 +153,41 @@ impl qobject::Basics {
             }
             None => QString::default(),
         }
+    }
+
+    fn dialog_heading(&self, dialog_type: i32, origin: &QUrl) -> QString {
+        let kind = dialogs::Kind::from_qt(dialog_type).unwrap_or(dialogs::Kind::Alert);
+        QString::from(dialogs::heading(kind, &origin.to_string()).as_str())
+    }
+
+    fn dialog_accept_label(&self, dialog_type: i32) -> QString {
+        let kind = dialogs::Kind::from_qt(dialog_type).unwrap_or(dialogs::Kind::Alert);
+        QString::from(kind.accept_label())
+    }
+
+    fn dialog_reject_label(&self, dialog_type: i32) -> QString {
+        dialogs::Kind::from_qt(dialog_type)
+            .and_then(dialogs::Kind::reject_label)
+            .map(QString::from)
+            .unwrap_or_default()
+    }
+
+    fn before_unload_message(&self) -> QString {
+        QString::from(dialogs::BEFORE_UNLOAD_MESSAGE)
+    }
+
+    fn offer_dialog_block(&self, count: i32) -> bool {
+        dialogs::offer_block(count.max(0) as u32)
+    }
+
+    fn auth_heading(&self, proxy: bool, url: &QUrl, proxy_host: &QString) -> QString {
+        let heading = dialogs::auth_heading(proxy, &url.to_string(), &proxy_host.to_string());
+        QString::from(heading.as_str())
+    }
+
+    fn auth_detail(&self, realm: &QString, url: &QUrl, proxy: bool) -> QString {
+        let detail = dialogs::auth_detail(&realm.to_string(), &url.to_string(), proxy);
+        QString::from(detail.as_str())
     }
 
     fn permission_glyph(&self, permission_type: i32) -> QString {
