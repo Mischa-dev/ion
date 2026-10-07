@@ -109,24 +109,27 @@ pub fn css_script(sites: &BTreeMap<String, SiteTheme>, base: &str) -> String {
   // elements this script made, never the page's.
   const state = (window.{STATE} ??= {{ styles: [], waiting: false }});
   state.texts = texts.filter((t) => t.trim());
+  // Appending moves the elements to the end of the document, after the
+  // page's own styles, so site CSS wins ties with them.
   const apply = () => {{
-    state.waiting = false;
-    const parent = document.head || document.documentElement;
+    const root = document.documentElement;
+    if (!root) return;
     while (state.styles.length > state.texts.length) state.styles.pop().remove();
     state.texts.forEach((text, i) => {{
-      let style = state.styles[i];
-      if (!style?.isConnected) {{
-        style = state.styles[i] = document.createElement("style");
-        parent.appendChild(style);
-      }}
+      const style = (state.styles[i] ??= document.createElement("style"));
       style.textContent = text;
+      root.appendChild(style);
     }});
   }};
-  if (document.documentElement) apply();
-  else if (!state.waiting) {{
-    // Applies whatever text is current by then, so a later run wins.
+  apply();
+  if (document.readyState === "loading" && !state.waiting) {{
+    // Once parsed, the page's styles are in: move ours after them. Applies
+    // whatever text is current by then, so a later run wins.
     state.waiting = true;
-    document.addEventListener("DOMContentLoaded", apply, {{ once: true }});
+    document.addEventListener("DOMContentLoaded", () => {{
+      state.waiting = false;
+      apply();
+    }}, {{ once: true }});
   }}
 }})();"#
     )
