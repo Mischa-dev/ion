@@ -35,23 +35,43 @@ pub mod qobject {
     }
 }
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use cxx_qt_lib::{QList, QMap, QMapPair_QString_QVariant, QString, QStringList, QVariant};
 use ion_bangs::{Action, BangTable, Palette, TabEntry};
-use ion_core::navigation::Omnibox;
+use ion_config::Config;
+use ion_core::navigation::{Omnibox, SearchEngine};
 
-pub struct PaletteSearchRust {
-    palette: Palette,
+/// Ion's built-in bangs plus the `[bangs]` table from config, rebuilt only
+/// when the config changes. Shared by the URL bar and the palette.
+pub fn current_bangs() -> Arc<BangTable> {
+    static CACHE: Mutex<Option<(Arc<Config>, Arc<BangTable>)>> = Mutex::new(None);
+    let config = ion_config::global().config();
+    let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((seen, table)) = cache.as_ref() {
+        if Arc::ptr_eq(seen, &config) {
+            return table.clone();
+        }
+    }
+    let mut table = BangTable::default();
+    let entries = config.bangs.iter().map(|(k, v)| (k.as_str(), v.as_str()));
+    for error in table.apply(entries) {
+        eprintln!("ion: config: {error}");
+    }
+    let table = Arc::new(table);
+    *cache = Some((config, table.clone()));
+    table
 }
 
-impl Default for PaletteSearchRust {
-    fn default() -> Self {
-        let bangs = Arc::new(BangTable::default());
-        let omnibox = Omnibox::default().with_step(bangs.clone());
-        Self {
-            palette: Palette::new(omnibox, bangs),
-        }
+#[derive(Default)]
+pub struct PaletteSearchRust;
+
+impl PaletteSearchRust {
+    fn palette(&self) -> Palette {
+        let config = ion_config::global().config();
+        let bangs = current_bangs();
+        let engine = SearchEngine::new(&config.search.engine, &config.search.template);
+        Palette::new(Omnibox::new(engine).with_step(bangs.clone()), bangs)
     }
 }
 
@@ -81,7 +101,7 @@ impl qobject::PaletteSearch {
         let current = usize::try_from(current).ok();
 
         let mut rows = QList::<QVariant>::default();
-        for item in self.palette.query(&input.to_string(), &tabs, current) {
+        for item in self.palette().query(&input.to_string(), &tabs, current) {
             let (action, value) = match &item.action {
                 Action::SwitchTab(index) => {
                     ("tab", QVariant::from(&i32::try_from(*index).unwrap_or(-1)))

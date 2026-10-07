@@ -29,16 +29,12 @@ pub mod qobject {
     }
 }
 
-use std::sync::Arc;
-
 use cxx_qt_lib::{QString, QUrl};
-use ion_bangs::BangTable;
 use ion_core::navigation::{Omnibox, Resolved, SearchEngine};
 
 pub struct OmniboxRust {
     search_engine_name: QString,
     search_template: QString,
-    bangs: Arc<BangTable>,
 }
 
 impl Default for OmniboxRust {
@@ -47,7 +43,6 @@ impl Default for OmniboxRust {
         Self {
             search_engine_name: QString::from(engine.name.as_str()),
             search_template: QString::from(engine.template.as_str()),
-            bangs: Arc::new(BangTable::default()),
         }
     }
 }
@@ -58,7 +53,7 @@ impl OmniboxRust {
             self.search_engine_name.to_string(),
             self.search_template.to_string(),
         ))
-        .with_step(self.bangs.clone())
+        .with_step(super::palette::current_bangs())
     }
 }
 
