@@ -75,6 +75,7 @@ ApplicationWindow {
 
     Component.onCompleted: {
         profile = profilePrototype.instance()
+        Adblock.attach(window.profile)
         if (Config.value("general.restoreSession"))
             Tabs.restoreLastSession()
         // URLs on the command line (`ion %U` from the desktop file) open as new
@@ -134,6 +135,7 @@ ApplicationWindow {
             currentIndex: Tabs.currentIndex
             onActivated: index => Tabs.activate(index)
             onCloseRequested: index => window.closeTab(index)
+            onMoveRequested: (from, to) => Tabs.moveTab(from, to)
             onNewTabRequested: window.newTab()
             onMenuRequested: anchor => sessionMenu.open(anchor)
             views: views
@@ -160,6 +162,7 @@ ApplicationWindow {
             currentIndex: Tabs.currentIndex
             onActivated: index => Tabs.activate(index)
             onCloseRequested: index => window.closeTab(index)
+            onMoveRequested: (from, to) => Tabs.moveTab(from, to)
             onNewTabRequested: window.newTab()
             onMenuRequested: anchor => sessionMenu.open(anchor)
             views: views

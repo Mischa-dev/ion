@@ -58,6 +58,8 @@ Rectangle {
                     urlBar.focus = false
             }
         }
+
+        AdblockButton { view: bar.view }
     }
 
     // Hairline between the browser chrome and the page.
