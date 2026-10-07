@@ -75,12 +75,19 @@ Shared files with small, append-only edits: root `Cargo.toml`,
   themes, DMS or manual palette files (live reloaded) and the system accent.
   `Theme.qml` binds them to the `[theme]` config section; see
   `crates/ion-theme/README.md`. Sizes and motion tokens are still static.
+- Web pages follow the theme's light/dark (`theme.pages`); `BrowserTab`
+  re-applies its settings when that changes. Per-site control and palette-tinted
+  dark mode are not built yet.
 - `ion_core::navigation::Omnibox` decides between address and search. Extra
   stages implement `InputStep` and run first; `ion_bangs::BangTable` is one.
   Config feeds user bangs through `BangTable::apply`.
 - The Ctrl/Cmd+K palette ranks tabs, history, sessions, commands and bangs in
   `ion_bangs::palette`; commands are
   listed in `ion_bangs::commands` and carried out in `CommandPalette.qml`.
+  `Palette::suggest` is the URL bar's narrower version (typed entry first,
+  then tabs, history and bang completions), and `ion_bangs::autofill` fills
+  in addresses inline; both lists draw their rows with
+  `CommandPaletteRow.qml`.
 - The browser profile is persistent (`storageName: "Default"`).
 - Settings come from `ion-config` (layered TOML, live reload, `programs.ion`
   home-manager module); see [CONFIG.md](CONFIG.md).

@@ -16,6 +16,10 @@ pub struct SavedTab {
     pub url: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub title: String,
+    /// The favicon the tab last showed, so restored tabs that have not loaded
+    /// yet still show it.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub icon: String,
 }
 
 /// A snapshot of one window's tabs.
@@ -194,7 +198,7 @@ mod tests {
                 .iter()
                 .map(|u| SavedTab {
                     url: u.to_string(),
-                    title: String::new(),
+                    ..SavedTab::default()
                 })
                 .collect(),
             ..Session::default()

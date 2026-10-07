@@ -97,6 +97,7 @@ in
         general = {
           homePage = setting types.str "Page opened at startup when there is nothing to restore.";
           restoreSession = setting types.bool "Reopen the previous session's tabs on start.";
+          suspendTabsAfter = setting types.ints.unsigned "Unload background tabs unseen for this many minutes (0 = never).";
         };
 
         search = {
@@ -114,6 +115,7 @@ in
             "horizontal"
             "vertical"
           ]) "Tab strip layout.";
+          collapseSidebar = setting types.bool "With vertical tabs, show only favicons until the sidebar is hovered.";
           animations = {
             enable = setting types.bool "Whether the interface animates.";
             speed = setting (types.addCheck types.number (x: x > 0)) "Animation speed multiplier.";
@@ -129,6 +131,14 @@ in
           ]) "Where Ion's palette comes from.";
           name = setting types.str "Built-in theme to use with `source = \"builtin\"`.";
           palette = setting types.str "Palette file for the `manual` and `dms` sources.";
+          pages =
+            setting
+              (types.enum [
+                "match"
+                "system"
+                "darken"
+              ])
+              "What web pages see: the theme's light/dark (`match`), the system's, or `match` plus darkening pages without a dark style.";
         };
 
         bangs = mkOption {

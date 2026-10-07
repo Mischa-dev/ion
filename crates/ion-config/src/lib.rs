@@ -33,7 +33,7 @@ use std::sync::OnceLock;
 
 pub use schema::{
     Adblock, Agent, AgentRule, AgentTrust, Agents, Animations, Config, Density, General, Mcp,
-    RuleEffect, Safety, Search, TabLayout, Theme, ThemeSource, Ui,
+    PageTheming, RuleEffect, Safety, Search, TabLayout, Theme, ThemeSource, Ui,
 };
 pub use store::{Paths, State, Store, Subscription, Watcher};
 pub use toml::Value;

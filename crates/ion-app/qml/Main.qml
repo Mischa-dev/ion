@@ -15,7 +15,7 @@ ApplicationWindow {
     readonly property var currentView: {
         window.viewsRevision
         const index = Tabs.currentIndex
-        return index >= 0 && index < views.count ? views.itemAt(index) : null
+        return window.viewAt(index)
     }
 
     width: 1280
@@ -55,9 +55,33 @@ ApplicationWindow {
         Tabs.closeTab(index)
     }
 
+    function viewAt(index) {
+        return index >= 0 && index < views.count ? views.itemAt(index) : null
+    }
+
+    // For the tab menu. Closing from the end keeps the lower indexes valid.
+    function closeTabsAfter(index) {
+        for (let i = Tabs.count - 1; i > index; i--)
+            Tabs.closeTab(i)
+    }
+
+    function closeOtherTabs(index) {
+        closeTabsAfter(index)
+        for (let i = index - 1; i >= 0; i--)
+            Tabs.closeTab(i)
+    }
+
     function newTab() {
         window.openTab("")
         window.focusUrlBar()
+    }
+
+    // Keyboard focus follows the visible page (so Space, arrows and Find work
+    // right after switching tabs), unless the person is typing in the URL bar.
+    onCurrentViewChanged: Qt.callLater(focusPage)
+    function focusPage() {
+        if (currentView && !navBar.urlBar.activeFocus && !palette.opened)
+            currentView.forceActiveFocus()
     }
 
     function focusUrlBar() {
@@ -84,6 +108,23 @@ ApplicationWindow {
         id: sessionSaveTimer
         interval: 1000
         onTriggered: Tabs.saveSession()
+    }
+    // Unload background tabs nobody has looked at for `general.suspendTabsAfter`
+    // minutes. Tabs playing sound are left alone.
+    Timer {
+        interval: 60 * 1000
+        repeat: true
+        running: true
+        onTriggered: {
+            const minutes = Config.value("general.suspendTabsAfter")
+            if (!(minutes > 0))
+                return
+            for (const index of Tabs.idleTabs(minutes * 60)) {
+                const view = views.itemAt(index)
+                if (view && !view.recentlyAudible)
+                    Tabs.setSuspended(index, true)
+            }
+        }
     }
     Timer {
         id: historySaveTimer
@@ -130,6 +171,9 @@ ApplicationWindow {
             onMoveRequested: (from, to) => Tabs.moveTab(from, to)
             onNewTabRequested: window.newTab()
             onMenuRequested: anchor => sessionMenu.open(anchor)
+            onTabMenuRequested: index => tabMenu.openFor(index)
+            views: views
+            viewsRevision: window.viewsRevision
         }
 
         NavigationBar {
@@ -140,6 +184,7 @@ ApplicationWindow {
     }
 
     SessionMenu { id: sessionMenu }
+    TabMenu { id: tabMenu; browser: window }
 
     RowLayout {
         anchors.fill: parent
@@ -147,7 +192,13 @@ ApplicationWindow {
 
         VerticalTabStrip {
             Layout.fillHeight: true
+            // Above the page, which an expanded collapsed sidebar covers.
+            z: 1
             visible: window.verticalTabs
+            collapsed: {
+                Config.revision
+                return Config.value("ui.collapseSidebar") === true
+            }
             tabs: Tabs
             currentIndex: Tabs.currentIndex
             onActivated: index => Tabs.activate(index)
@@ -155,6 +206,9 @@ ApplicationWindow {
             onMoveRequested: (from, to) => Tabs.moveTab(from, to)
             onNewTabRequested: window.newTab()
             onMenuRequested: anchor => sessionMenu.open(anchor)
+            onTabMenuRequested: index => tabMenu.openFor(index)
+            views: views
+            viewsRevision: window.viewsRevision
         }
 
         // One web view per tab, stacked; only the current one is visible.
@@ -173,6 +227,7 @@ ApplicationWindow {
                     id: view
 
                     required property int index
+                    required property bool suspended
                     readonly property bool current: index === Tabs.currentIndex
                     // Background tabs restored from a session load when first shown.
                     property bool deferred: false
@@ -186,6 +241,9 @@ ApplicationWindow {
                     anchors.fill: parent
                     visible: current
                     profile: window.profile
+                    // A suspended tab's page is unloaded; it reloads when shown.
+                    lifecycleState: suspended ? WebEngineView.LifecycleState.Discarded
+                                              : WebEngineView.LifecycleState.Active
 
                     Component.onCompleted: {
                         deferred = Tabs.restoring && !current
@@ -208,6 +266,10 @@ ApplicationWindow {
                             return
                         Tabs.setTitle(index, title)
                         History.updateTitle(url.toString(), title)
+                    }
+                    onIconChanged: {
+                        if (!deferred)
+                            Tabs.setIcon(index, icon.toString())
                     }
                     onLoadingChanged: info => {
                         if (info.status === WebEngineView.LoadSucceededStatus)

@@ -25,7 +25,9 @@ pub mod qobject {
         /// saved session names.
         ///
         /// `action` is `tab` (value: tab index), `open` (value: URL),
-        /// `session` (value: session name), `run` (value: command id) or
+        /// `session` (value: session name), `save-session` (value: name for
+        /// the open tabs), `run` (value: command id), `set`
+        /// (value: `[key, value, key, value, …]` for `Config.set`) or
         /// `complete` (value: new palette input).
         #[qinvokable]
         fn query(
@@ -37,13 +39,37 @@ pub mod qobject {
             history: &QString,
             sessions: &QStringList,
         ) -> QVariant;
+
+        /// Suggestions for the URL bar, in the same row format as `query`.
+        /// The first row is what Enter does with `input` as typed; the rest
+        /// are bang completions, other open tabs and history pages.
+        #[qinvokable]
+        fn suggest(
+            self: &PaletteSearch,
+            input: &QString,
+            titles: &QStringList,
+            urls: &QStringList,
+            current: i32,
+            history: &QString,
+        ) -> QVariant;
+
+        /// `input` with an address filled in from `urls` (open tabs) or
+        /// `history` (`History.search()`'s JSON), e.g. "git" → "github.com/";
+        /// `input` unchanged when nothing fits.
+        #[qinvokable]
+        fn autocomplete(
+            self: &PaletteSearch,
+            input: &QString,
+            urls: &QStringList,
+            history: &QString,
+        ) -> QString;
     }
 }
 
 use std::sync::{Arc, Mutex};
 
 use cxx_qt_lib::{QList, QMap, QMapPair_QString_QVariant, QString, QStringList, QVariant};
-use ion_bangs::{Action, BangTable, Palette, Sources, TabEntry};
+use ion_bangs::{Action, BangTable, Item, Palette, SettingValue, Sources, TabEntry};
 use ion_config::Config;
 use ion_core::navigation::{Omnibox, SearchEngine};
 
@@ -125,41 +151,98 @@ impl qobject::PaletteSearch {
         let tabs = entries(titles, urls);
         let history = history_entries(&history.to_string());
         let sessions = strings(sessions);
+        let settings = ion_bangs::settings::options(
+            &ion_config::global().config(),
+            ion_theme::builtin::names(),
+        );
         let sources = Sources {
             tabs: &tabs,
             current_tab: usize::try_from(current).ok(),
             history: &history,
             sessions: &sessions,
+            settings: &settings,
         };
 
-        let mut rows = QList::<QVariant>::default();
-        for item in self.palette().query(&input.to_string(), &sources) {
-            let (action, value) = match &item.action {
-                Action::SwitchTab(index) => {
-                    ("tab", QVariant::from(&i32::try_from(*index).unwrap_or(-1)))
-                }
-                Action::Open(url) => ("open", QVariant::from(&QString::from(url.as_str()))),
-                Action::OpenSession(name) => {
-                    ("session", QVariant::from(&QString::from(name.as_str())))
-                }
-                Action::Run(id) => ("run", QVariant::from(&QString::from(*id))),
-                Action::Complete(text) => {
-                    ("complete", QVariant::from(&QString::from(text.as_str())))
-                }
-            };
-            let mut row = QMap::<QMapPair_QString_QVariant>::default();
-            let mut set = |key: &str, value: QVariant| row.insert(QString::from(key), value);
-            set("kind", QVariant::from(&QString::from(item.kind.as_str())));
-            set("title", QVariant::from(&QString::from(item.title.as_str())));
-            set(
-                "subtitle",
-                QVariant::from(&QString::from(item.subtitle.as_str())),
-            );
-            set("hint", QVariant::from(&QString::from(item.hint.as_str())));
-            set("action", QVariant::from(&QString::from(action)));
-            set("value", value);
-            rows.append(QVariant::from(&row));
-        }
-        QVariant::from(&rows)
+        rows(self.palette().query(&input.to_string(), &sources))
     }
+
+    fn suggest(
+        &self,
+        input: &QString,
+        titles: &QStringList,
+        urls: &QStringList,
+        current: i32,
+        history: &QString,
+    ) -> QVariant {
+        let tabs = entries(titles, urls);
+        let history = history_entries(&history.to_string());
+        let sources = Sources {
+            tabs: &tabs,
+            current_tab: usize::try_from(current).ok(),
+            history: &history,
+            ..Sources::default()
+        };
+        rows(self.palette().suggest(&input.to_string(), &sources))
+    }
+}
+
+impl qobject::PaletteSearch {
+    fn autocomplete(&self, input: &QString, urls: &QStringList, history: &QString) -> QString {
+        let input = input.to_string();
+        let urls = strings(urls);
+        let history = history_entries(&history.to_string());
+        let candidates = urls
+            .iter()
+            .map(String::as_str)
+            .chain(history.iter().map(|page| page.url.as_str()));
+        QString::from(
+            ion_bangs::autofill::complete(&input, candidates)
+                .unwrap_or(input)
+                .as_str(),
+        )
+    }
+}
+
+/// Palette items as a list of `{ kind, title, subtitle, hint, action, value }`.
+fn rows(items: Vec<Item>) -> QVariant {
+    let mut rows = QList::<QVariant>::default();
+    for item in items {
+        let (action, value) = match &item.action {
+            Action::SwitchTab(index) => {
+                ("tab", QVariant::from(&i32::try_from(*index).unwrap_or(-1)))
+            }
+            Action::Open(url) => ("open", QVariant::from(&QString::from(url.as_str()))),
+            Action::OpenSession(name) => ("session", QVariant::from(&QString::from(name.as_str()))),
+            Action::SaveSession(name) => (
+                "save-session",
+                QVariant::from(&QString::from(name.as_str())),
+            ),
+            Action::Run(id) => ("run", QVariant::from(&QString::from(*id))),
+            Action::Set(changes) => {
+                let mut pairs = QList::<QVariant>::default();
+                for (key, value) in changes {
+                    pairs.append(QVariant::from(&QString::from(*key)));
+                    pairs.append(match value {
+                        SettingValue::Text(text) => QVariant::from(&QString::from(text.as_str())),
+                        SettingValue::Flag(flag) => QVariant::from(flag),
+                    });
+                }
+                ("set", QVariant::from(&pairs))
+            }
+            Action::Complete(text) => ("complete", QVariant::from(&QString::from(text.as_str()))),
+        };
+        let mut row = QMap::<QMapPair_QString_QVariant>::default();
+        let mut set = |key: &str, value: QVariant| row.insert(QString::from(key), value);
+        set("kind", QVariant::from(&QString::from(item.kind.as_str())));
+        set("title", QVariant::from(&QString::from(item.title.as_str())));
+        set(
+            "subtitle",
+            QVariant::from(&QString::from(item.subtitle.as_str())),
+        );
+        set("hint", QVariant::from(&QString::from(item.hint.as_str())));
+        set("action", QVariant::from(&QString::from(action)));
+        set("value", value);
+        rows.append(QVariant::from(&row));
+    }
+    QVariant::from(&rows)
 }

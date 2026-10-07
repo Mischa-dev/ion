@@ -38,6 +38,9 @@ pub struct General {
     pub home_page: String,
     /// Reopen the previous session's tabs on start.
     pub restore_session: bool,
+    /// Unload background tabs not looked at for this many minutes, to save
+    /// memory; they reload when shown. 0 never unloads tabs.
+    pub suspend_tabs_after: u32,
 }
 
 impl Default for General {
@@ -45,6 +48,7 @@ impl Default for General {
         Self {
             home_page: "https://duckduckgo.com/".into(),
             restore_session: true,
+            suspend_tabs_after: 30,
         }
     }
 }
@@ -74,6 +78,9 @@ pub struct Ui {
     /// Corner radius in logical pixels, from 0 (sharp) up.
     pub corner_radius: u32,
     pub tabs: TabLayout,
+    /// With vertical tabs, shrink the sidebar to favicons; it expands while
+    /// the pointer is over it.
+    pub collapse_sidebar: bool,
     pub animations: Animations,
 }
 
@@ -83,6 +90,7 @@ impl Default for Ui {
             density: Density::default(),
             corner_radius: 8,
             tabs: TabLayout::default(),
+            collapse_sidebar: false,
             animations: Animations::default(),
         }
     }
@@ -132,6 +140,8 @@ pub struct Theme {
     /// of its own when this is unset).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub palette: Option<PathBuf>,
+    /// What web pages see of the theme.
+    pub pages: PageTheming,
 }
 
 impl Default for Theme {
@@ -140,6 +150,7 @@ impl Default for Theme {
             source: ThemeSource::default(),
             name: "auto".into(),
             palette: None,
+            pages: PageTheming::default(),
         }
     }
 }
@@ -158,6 +169,20 @@ pub enum ThemeSource {
     /// A palette file named by `theme.palette` (default
     /// `<config dir>/palette.toml`).
     Manual,
+}
+
+/// How web pages follow the theme.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PageTheming {
+    /// Pages get the theme's light/dark as `prefers-color-scheme`.
+    #[default]
+    Match,
+    /// Pages get the system's light/dark setting.
+    System,
+    /// Like `match`; with a dark theme, pages without a dark style of their
+    /// own are darkened too.
+    Darken,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -289,6 +314,7 @@ as_str!(TabLayout { Horizontal => "horizontal", Vertical => "vertical" });
 as_str!(AgentTrust { Ask => "ask", TrustedSites => "trustedSites", Full => "full", Custom => "custom" });
 as_str!(RuleEffect { Allow => "allow", Ask => "ask", Deny => "deny" });
 as_str!(ThemeSource { Builtin => "builtin", Dms => "dms", System => "system", Manual => "manual" });
+as_str!(PageTheming { Match => "match", System => "system", Darken => "darken" });
 
 impl Config {
     /// Problems serde cannot express, as human-readable messages. The config
@@ -400,6 +426,12 @@ mod tests {
             assert_eq!(
                 toml::Value::try_from(tabs).unwrap().as_str(),
                 Some(tabs.as_str())
+            );
+        }
+        for pages in [PageTheming::Match, PageTheming::System, PageTheming::Darken] {
+            assert_eq!(
+                toml::Value::try_from(pages).unwrap().as_str(),
+                Some(pages.as_str())
             );
         }
     }

@@ -20,6 +20,8 @@ QtObject {
     // Palette file for "dms" / "manual"; empty uses ~/.config/ion/dms-palette.toml
     // or ~/.config/ion/palette.toml.
     property alias palettePath: engine.palettePath
+    // What web pages see: "match" (default) | "system" | "darken".
+    property alias pages: engine.pages
 
     readonly property string name: engine.name
     readonly property bool dark: engine.dark
@@ -39,25 +41,44 @@ QtObject {
     readonly property color danger: engine.danger
     readonly property color warning: engine.warning
     readonly property color success: engine.success
+    // What a web page without its own background is drawn on. Not themed:
+    // pages assume the web's default white.
+    readonly property color pageCanvas: "white"
 
-    // Shape and density
-    readonly property int radius: 8
-    readonly property int spacing: 6
-    readonly property int tabHeight: 32
+    // Shape and density, from the [ui] config section (docs/CONFIG.md).
+    readonly property bool compact: Config.density === "compact"
+    readonly property int radius: Math.max(0, Config.cornerRadius)
+    readonly property int spacing: compact ? 4 : 6
+    readonly property int tabHeight: compact ? 28 : 32
+    readonly property int tabMinWidth: compact ? 64 : 80
     readonly property int tabMaxWidth: 220
-    readonly property int urlBarHeight: 32
+    // A collapsed vertical tab sidebar: just wide enough for the favicons.
+    readonly property int sidebarCollapsedWidth: iconSize + spacing * 6
+    readonly property int urlBarHeight: compact ? 28 : 32
     readonly property int iconSize: 16
+    readonly property int hairline: 1
 
     // Typography
     readonly property int fontSize: 13
 
-    // Motion
-    readonly property int animationMs: 120
+    // Motion. `ui.animations` turns it off or changes its speed; 0 disables
+    // every Behavior and Transition that reads these.
+    readonly property real motionScale: Config.animationsEnabled && Config.animationSpeed > 0
+        ? 1 / Config.animationSpeed : 0
+    readonly property int animationMs: Math.round(120 * motionScale)
+    readonly property int animationSlowMs: Math.round(220 * motionScale)
+    // Loading spinners keep turning with animations off: they report status.
+    readonly property int spinnerMs: 800
+    // How long the pointer rests on a collapsed sidebar before it expands, so
+    // passing over it on the way somewhere else doesn't.
+    readonly property int hoverDelayMs: 250
 
     // Command palette
     readonly property int paletteWidth: 640
     readonly property int paletteMaxRows: 8
     readonly property real scrimOpacity: 0.4
+    // Things that are present but asleep, like a suspended tab's icon.
+    readonly property real dimmedOpacity: 0.45
 
     readonly property SystemPalette systemPalette: SystemPalette {}
 
@@ -66,6 +87,7 @@ QtObject {
         source: Config.themeSource
         themeName: Config.themeName
         palettePath: Config.revision, Config.value("theme.palette") ?? ""
+        pages: Config.revision, Config.value("theme.pages") ?? ""
         // An unknown scheme (common on Linux without a platform theme) counts
         // as dark, Ion's default look.
         systemDark: Qt.styleHints.colorScheme !== Qt.ColorScheme.Light
