@@ -131,6 +131,16 @@ Menu {
         function onContextMenuRequested(request) {
             menu.show(request)
         }
+        // The menu lives in the window overlay, so it would stay up over
+        // another tab or a new page while acting on this one.
+        function onVisibleChanged() {
+            if (!menu.view.visible)
+                menu.close()
+        }
+        function onLoadingChanged(request) {
+            if (request.status === WebEngineView.LoadStartedStatus)
+                menu.close()
+        }
     }
 
     padding: Theme.spacing / 2
