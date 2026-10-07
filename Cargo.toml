@@ -17,6 +17,7 @@ ion-bangs = { path = "crates/ion-bangs" }
 ion-config = { path = "crates/ion-config" }
 ion-session = { path = "crates/ion-session" }
 ion-theme = { path = "crates/ion-theme" }
+ion-safety = { path = "crates/ion-safety" }
 
 cxx = "1.0"
 cxx-qt = "0.10"

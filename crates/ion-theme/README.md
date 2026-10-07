@@ -27,6 +27,20 @@ macOS alike. `theme.palette` overrides the file for `dms` and `manual`
 If a palette file is missing or invalid, Ion keeps the last good palette,
 logs the reason and exposes it as `Theme.error`.
 
+## Web pages
+
+`theme.pages` decides what pages see of the theme:
+
+- `match` (default): pages get the theme's light/dark as
+  `prefers-color-scheme`, so sites with a dark style use it under a dark theme.
+- `system`: pages get the system's light/dark, whatever Ion's theme is.
+- `darken`: like `match`, and under a dark theme pages without a dark style
+  are darkened by Chromium's auto dark mode (not tinted with the palette).
+
+Changes apply to open pages live. QtWebEngine has no API for a page color
+scheme, so `cpp/theme.cpp` in `ion-app` feeds it through the
+`QStyleHints::colorSchemeChanged` signal it listens to; see the comment there.
+
 ## Palette files
 
 TOML. Only `background`, `text` and `accent` are required; everything else is

@@ -16,6 +16,23 @@ pub struct SavedTab {
     pub url: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub title: String,
+    /// The favicon the tab last showed, so restored tabs that have not loaded
+    /// yet still show it.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub icon: String,
+    /// Id of the workspace the tab belongs to (see [`Session::workspaces`]).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub workspace: u32,
+}
+
+/// A workspace as stored on disk.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SavedWorkspace {
+    pub id: u32,
+    pub name: String,
+    /// A `#rrggbb` color, or empty for the theme's accent.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub color: String,
 }
 
 /// A snapshot of one window's tabs.
@@ -28,10 +45,18 @@ pub struct Session {
     /// Index of the current tab.
     #[serde(default)]
     pub current: usize,
+    /// Workspaces in switcher order. Empty in files from before workspaces,
+    /// whose tabs all belong to one default workspace.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub workspaces: Vec<SavedWorkspace>,
 }
 
 fn default_version() -> u32 {
     SESSION_VERSION
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
 }
 
 impl Default for Session {
@@ -40,6 +65,7 @@ impl Default for Session {
             version: SESSION_VERSION,
             tabs: Vec::new(),
             current: 0,
+            workspaces: Vec::new(),
         }
     }
 }
@@ -194,7 +220,7 @@ mod tests {
                 .iter()
                 .map(|u| SavedTab {
                     url: u.to_string(),
-                    title: String::new(),
+                    ..SavedTab::default()
                 })
                 .collect(),
             ..Session::default()

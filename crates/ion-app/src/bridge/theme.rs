@@ -4,6 +4,10 @@
 //!
 //! It re-resolves when its inputs change (source, theme name, palette path,
 //! system light/dark and accent) and when the watched palette file changes.
+//!
+//! It also decides what web pages see of the theme (`theme.pages`): it sets
+//! the `prefers-color-scheme` QtWebEngine hands to pages, and `darkenPages`
+//! tells each `BrowserTab` whether to force-darken pages.
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -26,6 +30,7 @@ pub mod qobject {
         #[qproperty(QString, palette_path, cxx_name = "palettePath")]
         #[qproperty(bool, system_dark, cxx_name = "systemDark")]
         #[qproperty(QColor, system_accent, cxx_name = "systemAccent")]
+        #[qproperty(QString, pages)]
         // Outputs: the resolved palette.
         #[qproperty(QString, name, READ, NOTIFY = palette_changed)]
         #[qproperty(bool, dark, READ, NOTIFY = palette_changed)]
@@ -46,15 +51,37 @@ pub mod qobject {
         // error: why the configured theme could not be used; empty when it was.
         // Its own signal, so a handler fires once per new error.
         #[qproperty(QString, error, READ, NOTIFY)]
+        // Whether pages without a dark style should be force-darkened.
+        #[qproperty(bool, darken_pages, cxx_name = "darkenPages", READ, NOTIFY = page_scheme_changed)]
         type ThemeEngine = super::ThemeEngineRust;
 
         #[qsignal]
         #[cxx_name = "paletteChanged"]
         fn palette_changed(self: Pin<&mut ThemeEngine>);
 
+        /// What pages see of the theme changed; open pages must re-apply their
+        /// settings to pick it up.
+        #[qsignal]
+        #[cxx_name = "pageSchemeChanged"]
+        fn page_scheme_changed(self: Pin<&mut ThemeEngine>);
+
+        /// Hand pages the theme's light/dark again. QtWebEngine resets it when
+        /// a tab is created, so each tab calls this once its page exists.
+        #[qinvokable]
+        #[cxx_name = "applyPageScheme"]
+        fn apply_page_scheme(self: &ThemeEngine);
+
         /// Resolve the palette again. Runs on its own when an input changes.
         #[qinvokable]
         fn reload(self: Pin<&mut ThemeEngine>);
+    }
+
+    #[namespace = "ion"]
+    unsafe extern "C++" {
+        include!("ion-app/cpp/theme.h");
+
+        #[cxx_name = "setWebColorScheme"]
+        fn set_web_color_scheme(scheme: i32);
     }
 
     impl cxx_qt::Initialize for ThemeEngine {}
@@ -68,7 +95,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QColor, QString, QStringList};
-use ion_theme::{Color, Dirs, FileWatcher, Palette, Scheme, SystemAppearance, ThemeSource};
+use ion_theme::{
+    Color, Dirs, FileWatcher, PageTheming, Palette, Scheme, SystemAppearance, ThemeSource,
+};
 
 pub struct ThemeEngineRust {
     source: QString,
@@ -76,6 +105,7 @@ pub struct ThemeEngineRust {
     palette_path: QString,
     system_dark: bool,
     system_accent: QColor,
+    pages: QString,
 
     name: QString,
     dark: bool,
@@ -93,6 +123,12 @@ pub struct ThemeEngineRust {
     success: QColor,
     theme_ids: QStringList,
     error: QString,
+    darken_pages: bool,
+    /// The scheme pages see, as passed to `set_web_color_scheme`.
+    page_scheme: i32,
+    /// The system's light/dark when pages follow it, so they re-apply when
+    /// it changes.
+    page_system_dark: Option<bool>,
 
     /// The palette file being watched, and its watcher.
     watched: Option<(PathBuf, FileWatcher)>,
@@ -112,6 +148,7 @@ impl Default for ThemeEngineRust {
             palette_path: QString::default(),
             system_dark: true,
             system_accent: QColor::default(),
+            pages: QString::default(),
             name: QString::default(),
             dark: true,
             background: QColor::default(),
@@ -128,6 +165,10 @@ impl Default for ThemeEngineRust {
             success: QColor::default(),
             theme_ids: QStringList::default(),
             error: QString::default(),
+            darken_pages: false,
+            // Not a valid scheme, so the first reload always sets it.
+            page_scheme: -1,
+            page_system_dark: None,
             watched: None,
             reload_queued: Arc::default(),
         };
@@ -154,6 +195,30 @@ impl ThemeEngineRust {
         self.danger = qcolor(p.danger);
         self.warning = qcolor(p.warning);
         self.success = qcolor(p.success);
+    }
+
+    /// Decide what pages see of the current palette and hand QtWebEngine the
+    /// scheme. Returns whether anything changed.
+    fn update_pages(&mut self, pages: PageTheming) -> bool {
+        let scheme = if self.dark {
+            Scheme::Dark
+        } else {
+            Scheme::Light
+        };
+        let page_scheme = match pages.scheme(scheme) {
+            None => 0,
+            Some(Scheme::Light) => 1,
+            Some(Scheme::Dark) => 2,
+        };
+        let darken = pages.darken(scheme);
+        let system_dark = (page_scheme == 0).then_some(self.system_dark);
+        if page_scheme != self.page_scheme {
+            qobject::set_web_color_scheme(page_scheme);
+        }
+        let state = (page_scheme, darken, system_dark);
+        let old = (self.page_scheme, self.darken_pages, self.page_system_dark);
+        (self.page_scheme, self.darken_pages, self.page_system_dark) = state;
+        state != old
     }
 
     fn system_appearance(&self) -> SystemAppearance {
@@ -185,6 +250,9 @@ impl cxx_qt::Initialize for qobject::ThemeEngine {
         self.as_mut()
             .on_system_accent_changed(|this| this.reload())
             .release();
+        self.as_mut()
+            .on_pages_changed(|this| this.reload())
+            .release();
         self.reload();
     }
 }
@@ -203,6 +271,7 @@ impl qobject::ThemeEngine {
         let watch_error = self.as_mut().watch(watch_path);
         let resolved = source.and_then(|s| s.resolve(&system, &dirs));
 
+        let pages = self.pages().to_string().parse::<PageTheming>();
         let mut rust = self.as_mut().rust_mut();
         let error = match resolved {
             Ok(palette) => {
@@ -213,6 +282,8 @@ impl qobject::ThemeEngine {
             // mid-edit should not flash the UI back to the default theme.
             Err(e) => Some(e.to_string()),
         };
+        let error = error.or(pages.as_ref().err().cloned());
+        let page_changed = rust.update_pages(pages.unwrap_or_default());
         let error = QString::from(error.unwrap_or_default().as_str());
         let error_changed = rust.error != error;
         rust.error = error;
@@ -222,9 +293,16 @@ impl qobject::ThemeEngine {
             .map(|id| QString::from(id.as_str()))
             .collect();
         self.as_mut().palette_changed();
+        if page_changed {
+            self.as_mut().page_scheme_changed();
+        }
         if error_changed {
             self.error_changed();
         }
+    }
+
+    fn apply_page_scheme(&self) {
+        qobject::set_web_color_scheme(self.page_scheme);
     }
 
     /// Watch `path` for changes (or stop watching). Returns an error message

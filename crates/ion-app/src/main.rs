@@ -26,6 +26,9 @@ fn main() {
     }
     QGuiApplication::set_desktop_file_name(&QString::from(ion_core::APP_ID));
 
+    // The permission and safety model, before anything can ask it.
+    bridge::safety::install();
+
     let mut engine = QQmlApplicationEngine::new();
     if let Some(engine) = engine.as_mut() {
         engine.load(&QUrl::from(MAIN_QML));

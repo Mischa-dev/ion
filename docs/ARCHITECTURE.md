@@ -25,7 +25,8 @@ crates/
                           context menu and new-tab page logic
   ion-platform/           Chromium switches, one-instance-per-profile hand-off
   ion-bangs/              !bangs and the command palette's ranking
-  ion-session/            tab list, saved and named sessions, browsing history
+  ion-session/            tabs and workspaces, saved and named sessions, history
+  ion-safety/             permissions and agent trust: decisions, prompts, activity log
   ion-app/                the binary (`ion`)
     build.rs              auto-discovers bridges, C++ shims and QML files
     src/main.rs           startup: QtWebEngine init, app, QML engine
@@ -68,6 +69,10 @@ Shared files with small, append-only edits: root `Cargo.toml`,
   and title changes back. The open tabs are saved to
   `<data dir>/sessions/last.json` and restored at startup; restored background
   tabs load when first shown. Named sessions live next to it in `named/`.
+- Every tab belongs to a workspace (`Tabs.workspace` is the current tab's).
+  The strips filter the model to the current workspace with a
+  `SortFilterProxyModel`; delegates use the `row` role, not their list index,
+  when they talk to `Tabs`. Workspaces are saved with the session.
 - `History` (`bridge/history.rs`) records finished page loads in
   `<data dir>/history.json`; `History.search(query, limit)` returns JSON for the
   command palette. The data dir is `$ION_DATA_DIR`, else
@@ -76,12 +81,19 @@ Shared files with small, append-only edits: root `Cargo.toml`,
   themes, DMS or manual palette files (live reloaded) and the system accent.
   `Theme.qml` binds them to the `[theme]` config section; see
   `crates/ion-theme/README.md`. Sizes and motion tokens are still static.
+- Web pages follow the theme's light/dark (`theme.pages`); `BrowserTab`
+  re-applies its settings when that changes. Per-site control and palette-tinted
+  dark mode are not built yet.
 - `ion_core::navigation::Omnibox` decides between address and search. Extra
   stages implement `InputStep` and run first; `ion_bangs::BangTable` is one.
   Config feeds user bangs through `BangTable::apply`.
 - The Ctrl/Cmd+K palette ranks tabs, history, sessions, commands and bangs in
   `ion_bangs::palette`; commands are
   listed in `ion_bangs::commands` and carried out in `CommandPalette.qml`.
+  `Palette::suggest` is the URL bar's narrower version (typed entry first,
+  then tabs, history and bang completions), and `ion_bangs::autofill` fills
+  in addresses inline; both lists draw their rows with
+  `CommandPaletteRow.qml`.
 - The browser profile is persistent (`storageName: "Default"`).
 - Per-tab UI (find bar, permission prompt, context menu, new-tab page) is
   declared inside `BrowserTab.qml`; window-wide pieces (downloads panel,
