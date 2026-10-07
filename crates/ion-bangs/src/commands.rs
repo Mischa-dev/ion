@@ -65,6 +65,18 @@ pub const COMMANDS: &[Command] = &[
         "chrome firefox brave chromium vivaldi edge migrate",
         "",
     ),
+    command(
+        "reload-userscripts",
+        "Reload user scripts and styles",
+        "userscript css greasemonkey refresh",
+        "",
+    ),
+    command(
+        "open-userscripts",
+        "Open user scripts folder",
+        "userscript css greasemonkey edit",
+        "",
+    ),
     command("quit", "Quit Ion", "exit close window", "Ctrl+Q"),
 ];
 

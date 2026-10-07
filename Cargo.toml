@@ -17,6 +17,7 @@ ion-config = { path = "crates/ion-config" }
 ion-session = { path = "crates/ion-session" }
 ion-theme = { path = "crates/ion-theme" }
 ion-bookmarks = { path = "crates/ion-bookmarks" }
+ion-sites = { path = "crates/ion-sites" }
 
 cxx = "1.0"
 cxx-qt = "0.10"

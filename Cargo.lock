@@ -695,6 +695,7 @@ dependencies = [
  "ion-core",
  "ion-platform",
  "ion-session",
+ "ion-sites",
  "ion-theme",
  "serde_json",
 ]
@@ -750,6 +751,15 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "ion-sites"
+version = "0.1.0"
+dependencies = [
+ "ion-config",
+ "serde_json",
+ "url",
 ]
 
 [[package]]

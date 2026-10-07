@@ -130,6 +130,9 @@ ApplicationWindow {
 
     ImportDialog { id: importDialog }
 
+    // Per-site CSS and userscripts, installed on the profile.
+    SiteScripts { profile: window.profile }
+
     header: ColumnLayout {
         spacing: 0
 

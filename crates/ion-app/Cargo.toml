@@ -19,6 +19,7 @@ ion-config.workspace = true
 ion-session.workspace = true
 ion-theme.workspace = true
 ion-bookmarks.workspace = true
+ion-sites.workspace = true
 cxx.workspace = true
 cxx-qt.workspace = true
 cxx-qt-lib.workspace = true

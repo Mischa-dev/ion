@@ -25,6 +25,7 @@ crates/
   ion-bangs/              !bangs and the command palette's ranking
   ion-session/            tab list, saved and named sessions, browsing history
   ion-bookmarks/          bookmarks; importing bookmarks and history from Chrome/Firefox
+  ion-sites/              per-site settings ([sites] in config), user scripts and styles
   ion-app/                the binary (`ion`)
     build.rs              auto-discovers bridges, C++ shims and QML files
     src/main.rs           startup: QtWebEngine init, app, QML engine

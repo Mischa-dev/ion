@@ -27,6 +27,21 @@ pub struct Config {
     /// Shortcut remaps: command id (for example `"palette"`) to a Qt key
     /// sequence (for example `"Ctrl+K"`). Unlisted commands keep their default.
     pub shortcuts: BTreeMap<String, String>,
+    /// Per-site settings, keyed by host. `"example.com"` also covers its
+    /// subdomains; the most specific key wins. `"*"` covers every site.
+    pub sites: BTreeMap<String, Site>,
+}
+
+/// Settings for one site. Unset fields fall back to less specific keys.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Site {
+    /// Run JavaScript on the site.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub javascript: Option<bool>,
+    /// Style sheet added to the site's pages.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub css: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -257,6 +272,10 @@ mod tests {
 
             [adblock]
             lists = ["easylist", "easyprivacy", "ublock-filters"]
+
+            [sites."example.com"]
+            javascript = false
+            css = "body { font-size: 120% }"
             "#,
         )
         .unwrap();
@@ -265,6 +284,7 @@ mod tests {
         assert_eq!(config.ui.tabs, TabLayout::Vertical);
         assert_eq!(config.bangs["gh"], "https://github.com/search?q={}");
         assert_eq!(config.general, General::default());
+        assert_eq!(config.sites["example.com"].javascript, Some(false));
     }
 
     #[test]

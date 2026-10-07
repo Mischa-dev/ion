@@ -55,7 +55,27 @@ lists = ["easylist", "easyprivacy", "ublock-filters"]
 
 [shortcuts]                  # command id = Qt key sequence
 # palette = "Ctrl+K"
+
+[sites."example.com"]        # per-site settings; a host covers its subdomains,
+javascript = true            # "*" covers every site, the most specific wins
+# css = "body { max-width: 60em; margin: auto }"   # added to the site's pages
 ```
+
+## User scripts and styles
+
+Files in `~/.config/ion/userscripts/` are injected into pages:
+
+- `*.user.js`: Greasemonkey-style userscripts. The `// ==UserScript==` header's
+  `@match`, `@include`, `@exclude` and `@run-at` (`document-start`,
+  `document-end`, `document-idle`) are honored. Scripts run in an isolated
+  world that shares only the DOM with the page; `// @inject-into page` runs one
+  in the page's own world instead. GM_* APIs are not provided.
+- `*.user.css`: style sheets for every page, or only for the `@match` patterns
+  listed in a leading `/* ==UserStyle== … ==/UserStyle== */` comment.
+
+Run "Reload user scripts and styles" from the palette after editing them; "Open
+user scripts folder" creates and opens the folder. Config changes apply on the
+next page load. User scripts still run on sites with `javascript = false`.
 
 ## Nix
 

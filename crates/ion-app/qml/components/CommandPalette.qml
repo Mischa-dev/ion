@@ -100,6 +100,11 @@ Popup {
         case "bookmark-page": browser.toggleBookmark(); break
         case "bookmarks": Qt.callLater(() => root.show("*")); break
         case "import-browser-data": browser.showImport(); break
+        case "reload-userscripts": Sites.reload(); view?.reload(); break
+        case "open-userscripts":
+            if (Sites.ensureDirectory())
+                Qt.openUrlExternally("file://" + Sites.directory)
+            break
         case "quit": Qt.quit(); break
         default: console.warn("CommandPalette: unknown command", id)
         }

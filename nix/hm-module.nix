@@ -107,6 +107,25 @@ in
           lists = setting (types.listOf types.str) "Filter lists, by well-known name or URL.";
         };
 
+        sites = mkOption {
+          type = types.attrsOf (
+            types.submodule {
+              options = {
+                javascript = setting types.bool "Run JavaScript on the site.";
+                css = setting types.lines "Style sheet added to the site's pages.";
+              };
+            }
+          );
+          default = { };
+          example = {
+            "example.com" = {
+              javascript = false;
+              css = "body { max-width: 50em; margin: auto; }";
+            };
+          };
+          description = "Per-site settings keyed by host; a host also covers its subdomains, `*` covers every site.";
+        };
+
         shortcuts = mkOption {
           type = types.attrsOf types.str;
           default = { };
