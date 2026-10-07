@@ -67,10 +67,19 @@ Item {
         }
     }
 
-    // Switching tabs takes the page out of fullscreen.
+    // A fullscreen tab that is closed clears pageView on its own; restore the
+    // window then too.
+    onPageViewChanged: {
+        if (!pageView)
+            leave()
+    }
+
+    // Switching tabs takes the page out of fullscreen. The old tab's exit
+    // request would arrive after the Connections above moved on to the new
+    // view, so reset its fullscreen state directly instead of asking.
     onViewChanged: {
         if (pageView && pageView !== view) {
-            pageView.triggerWebAction(WebEngineView.ExitFullScreen)
+            pageView.fullScreenCancelled()
             pageView = null
             leave()
         }
