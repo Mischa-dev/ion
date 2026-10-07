@@ -94,6 +94,7 @@ Popup {
                 id: row
 
                 required property string modelData
+                required property int index
 
                 Layout.fillWidth: true
                 implicitHeight: Theme.tabHeight + Theme.spacing * 2
@@ -105,8 +106,10 @@ Popup {
 
                 Keys.onReturnPressed: clicked()
                 Keys.onEnterPressed: clicked()
-                Keys.onUpPressed: nextItemInFocusChain(false).forceActiveFocus(Qt.BacktabFocusReason)
-                Keys.onDownPressed: nextItemInFocusChain(true).forceActiveFocus(Qt.TabFocusReason)
+                // Straight to the neighbouring row: macOS without Full Keyboard
+                // Access leaves buttons out of the tab chain.
+                Keys.onUpPressed: rows.itemAt(index - 1)?.forceActiveFocus(Qt.BacktabFocusReason)
+                Keys.onDownPressed: rows.itemAt(index + 1)?.forceActiveFocus(Qt.TabFocusReason)
 
                 contentItem: Text {
                     text: row.text
