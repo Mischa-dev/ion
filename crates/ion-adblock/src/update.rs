@@ -125,16 +125,54 @@ pub fn load(store: &Store, lists: &[FilterList]) -> Option<Blocker> {
 
 /// Guards against saving a captive portal page or an error page as a list.
 /// Any text is a valid filter pattern, so this looks at the shape instead:
-/// filter lists open with a header or comment (`[Adblock Plus …]`, `! Title:`,
-/// or `#` in hosts files) and contain at least one rule.
+/// no HTML or JSON, and at least half of the non-comment lines look like
+/// rules (network filters have no spaces; cosmetic rules have `##`; hosts
+/// entries start with an IP address). Headers and comments are optional.
 fn looks_like_filter_list(text: &str) -> bool {
     let start = text.trim_start();
-    let has_header = start.starts_with('[') || start.starts_with('!') || start.starts_with('#');
-    let is_comment = |line: &str| {
-        let line = line.trim();
-        line.is_empty() || line.starts_with('!') || line.starts_with('[') || line.starts_with('#')
-    };
-    has_header && start.lines().any(|line| !is_comment(line))
+    if start.starts_with(['<', '{']) {
+        return false;
+    }
+    let mut rules = 0;
+    let mut other = 0;
+    for line in start.lines().map(str::trim) {
+        if line.is_empty() || line.starts_with('!') || is_header(line) {
+            continue;
+        }
+        if line.starts_with('#') && !is_cosmetic(line) {
+            continue; // a hosts file comment
+        }
+        if is_rule(line) {
+            rules += 1;
+        } else {
+            other += 1;
+        }
+    }
+    rules > 0 && rules >= other
+}
+
+/// `[Adblock Plus 2.0]` and friends.
+fn is_header(line: &str) -> bool {
+    line.len() > 2
+        && line.starts_with('[')
+        && line.ends_with(']')
+        && line[1..].starts_with(|c: char| c.is_ascii_alphabetic())
+}
+
+fn is_cosmetic(line: &str) -> bool {
+    ["##", "#@#", "#?#", "#$#", "#%#"]
+        .iter()
+        .any(|marker| line.contains(marker))
+}
+
+fn is_rule(line: &str) -> bool {
+    if line.starts_with(['{', '}', '[', ']', '<', '"']) {
+        return false;
+    }
+    let mut words = line.split_whitespace();
+    let first = words.next().unwrap_or("");
+    let is_hosts_entry = first.parse::<std::net::IpAddr>().is_ok() && words.next().is_some();
+    is_hosts_entry || is_cosmetic(line) || !line.contains(char::is_whitespace)
 }
 
 #[cfg(test)]
@@ -277,5 +315,17 @@ mod tests {
         assert!(!looks_like_filter_list("Bad Gateway\n"));
         assert!(!looks_like_filter_list("{\"error\": \"rate limited\"}"));
         assert!(!looks_like_filter_list(""));
+        // Headers are optional.
+        assert!(looks_like_filter_list("||ads.example^\n##.banner\n"));
+        // Pretty-printed JSON and plain-text errors are not lists.
+        assert!(!looks_like_filter_list(
+            "[\n  {\"error\": \"rate limited\"}\n]\n"
+        ));
+        assert!(!looks_like_filter_list(
+            "[\n{\"error\":\"rate_limited\"}\n]\n"
+        ));
+        assert!(!looks_like_filter_list(
+            "Service Unavailable\nTry again later\n"
+        ));
     }
 }

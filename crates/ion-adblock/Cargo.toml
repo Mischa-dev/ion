@@ -12,6 +12,8 @@ url.workspace = true
 # thread and handed to the UI thread, where QtWebEngine asks about requests.
 adblock = { version = "0.13", default-features = false, features = ["embedded-domain-resolver", "full-regex-handling"] }
 dirs = "6"
+# The public suffix list, also used by adblock-rust (through `addr`).
+psl = "2"
 ureq = "3"
 
 [lints]

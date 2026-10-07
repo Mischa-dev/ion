@@ -17,14 +17,18 @@ pub fn site_of(url: &str) -> Option<String> {
 }
 
 /// Lower-case, no trailing dot, no leading `www.`, unless that would leave a
-/// bare top-level domain: `www.com` stays as is, so switching it off doesn't
-/// switch off every `.com` site.
+/// public suffix: `www.com` and `www.co.uk` stay as they are, so switching
+/// one off doesn't switch off every `.com` or `.co.uk` site.
 fn normalize(host: &str) -> String {
     let host = host.trim_end_matches('.').to_ascii_lowercase();
     match host.strip_prefix("www.") {
-        Some(rest) if rest.contains('.') => rest.to_owned(),
+        Some(rest) if !is_public_suffix(rest) => rest.to_owned(),
         _ => host,
     }
+}
+
+fn is_public_suffix(domain: &str) -> bool {
+    !domain.contains('.') || psl::suffix_str(domain) == Some(domain)
 }
 
 /// Sites where blocking is off. Turning a site off also covers its subdomains,
@@ -131,6 +135,11 @@ mod tests {
         );
         // Never collapse to a bare TLD.
         assert_eq!(site_of("https://www.com/").as_deref(), Some("www.com"));
+        assert_eq!(site_of("https://www.co.uk/").as_deref(), Some("www.co.uk"));
+        assert_eq!(
+            site_of("https://www.bbc.co.uk/").as_deref(),
+            Some("bbc.co.uk")
+        );
         assert_eq!(site_of("about:blank"), None);
         assert_eq!(site_of("file:///etc/hosts"), None);
         assert_eq!(site_of("garbage"), None);
