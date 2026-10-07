@@ -129,15 +129,27 @@ Item {
         return true
     }
 
+    // Check new classes and ids against the generic rules. `reset` rescans
+    // the whole page and swaps the generic sheet in one go, so rules that
+    // still apply never flicker off.
     function scan(reset) {
         const url = root.view.url
         root.view.runJavaScript(root.scanScript(reset), WebEngineScript.ApplicationWorld, found => {
-            if (!found || (found.classes.length === 0 && found.ids.length === 0))
+            const any = found && (found.classes.length > 0 || found.ids.length > 0)
+            if (!any && !reset)
                 return
-            const css = Adblock.genericCss(url, found.classes, found.ids)
-            if (css !== "" && root.view.url === url)
-                root.run(root.sheetScript("generic", css, true))
+            const css = any ? Adblock.genericCss(url, found.classes, found.ids) : ""
+            if ((reset || css !== "") && root.view.url === url)
+                root.run(root.sheetScript("generic", css, !reset))
         })
+    }
+
+    // Redo the loaded page with the current rules and URL.
+    function redo() {
+        if (root.view.loading || root.view.url.toString() === "")
+            return
+        if (root.refreshPageSheet())
+            root.scan(true)
     }
 
     Connections {
@@ -152,19 +164,19 @@ Item {
                 rescan.start()
             }
         }
+        // history.pushState() and fragment links change the URL without a
+        // load, and with it which exceptions apply.
+        function onUrlChanged() {
+            root.redo()
+        }
     }
 
-    // New lists, no lists or the global switch: redo the loaded page with
-    // the current rules. A page still loading catches up when it finishes.
+    // New lists, no lists or a switch changed. A page still loading catches
+    // up when it finishes.
     Connections {
         target: Adblock
         function onFiltersRevisionChanged() {
-            if (root.view.loading || root.view.url.toString() === "")
-                return
-            if (root.refreshPageSheet()) {
-                root.run(root.sheetScript("generic", "", false))
-                root.scan(true)
-            }
+            root.redo()
         }
     }
 

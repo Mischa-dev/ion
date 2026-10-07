@@ -163,14 +163,29 @@ pub fn hiding_css(selectors: &[String]) -> String {
 }
 
 /// Selectors go into a style sheet verbatim, so one that could close its rule
-/// and start another, or open a comment, is dropped. CSS escapes (`.sm\:block`)
-/// are fine, but not a trailing backslash, which would escape the rule's `{`.
+/// and start another, or open a comment, is dropped. Braces and `/*` are fine
+/// inside quoted strings and CSS escapes (`.sm\:block`) are fine anywhere;
+/// a dangling escape or an unterminated string, which would swallow the
+/// rule's own `{`, is not.
 fn is_safe_selector(selector: &str) -> bool {
-    !selector.is_empty()
-        && !selector.contains(['{', '}'])
-        && !selector.contains("/*")
-        && !selector.contains('<')
-        && selector.chars().rev().take_while(|&c| c == '\\').count() % 2 == 0
+    let mut quote = None;
+    let mut chars = selector.chars().peekable();
+    while let Some(c) = chars.next() {
+        match (c, quote) {
+            ('\\', _) => {
+                if chars.next().is_none() {
+                    return false;
+                }
+            }
+            ('"' | '\'', None) => quote = Some(c),
+            (c, Some(q)) if c == q => quote = None,
+            ('\n' | '\r' | '\x0c', Some(_)) => return false,
+            ('{' | '}', None) => return false,
+            ('/', None) if chars.peek() == Some(&'*') => return false,
+            _ => {}
+        }
+    }
+    !selector.is_empty() && quote.is_none()
 }
 
 /// Hosts files (`0.0.0.0 ads.example`) need their own parser; the first rule
@@ -383,6 +398,11 @@ shop.example.org##a{color:red}body
         assert!(is_safe_selector(r".a\\"));
         assert!(!is_safe_selector(r".a\"));
         assert!(!is_safe_selector(r".a\\\"));
+        assert!(is_safe_selector(r#"[data-ad="<sponsor>"]"#));
+        assert!(is_safe_selector(r#"[title='a{b}/*c']"#));
+        assert!(is_safe_selector(r#"[title="it's"]"#));
+        assert!(!is_safe_selector(r#"[title="a{"#));
+        assert!(!is_safe_selector(r#"[title="a\"]"#));
     }
 
     #[test]
