@@ -32,8 +32,8 @@ mod store;
 use std::sync::OnceLock;
 
 pub use schema::{
-    Adblock, Animations, Config, Density, General, PageTheming, Search, TabLayout, Theme,
-    ThemeSource, Ui,
+    Adblock, Agent, AgentRule, AgentTrust, Agents, Animations, Config, Density, General, Mcp,
+    PageTheming, RuleEffect, Safety, Search, TabLayout, Theme, ThemeSource, Ui,
 };
 pub use store::{Paths, State, Store, Subscription, Watcher};
 pub use toml::Value;

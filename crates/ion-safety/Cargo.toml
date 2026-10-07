@@ -1,0 +1,15 @@
+[package]
+name = "ion-safety"
+description = "Permission and safety model for the Ion browser: site permissions, agent trust, prompts and the activity log"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+url.workspace = true
+
+[lints]
+workspace = true

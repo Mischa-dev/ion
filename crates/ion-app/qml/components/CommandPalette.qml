@@ -126,6 +126,8 @@ Popup {
                 view.reload()
             break
         case "update-filter-lists": Adblock.updateLists(); break
+        case "stop-agents": Safety.stopAgents(); break
+        case "resume-agents": Safety.resumeAgents(); break
         case "quit": Qt.quit(); break
         default: console.warn("CommandPalette: unknown command", id)
         }

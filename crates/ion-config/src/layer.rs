@@ -140,6 +140,10 @@ mod tests {
         assert_eq!(loaded.config.ui.animations.speed, 1.5);
         assert!(!loaded.config.general.restore_session);
         assert_eq!(loaded.config.bangs.len(), 2);
+        assert!(loaded.config.agents.mcp.enable);
+        let claude = &loaded.config.agents.profiles["claude-code"];
+        assert_eq!(claude.trust, crate::AgentTrust::TrustedSites);
+        assert_eq!(claude.rules[0].site, "*");
     }
 
     #[test]
