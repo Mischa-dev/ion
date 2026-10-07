@@ -10,6 +10,11 @@ WebEngineView {
     // Emitted when the page asks for a new tab or window (target=_blank, window.open).
     signal newTabRequested(var request)
 
+    // A tab with no page yet matches the browser chrome instead of glaring
+    // white. Pages get the web's usual white canvas, which many rely on.
+    backgroundColor: url.toString().length === 0 || url.toString() === "about:blank"
+        ? Theme.background : Theme.pageCanvas
+
     // Pages follow Ion's theme (theme.pages). QtWebEngine reads the light/dark
     // preference and force-dark only when a page's settings are applied, so
     // setting forceDarkMode (even to the same value) re-applies them.
