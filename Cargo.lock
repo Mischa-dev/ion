@@ -477,10 +477,19 @@ dependencies = [
  "cxx-qt",
  "cxx-qt-build",
  "cxx-qt-lib",
+ "ion-bangs",
  "ion-config",
  "ion-core",
  "ion-session",
  "serde_json",
+]
+
+[[package]]
+name = "ion-bangs"
+version = "0.1.0"
+dependencies = [
+ "ion-core",
+ "url",
 ]
 
 [[package]]

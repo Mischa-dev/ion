@@ -41,7 +41,8 @@ name = "dark"
 # palette = "/path/to/palette.json"   # for "manual" (and "dms" to override its path)
 
 [bangs]                      # your own, on top of Ion's built-in set
-# gh = "https://github.com/search?q={}"
+# gh = "https://github.com/search?q={}"   # adds or replaces !gh
+# yt = ""                                 # removes the built-in !yt
 
 [adblock]
 enable = true
