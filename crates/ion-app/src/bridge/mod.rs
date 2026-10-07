@@ -6,6 +6,8 @@
 pub mod basics;
 pub mod config;
 pub mod downloads;
+pub mod history;
 pub mod omnibox;
+pub mod tabs;
 pub mod webengine;
 pub mod zoom;

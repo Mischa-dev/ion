@@ -36,10 +36,10 @@ Rectangle {
         queue = queue.slice(1)
     }
 
-    // A new page cancels whatever the old one asked for.
+    // A new page cancels whatever the old one asked for. The engine drops those
+    // requests itself; denying them here would store a "Block" the user never
+    // chose for persistent kinds like notifications or location.
     function dropAll() {
-        for (const permission of queue)
-            permission.deny()
         queue = []
     }
 

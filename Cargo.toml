@@ -12,12 +12,14 @@ publish = false
 ion-core = { path = "crates/ion-core" }
 ion-basics = { path = "crates/ion-basics" }
 ion-config = { path = "crates/ion-config" }
+ion-session = { path = "crates/ion-session" }
 
 cxx = "1.0"
 cxx-qt = "0.10"
 cxx-qt-lib = { version = "0.10", features = ["qt_gui", "qt_qml"] }
 cxx-qt-build = "0.10"
 url = "2.5"
+serde_json = "1.0"
 
 # ion-config
 notify = "8"
