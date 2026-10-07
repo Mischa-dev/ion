@@ -6,17 +6,21 @@ import Ion
 
 // Ion's own prompt for camera, microphone, location, notifications and the
 // other site permissions. Lives inside a BrowserTab, below the toolbar on the
-// left like a doorhanger. Requests queue up and are asked one at a time; the
-// profile remembers the persistent ones (location, notifications…) on disk.
+// left like a doorhanger. Requests queue up and are asked one at a time.
+// Ion's safety model (Safety, docs/SAFETY.md) decides, words the prompt and
+// remembers answers; the engine's own permission store is off (Main.qml).
 Rectangle {
     id: prompt
 
     required property WebEngineView view
+    // The tab's id in the `Tabs` model; Safety scopes answers to it.
+    required property int tabId
 
-    // Pending WebEnginePermission values, oldest first.
+    // Pending requests, oldest first: { permission, text, choices, generation }
+    // with the prompt Safety built for each.
     property var queue: []
     readonly property var current: queue.length > 0 ? queue[0] : null
-    readonly property string message: current ? Basics.permissionText(current.permissionType, current.origin) : ""
+    readonly property string message: current ? current.text : ""
     // Allow stays disabled for a moment after each new request shows, so a
     // click aimed at the page can't grant it by accident. The delay starts
     // again whenever the prompt comes back into view: its tab is shown, or
@@ -39,22 +43,44 @@ Rectangle {
         onTriggered: prompt.armed = true
     }
 
-    function enqueue(permission) {
-        if (Basics.permissionText(permission.permissionType, permission.origin).length === 0) {
-            permission.deny()
-            return
+    // Settle `permission` if Safety already knows the answer. Returns the
+    // prompt to show otherwise, or null once settled.
+    function settle(permission) {
+        const decision = Safety.siteDecision(permission.permissionType, permission.origin, tabId)
+        if (decision === "allow") {
+            permission.grant()
+            return null
         }
-        queue = queue.concat([permission])
+        if (decision !== "ask") {
+            permission.deny()
+            return null
+        }
+        const json = Safety.sitePrompt(permission.permissionType, permission.origin, tabId)
+        if (json.length === 0) {
+            permission.deny()
+            return null
+        }
+        const shown = JSON.parse(json)
+        shown.permission = permission
+        return shown
     }
 
-    function answer(allow) {
-        if (!current || (allow && !armed))
+    function enqueue(permission) {
+        const shown = settle(permission)
+        if (shown)
+            queue = queue.concat([shown])
+    }
+
+    function answer(choice) {
+        if (!current || (choice !== "deny" && !armed))
             return
-        if (allow)
-            current.grant()
+        const p = current.permission
+        if (Safety.answerSite(p.permissionType, p.origin, tabId, current.generation, choice))
+            p.grant()
         else
-            current.deny()
-        queue = queue.slice(1)
+            p.deny()
+        // An answer that was remembered may settle requests still waiting.
+        queue = queue.slice(1).map(item => settle(item.permission)).filter(item => item !== null)
     }
 
     // A new page cancels whatever the old one asked for. The engine drops those
@@ -98,7 +124,7 @@ Rectangle {
             spacing: Theme.spacing * 2
 
             Text {
-                text: prompt.current ? Basics.permissionGlyph(prompt.current.permissionType) : ""
+                text: prompt.current ? Basics.permissionGlyph(prompt.current.permission.permissionType) : ""
                 font.pixelSize: Theme.fontSize + 7
                 color: Theme.text
             }
@@ -115,15 +141,17 @@ Rectangle {
             Layout.alignment: Qt.AlignRight
             spacing: Theme.spacing
 
-            PromptButton {
-                text: qsTr("Block")
-                onClicked: prompt.answer(false)
-            }
-            PromptButton {
-                text: qsTr("Allow")
-                primary: true
-                enabled: prompt.armed
-                onClicked: prompt.answer(true)
+            // Safety's choices, primary last: Block, Allow this time, Allow.
+            Repeater {
+                model: prompt.current ? prompt.current.choices : []
+                delegate: PromptButton {
+                    required property var modelData
+                    required property int index
+                    text: modelData.label
+                    primary: index === prompt.current.choices.length - 1 && modelData.id !== "deny"
+                    enabled: modelData.id === "deny" || prompt.armed
+                    onClicked: prompt.answer(modelData.id)
+                }
             }
         }
     }
