@@ -30,6 +30,10 @@ pub struct Workspace {
 /// clusters), so a multi-part emoji counts once and is never cut in half.
 pub const WORKSPACE_ICON_MAX_CHARS: usize = 8;
 
+/// Longest workspace icon kept, in bytes. One character can hold any number of
+/// combining marks, so the character cap alone does not bound the size.
+pub const WORKSPACE_ICON_MAX_BYTES: usize = 256;
+
 /// How many closed tabs "reopen closed tab" remembers.
 pub const CLOSED_TABS_KEPT: usize = 25;
 
@@ -508,14 +512,18 @@ impl TabList {
     }
 
     /// Change a workspace's icon (trimmed, at most
-    /// [`WORKSPACE_ICON_MAX_CHARS`] characters; empty shows the color dot).
+    /// [`WORKSPACE_ICON_MAX_CHARS`] whole characters and
+    /// [`WORKSPACE_ICON_MAX_BYTES`] bytes; empty shows the color dot).
     /// False if there is no such workspace or the icon is unchanged.
     pub fn set_workspace_icon(&mut self, id: WorkspaceId, icon: &str) -> bool {
-        let icon: String = icon
-            .trim()
-            .graphemes(true)
-            .take(WORKSPACE_ICON_MAX_CHARS)
-            .collect();
+        let mut kept = String::new();
+        for g in icon.trim().graphemes(true).take(WORKSPACE_ICON_MAX_CHARS) {
+            if kept.len() + g.len() > WORKSPACE_ICON_MAX_BYTES {
+                break;
+            }
+            kept.push_str(g);
+        }
+        let icon = kept;
         match self.workspaces.iter_mut().find(|w| w.id == id) {
             Some(w) if w.icon != icon => {
                 w.icon = icon;
@@ -878,6 +886,10 @@ mod tests {
         let family = "👨\u{200d}👩\u{200d}👧\u{200d}👦";
         assert!(l.set_workspace_icon(work, &format!("{family}{family}")));
         assert_eq!(l.workspace(work).unwrap().icon, format!("{family}{family}"));
+        // One character stuffed with combining marks is dropped, not kept whole.
+        let zalgo = format!("a{}b", "\u{301}".repeat(1000));
+        assert!(l.set_workspace_icon(work, &zalgo));
+        assert_eq!(l.workspace(work).unwrap().icon, "");
         assert!(l.move_workspace(work, 0));
         assert_eq!(l.workspaces()[0].id, work);
         l.open_in(work, 1, "w", "", false);
