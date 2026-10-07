@@ -7,6 +7,9 @@ import Ion
 Menu {
     id: menu
 
+    // Drawn by Qt Quick in every style. On macOS the default is a native menu,
+    // which ignores the delegate, background and transitions below.
+    popupType: Popup.Item
     padding: Theme.spacing / 2
     implicitWidth: Theme.tabMaxWidth
     delegate: IonMenuItem {}
