@@ -15,7 +15,7 @@ ApplicationWindow {
     readonly property var currentView: {
         window.viewsRevision
         const index = Tabs.currentIndex
-        return index >= 0 && index < views.count ? views.itemAt(index) : null
+        return window.viewAt(index)
     }
 
     width: 1280
@@ -53,6 +53,22 @@ ApplicationWindow {
             return
         }
         Tabs.closeTab(index)
+    }
+
+    function viewAt(index) {
+        return index >= 0 && index < views.count ? views.itemAt(index) : null
+    }
+
+    // For the tab menu. Closing from the end keeps the lower indexes valid.
+    function closeTabsAfter(index) {
+        for (let i = Tabs.count - 1; i > index; i--)
+            Tabs.closeTab(i)
+    }
+
+    function closeOtherTabs(index) {
+        closeTabsAfter(index)
+        for (let i = index - 1; i >= 0; i--)
+            Tabs.closeTab(i)
     }
 
     function newTab() {
@@ -155,6 +171,7 @@ ApplicationWindow {
             onMoveRequested: (from, to) => Tabs.moveTab(from, to)
             onNewTabRequested: window.newTab()
             onMenuRequested: anchor => sessionMenu.open(anchor)
+            onTabMenuRequested: index => tabMenu.openFor(index)
             views: views
             viewsRevision: window.viewsRevision
         }
@@ -167,6 +184,7 @@ ApplicationWindow {
     }
 
     SessionMenu { id: sessionMenu }
+    TabMenu { id: tabMenu; browser: window }
 
     RowLayout {
         anchors.fill: parent
@@ -182,6 +200,7 @@ ApplicationWindow {
             onMoveRequested: (from, to) => Tabs.moveTab(from, to)
             onNewTabRequested: window.newTab()
             onMenuRequested: anchor => sessionMenu.open(anchor)
+            onTabMenuRequested: index => tabMenu.openFor(index)
             views: views
             viewsRevision: window.viewsRevision
         }

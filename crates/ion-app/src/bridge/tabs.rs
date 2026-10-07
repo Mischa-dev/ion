@@ -120,6 +120,12 @@ pub mod qobject {
         #[cxx_name = "openTabNextToCurrent"]
         fn open_tab_next_to_current(self: Pin<&mut Tabs>, url: &QString, activate: bool) -> i32;
 
+        /// Open a tab at `index` (clamped to the end of the strip). Returns its
+        /// index.
+        #[qinvokable]
+        #[cxx_name = "openTabAt"]
+        fn open_tab_at(self: Pin<&mut Tabs>, index: i32, url: &QString, activate: bool) -> i32;
+
         /// Close the tab at `index`. False if there is no such tab.
         #[qinvokable]
         #[cxx_name = "closeTab"]
@@ -328,6 +334,10 @@ impl qobject::Tabs {
     fn open_tab_next_to_current(self: Pin<&mut Self>, url: &QString, activate: bool) -> i32 {
         let next = self.list.current().map_or(0, |i| i + 1);
         self.insert_at(next, url, activate)
+    }
+
+    fn open_tab_at(self: Pin<&mut Self>, index: i32, url: &QString, activate: bool) -> i32 {
+        self.insert_at(index.max(0) as usize, url, activate)
     }
 
     fn close_tab(mut self: Pin<&mut Self>, index: i32) -> bool {
