@@ -67,6 +67,23 @@ ApplicationWindow {
             Bookmarks.toggle(view.url.toString(), view.title)
     }
 
+    // Save what the current tab shows as a PNG in ~/Pictures/Ion and copy it.
+    function screenshot() {
+        const view = window.currentView
+        if (!view)
+            return
+        view.grabToImage(result => {
+            const stamp = Qt.formatDateTime(new Date(), "yyyy-MM-dd HH-mm-ss")
+            const path = Screenshots.savePath(view.title, stamp)
+            if (path.length === 0 || !result.saveToFile(path)) {
+                view.notify(qsTr("Couldn't save the screenshot"))
+                return
+            }
+            Screenshots.copyToClipboard(path)
+            view.notify(qsTr("Screenshot saved to %1 and copied").arg(path))
+        })
+    }
+
     function showImport() {
         importDialog.show()
     }
@@ -270,6 +287,7 @@ ApplicationWindow {
     Shortcut { sequences: [StandardKey.Quit]; onActivated: Qt.quit() }
     Shortcut { sequence: "Ctrl+D"; onActivated: window.toggleBookmark() }
     Shortcut { sequence: "Ctrl+Alt+R"; onActivated: window.currentView?.reader.toggle() }
+    Shortcut { sequence: "Ctrl+Shift+S"; onActivated: window.screenshot() }
     Shortcut {
         sequence: { Config.revision; return Config.value("shortcuts.palette") || "Ctrl+K" }
         onActivated: palette.show()

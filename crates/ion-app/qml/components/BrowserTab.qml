@@ -15,7 +15,13 @@ WebEngineView {
 
     onNewWindowRequested: request => view.newTabRequested(request)
 
+    // Show a short message over the page.
+    function notify(message) {
+        notice.show(message)
+    }
+
     ReaderMode { id: readerMode; view: view }
+    PageNotice { id: notice }
 
     // Per-site JavaScript switch from `[sites]` in config, applied as each
     // page starts loading.

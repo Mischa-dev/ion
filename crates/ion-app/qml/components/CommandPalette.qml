@@ -104,6 +104,7 @@ Popup {
         case "clear-cache": browser.profile.clearHttpCache(); break
         case "clear-history": History.clear(); History.save(); break
         case "reader-mode": view?.reader.toggle(); break
+        case "screenshot": browser.screenshot(); break
         case "reload-userscripts": Sites.reload(); view?.reload(); break
         case "open-userscripts":
             if (Sites.ensureDirectory())

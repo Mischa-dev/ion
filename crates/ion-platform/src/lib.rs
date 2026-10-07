@@ -6,6 +6,8 @@
 //!   clicked in another app, `ion https://…` in a terminal) hands its URLs to
 //!   the running process over a local socket and exits, because two processes
 //!   cannot share one QtWebEngine profile.
+//! - [`screenshots`]: where page screenshots are saved and what they're called.
 
 pub mod chromium;
 pub mod instance;
+pub mod screenshots;
