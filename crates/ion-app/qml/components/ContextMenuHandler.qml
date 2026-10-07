@@ -76,6 +76,7 @@ Menu {
                 : qsTr("Go to %1").arg(preview)
         }
         case "savePage": return qsTr("Save Page As…")
+        case "screenshot": return qsTr("Take Screenshot")
         case "viewSource": return qsTr("View Page Source")
         }
         return id
@@ -122,6 +123,7 @@ Menu {
             break
         }
         case "savePage": v.triggerWebAction(WebEngineView.SavePage); break
+        case "screenshot": v.takeScreenshot(false); break
         case "viewSource": v.triggerWebAction(WebEngineView.ViewSource); break
         }
     }
