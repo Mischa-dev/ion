@@ -163,8 +163,8 @@ ApplicationWindow {
             const early = []
             for (let i = 0; i < Tabs.count; i++)
                 early.push(Tabs.urlAt(i))
-            Tabs.restoreLastSession()
-            early.forEach((target, i) => openTab(target, i === 0))
+            if (Tabs.restoreLastSession())
+                early.forEach((target, i) => openTab(target, i === 0))
         }
         // URLs on the command line (`ion %U` from the desktop file) open as new
         // tabs after the restored ones; the first one becomes current.
