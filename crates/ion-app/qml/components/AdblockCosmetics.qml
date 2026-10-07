@@ -25,12 +25,21 @@ Item {
         return Adblock.filtersRevision + " " + url
     }
 
+    // How often Ion's sheets are put back if the page replaced the adopted
+    // sheet list (it is shared with the page's world), in ms.
+    readonly property int keepInterval: 1000
+
     // Set (or, with `append`, extend) one of Ion's style sheets on the page.
     // Constructed sheets aren't subject to the page's Content Security Policy
     // and need no <html> element, so this works at document creation too.
     function sheetScript(kind, css, append) {
         return "(function (kind, css, append) {"
             + " var ion = window.__ionAdblock || (window.__ionAdblock = { sheets: {}, text: {} });"
+            + " if (!ion.keeper) ion.keeper = setInterval(function () {"
+            + "   var list = document.adoptedStyleSheets, missing = [];"
+            + "   for (var k in ion.sheets) if (list.indexOf(ion.sheets[k]) < 0) missing.push(ion.sheets[k]);"
+            + "   if (missing.length) document.adoptedStyleSheets = list.concat(missing);"
+            + " }, " + root.keepInterval + ");"
             + " if (append) css = (ion.text[kind] || '') + css;"
             + " var old = ion.sheets[kind];"
             + " var sheets = document.adoptedStyleSheets.filter(function (s) { return s !== old; });"
