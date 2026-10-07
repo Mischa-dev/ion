@@ -20,6 +20,7 @@ ion-session.workspace = true
 ion-theme.workspace = true
 ion-bookmarks.workspace = true
 ion-sites.workspace = true
+ion-reader.workspace = true
 cxx.workspace = true
 cxx-qt.workspace = true
 cxx-qt-lib.workspace = true

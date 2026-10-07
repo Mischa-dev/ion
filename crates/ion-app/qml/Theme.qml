@@ -53,6 +53,8 @@ QtObject {
 
     // Motion
     readonly property int animationMs: 120
+    // How long a transient notice stays on screen.
+    readonly property int noticeMs: 2500
 
     // Command palette
     readonly property int paletteWidth: 640

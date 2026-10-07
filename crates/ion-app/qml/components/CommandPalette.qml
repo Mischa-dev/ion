@@ -100,6 +100,7 @@ Popup {
         case "bookmark-page": browser.toggleBookmark(); break
         case "bookmarks": Qt.callLater(() => root.show("*")); break
         case "import-browser-data": browser.showImport(); break
+        case "reader-mode": view?.reader.toggle(); break
         case "reload-userscripts": Sites.reload(); view?.reload(); break
         case "open-userscripts":
             if (Sites.ensureDirectory())

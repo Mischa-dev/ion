@@ -7,10 +7,15 @@ import Ion
 WebEngineView {
     id: view
 
+    // Reader mode for this tab: `reader.toggle()`, `reader.active`.
+    readonly property alias reader: readerMode
+
     // Emitted when the page asks for a new tab or window (target=_blank, window.open).
     signal newTabRequested(var request)
 
     onNewWindowRequested: request => view.newTabRequested(request)
+
+    ReaderMode { id: readerMode; view: view }
 
     // Per-site JavaScript switch from `[sites]` in config, applied as each
     // page starts loading.

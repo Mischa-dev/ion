@@ -18,6 +18,7 @@ ion-session = { path = "crates/ion-session" }
 ion-theme = { path = "crates/ion-theme" }
 ion-bookmarks = { path = "crates/ion-bookmarks" }
 ion-sites = { path = "crates/ion-sites" }
+ion-reader = { path = "crates/ion-reader" }
 
 cxx = "1.0"
 cxx-qt = "0.10"
@@ -36,6 +37,10 @@ toml_edit = "0.25"
 
 # ion-bookmarks
 rusqlite = { version = "0.40", features = ["bundled"] }
+
+# ion-reader
+scraper = { version = "0.27", default-features = false }
+ego-tree = "0.11"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "warn"

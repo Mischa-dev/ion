@@ -263,6 +263,7 @@ ApplicationWindow {
     Shortcut { sequences: [StandardKey.Forward]; onActivated: window.currentView?.goForward() }
     Shortcut { sequences: [StandardKey.Quit]; onActivated: Qt.quit() }
     Shortcut { sequence: "Ctrl+D"; onActivated: window.toggleBookmark() }
+    Shortcut { sequence: "Ctrl+Alt+R"; onActivated: window.currentView?.reader.toggle() }
     Shortcut {
         sequence: { Config.revision; return Config.value("shortcuts.palette") || "Ctrl+K" }
         onActivated: palette.show()

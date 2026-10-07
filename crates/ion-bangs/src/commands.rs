@@ -66,6 +66,12 @@ pub const COMMANDS: &[Command] = &[
         "",
     ),
     command(
+        "reader-mode",
+        "Reader mode",
+        "read article clean distraction free simplify",
+        "Ctrl+Alt+R",
+    ),
+    command(
         "reload-userscripts",
         "Reload user scripts and styles",
         "userscript css greasemonkey refresh",

@@ -55,6 +55,14 @@ Rectangle {
             }
         }
         IconButton {
+            readonly property bool reading: bar.view?.reader.active ?? false
+            glyph: "¶"
+            tip: reading ? qsTr("Leave reader mode") : qsTr("Reader mode")
+            enabled: bar.view !== null
+            opacity: reading ? 1 : 0.7
+            onClicked: bar.view.reader.toggle()
+        }
+        IconButton {
             readonly property string pageUrl: (bar.view?.url ?? "").toString()
             readonly property bool bookmarked: { Bookmarks.revision; return Bookmarks.contains(pageUrl) }
             glyph: bookmarked ? "★" : "☆"
