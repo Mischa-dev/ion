@@ -112,6 +112,8 @@ ApplicationWindow {
         searchTemplate: Config.searchTemplate
     }
 
+    PlatformIntegration { window: window }
+
     // Command palette (Ctrl/Cmd+K).
     CommandPalette { id: palette; browser: window }
 
