@@ -8,6 +8,8 @@ pub mod qobject {
         type QString = cxx_qt_lib::QString;
         include!("cxx-qt-lib/qurl.h");
         type QUrl = cxx_qt_lib::QUrl;
+        include!("cxx-qt-lib/qvariant.h");
+        type QVariant = cxx_qt_lib::QVariant;
     }
 
     extern "RustQt" {
@@ -46,6 +48,11 @@ pub mod qobject {
         #[cxx_name = "setFolder"]
         fn set_folder(self: Pin<&mut Downloads>, category: &QString, folder: &QString) -> bool;
 
+        /// Free a download request the panel no longer shows. The profile
+        /// keeps every request until it is deleted.
+        #[qinvokable]
+        fn release(self: &Downloads, request: &QVariant);
+
         /// The status line under a download's file name.
         #[qinvokable]
         #[cxx_name = "statusText"]
@@ -68,13 +75,21 @@ pub mod qobject {
         #[cxx_name = "smoothRate"]
         fn smooth_rate(self: &Downloads, previous: f64, sample: f64) -> f64;
     }
+
+    #[namespace = "ion"]
+    unsafe extern "C++" {
+        include!("ion-app/cpp/downloads.h");
+
+        #[cxx_name = "deleteLaterObject"]
+        fn delete_later_object(value: &QVariant);
+    }
 }
 
 use std::path::Path;
 use std::pin::Pin;
 
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::{QString, QUrl};
+use cxx_qt_lib::{QString, QUrl, QVariant};
 use ion_basics::downloads::{self, Category, FolderRules, Progress, State};
 
 #[derive(Default)]
@@ -163,5 +178,9 @@ impl qobject::Downloads {
 
     fn smooth_rate(&self, previous: f64, sample: f64) -> f64 {
         downloads::smooth_rate(previous, sample)
+    }
+
+    fn release(&self, request: &QVariant) {
+        qobject::delete_later_object(request);
     }
 }

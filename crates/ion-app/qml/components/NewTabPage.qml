@@ -26,88 +26,98 @@ Rectangle {
         onTriggered: page.now = new Date()
     }
 
-    ColumnLayout {
-        anchors.centerIn: parent
-        width: Math.min(parent.width - Theme.spacing * 8, Theme.tabMaxWidth * 3)
-        spacing: Theme.spacing * 2
+    // Scrolls when a short or narrow window can't fit every shortcut.
+    Flickable {
+        anchors.fill: parent
+        contentHeight: Math.max(height, content.implicitHeight + Theme.spacing * 8)
+        boundsBehavior: Flickable.StopAtBounds
+        clip: true
 
-        Text {
-            Layout.alignment: Qt.AlignHCenter
-            // Hours and minutes in the locale's style, without seconds.
-            text: Qt.formatTime(page.now, Qt.locale().timeFormat(Locale.ShortFormat).replace(/[:.]ss/, ""))
-            color: Theme.text
-            font.pixelSize: Theme.fontSize * 5
-            font.weight: Font.Light
-        }
+        ColumnLayout {
+            id: content
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: (parent.height - implicitHeight) / 2
+            width: Math.min(page.width - Theme.spacing * 8, Theme.tabMaxWidth * 3)
+            spacing: Theme.spacing * 2
 
-        Text {
-            Layout.alignment: Qt.AlignHCenter
-            text: Basics.greeting(page.now.getHours())
-            color: Theme.textMuted
-            font.pixelSize: Theme.fontSize + 5
-        }
+            Text {
+                Layout.alignment: Qt.AlignHCenter
+                // Hours and minutes in the locale's style, without seconds.
+                text: Qt.formatTime(page.now, Qt.locale().timeFormat(Locale.ShortFormat).replace(/[:.]ss/, ""))
+                color: Theme.text
+                font.pixelSize: Theme.fontSize * 5
+                font.weight: Font.Light
+            }
 
-        GridLayout {
-            id: grid
-            Layout.alignment: Qt.AlignHCenter
-            Layout.topMargin: Theme.spacing * 6
-            columns: Math.max(1, Math.min(Basics.shortcutCount, Math.floor(parent.width / (tileSize + columnSpacing))))
-            columnSpacing: Theme.spacing * 2
-            rowSpacing: Theme.spacing * 2
+            Text {
+                Layout.alignment: Qt.AlignHCenter
+                text: Basics.greeting(page.now.getHours())
+                color: Theme.textMuted
+                font.pixelSize: Theme.fontSize + 5
+            }
 
-            readonly property int tileSize: Theme.tabHeight * 3
+            GridLayout {
+                id: grid
+                Layout.alignment: Qt.AlignHCenter
+                Layout.topMargin: Theme.spacing * 6
+                columns: Math.max(1, Math.min(Basics.shortcutCount, Math.floor(parent.width / (tileSize + columnSpacing))))
+                columnSpacing: Theme.spacing * 2
+                rowSpacing: Theme.spacing * 2
 
-            Repeater {
-                model: Basics.shortcutCount
+                readonly property int tileSize: Theme.tabHeight * 3
 
-                delegate: Rectangle {
-                    id: tile
-                    required property int index
+                Repeater {
+                    model: Basics.shortcutCount
 
-                    Layout.preferredWidth: grid.tileSize
-                    Layout.preferredHeight: grid.tileSize
-                    radius: Theme.radius * 1.5
-                    color: tileMouse.containsMouse ? Theme.surfaceRaised : Theme.surface
+                    delegate: Rectangle {
+                        id: tile
+                        required property int index
 
-                    Behavior on color { ColorAnimation { duration: Theme.animationMs } }
+                        Layout.preferredWidth: grid.tileSize
+                        Layout.preferredHeight: grid.tileSize
+                        radius: Theme.radius * 1.5
+                        color: tileMouse.containsMouse ? Theme.surfaceRaised : Theme.surface
 
-                    ColumnLayout {
-                        anchors.centerIn: parent
-                        width: parent.width - Theme.spacing * 2
-                        spacing: Theme.spacing
+                        Behavior on color { ColorAnimation { duration: Theme.animationMs } }
 
-                        Rectangle {
-                            Layout.alignment: Qt.AlignHCenter
-                            implicitWidth: Theme.tabHeight * 1.25
-                            implicitHeight: implicitWidth
-                            radius: width / 2
-                            color: Theme.surfaceHover
+                        ColumnLayout {
+                            anchors.centerIn: parent
+                            width: parent.width - Theme.spacing * 2
+                            spacing: Theme.spacing
+
+                            Rectangle {
+                                Layout.alignment: Qt.AlignHCenter
+                                implicitWidth: Theme.tabHeight * 1.25
+                                implicitHeight: implicitWidth
+                                radius: width / 2
+                                color: Theme.surfaceHover
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: Basics.shortcutLetter(tile.index)
+                                    color: Theme.accent
+                                    font.pixelSize: Theme.fontSize + 5
+                                    font.bold: true
+                                }
+                            }
 
                             Text {
-                                anchors.centerIn: parent
-                                text: Basics.shortcutLetter(tile.index)
-                                color: Theme.accent
-                                font.pixelSize: Theme.fontSize + 5
-                                font.bold: true
+                                Layout.fillWidth: true
+                                text: Basics.shortcutTitle(tile.index)
+                                color: Theme.text
+                                font.pixelSize: Theme.fontSize - 1
+                                horizontalAlignment: Text.AlignHCenter
+                                elide: Text.ElideRight
                             }
                         }
 
-                        Text {
-                            Layout.fillWidth: true
-                            text: Basics.shortcutTitle(tile.index)
-                            color: Theme.text
-                            font.pixelSize: Theme.fontSize - 1
-                            horizontalAlignment: Text.AlignHCenter
-                            elide: Text.ElideRight
+                        MouseArea {
+                            id: tileMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: page.view.url = Basics.shortcutUrl(tile.index)
                         }
-                    }
-
-                    MouseArea {
-                        id: tileMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: page.view.url = Basics.shortcutUrl(tile.index)
                     }
                 }
             }

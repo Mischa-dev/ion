@@ -44,12 +44,17 @@ Popup {
         open()
     }
 
+    // The profile keeps every download request until it is deleted, so rows
+    // we drop also free their request.
     function clearFinished() {
+        const finished = items.filter(d => d.isFinished)
         items = items.filter(d => !d.isFinished)
+        finished.forEach(d => Downloads.release(d))
     }
 
     function remove(download) {
         items = items.filter(d => d !== download)
+        Downloads.release(download)
         if (items.length === 0)
             close()
     }
