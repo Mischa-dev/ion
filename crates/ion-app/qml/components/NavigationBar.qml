@@ -62,6 +62,8 @@ Rectangle {
             enabled: pageUrl.startsWith("http") || pageUrl.startsWith("file:")
             onClicked: bar.bookmarkToggled()
         }
+
+        AdblockButton { view: bar.view }
     }
 
     // Thin load progress line along the bottom edge.

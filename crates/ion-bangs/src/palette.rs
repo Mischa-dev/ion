@@ -1,10 +1,10 @@
 //! Ranking for the Ctrl/Cmd+K command palette.
 //!
-//! One query searches open tabs, bookmarks, browsing history, saved sessions, Ion
-//! commands and bangs together, plus a "open / search for what I typed" entry
-//! resolved by the URL bar's [`Omnibox`]. Two prefixes narrow it down:
+//! One query searches open tabs, bookmarks, browsing history, saved sessions,
+//! Ion commands, settings and bangs together, plus a "open / search for what I
+//! typed" entry resolved by the URL bar's [`Omnibox`]. Prefixes narrow it down:
 //!
-//! - `>` lists commands only.
+//! - `>` lists commands and settings only.
 //! - `*` lists bookmarks only.
 //! - `!` lists bangs while the trigger is being typed; once a known bang is
 //!   followed by a query, the only result is the expanded search.
@@ -19,6 +19,7 @@ use ion_core::navigation::{Omnibox, Resolved};
 use crate::bang::BangTable;
 use crate::commands::{COMMANDS, Command};
 use crate::fuzzy;
+use crate::settings::{SettingOption, SettingValue};
 
 /// Most results returned for one query.
 pub const MAX_RESULTS: usize = 50;
@@ -46,6 +47,8 @@ pub struct Sources<'a> {
     pub bookmarks: &'a [TabEntry],
     /// Names of saved sessions.
     pub sessions: &'a [String],
+    /// Settings that can be changed in one step.
+    pub settings: &'a [SettingOption],
 }
 
 /// What kind of thing a result is; QML picks the icon from it.
@@ -56,6 +59,7 @@ pub enum Kind {
     History,
     Session,
     Command,
+    Setting,
     Bang,
     /// Open the address that was typed.
     Open,
@@ -71,6 +75,7 @@ impl Kind {
             Kind::History => "history",
             Kind::Session => "session",
             Kind::Command => "command",
+            Kind::Setting => "setting",
             Kind::Bang => "bang",
             Kind::Open => "open",
             Kind::Search => "search",
@@ -89,6 +94,8 @@ pub enum Action {
     OpenSession(String),
     /// Run the command with this id.
     Run(&'static str),
+    /// Write these config keys.
+    Set(Vec<(&'static str, SettingValue)>),
     /// Replace the palette's input with this text and keep it open.
     Complete(String),
 }
@@ -126,11 +133,14 @@ impl Palette {
             history,
             bookmarks,
             sessions,
+            settings,
         } = *sources;
         let input = input.trim_start();
 
         if let Some(rest) = input.strip_prefix('>') {
-            return finish(commands(rest.trim()));
+            let mut items = commands(rest.trim());
+            items.extend(setting_items(settings, rest.trim()));
+            return finish(items);
         }
 
         if let Some(rest) = input.strip_prefix('*') {
@@ -173,6 +183,7 @@ impl Palette {
         items.extend(history_items(history, &known, query));
         items.extend(session_items(sessions, query));
         items.extend(commands(query));
+        items.extend(setting_items(settings, query));
         items.extend(self.bangs.iter().filter_map(|bang| {
             let score = fuzzy::score(query, &bang.name).max(fuzzy::score(query, &bang.trigger))?
                 - BANG_PENALTY;
@@ -340,6 +351,31 @@ fn session_items(sessions: &[String], query: &str) -> Vec<Item> {
         .collect()
 }
 
+fn setting_items(settings: &[SettingOption], query: &str) -> Vec<Item> {
+    settings
+        .iter()
+        .filter_map(|option| {
+            let score = fuzzy::score(query, &option.title).max(fuzzy::score(
+                query,
+                &format!("{} {}", option.title, option.keywords),
+            ))?;
+            Some(Item {
+                kind: Kind::Setting,
+                title: option.title.clone(),
+                subtitle: String::new(),
+                hint: if option.active {
+                    "Current".to_owned()
+                } else {
+                    String::new()
+                },
+                action: Action::Set(option.changes.clone()),
+                // Settings sit just below commands that match as well.
+                score: score - 1,
+            })
+        })
+        .collect()
+}
+
 fn commands(query: &str) -> Vec<Item> {
     COMMANDS
         .iter()
@@ -365,7 +401,7 @@ fn commands(query: &str) -> Vec<Item> {
 }
 
 /// Best first; equal scores keep source order (tabs, history, sessions,
-/// commands, bangs, typed).
+/// commands, settings, bangs, typed).
 fn finish(mut items: Vec<Item>) -> Vec<Item> {
     items.sort_by_key(|item| std::cmp::Reverse(item.score));
     items.truncate(MAX_RESULTS);
@@ -417,6 +453,7 @@ mod tests {
             url: "https://nixos.org/manual/".into(),
         }];
         let sessions = vec!["work".to_owned()];
+        let settings = crate::settings::options(&ion_config::Config::default(), ["nord"]);
         palette().query(
             input,
             &Sources {
@@ -425,6 +462,7 @@ mod tests {
                 history: &history,
                 bookmarks: &bookmarks,
                 sessions: &sessions,
+                settings: &settings,
             },
         )
     }
@@ -496,13 +534,29 @@ mod tests {
     }
 
     #[test]
-    fn angle_prefix_lists_only_commands() {
+    fn angle_prefix_lists_only_commands_and_settings() {
         let items = query(">");
-        assert_eq!(items.len(), COMMANDS.len());
-        assert!(items.iter().all(|i| i.kind == Kind::Command));
+        assert!(items.len() > COMMANDS.len());
+        assert!(
+            items
+                .iter()
+                .all(|i| matches!(i.kind, Kind::Command | Kind::Setting))
+        );
+        assert_eq!(items[0].action, Action::Run(COMMANDS[0].id));
         let items = query("> quit");
         assert_eq!(items[0].action, Action::Run("quit"));
-        assert!(items.iter().all(|i| i.kind == Kind::Command));
+    }
+
+    #[test]
+    fn settings_are_found_by_title_and_keywords() {
+        let items = query("nord");
+        assert_eq!(items[0].title, "Theme: Nord");
+        assert!(matches!(items[0].action, Action::Set(_)));
+        let items = query("vertical");
+        assert_eq!(items[0].title, "Vertical tabs");
+        let current = query("comfortable");
+        assert_eq!(current[0].hint, "Current");
+        assert!(query("").iter().all(|i| i.kind != Kind::Setting));
     }
 
     #[test]
