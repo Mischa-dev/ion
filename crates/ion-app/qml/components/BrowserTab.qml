@@ -25,9 +25,11 @@ WebEngineView {
     Component.onCompleted: applyPageTheme()
 
     // Creating a tab resets the scheme QtWebEngine hands to pages, so restore
-    // Ion's before each load.
+    // Ion's when this tab's first load starts. Later loads don't reset it.
+    property bool pageSchemeRestored: false
     onLoadingChanged: info => {
-        if (info.status === WebEngineView.LoadStartedStatus) {
+        if (!pageSchemeRestored && info.status === WebEngineView.LoadStartedStatus) {
+            pageSchemeRestored = true
             Theme.engine.applyPageScheme()
             applyPageTheme()
         }
