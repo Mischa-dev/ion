@@ -35,10 +35,14 @@ Switch {
             height: width
             radius: width / 2
             anchors.verticalCenter: parent.verticalCenter
-            x: control.checked ? parent.width - width - Theme.hairline * 3 : Theme.hairline * 3
+            // visualPosition follows a drag and mirrors in right-to-left layouts.
+            x: Theme.hairline * 3 + control.visualPosition * (parent.width - width - Theme.hairline * 6)
             color: control.checked ? Theme.onAccent : Theme.textMuted
 
-            Behavior on x { NumberAnimation { duration: Theme.animationMs; easing.type: Easing.OutCubic } }
+            Behavior on x {
+                enabled: !control.pressed
+                NumberAnimation { duration: Theme.animationMs; easing.type: Easing.OutCubic }
+            }
         }
     }
 
