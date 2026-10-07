@@ -120,19 +120,20 @@ ApplicationWindow {
             currentView.forceActiveFocus()
     }
 
-    // Delete what `[privacy] clearOnExit` lists. Returns whether a cache
-    // clear started; it finishes with profile.clearHttpCacheCompleted, and
-    // pages shouldn't load before then. At start the cookie database is
-    // already gone (deleted before the engine opened it, in main.rs).
-    function clearOnExit() {
+    // Delete what `[privacy] clearOnExit` lists, one asynchronous profile
+    // operation at a time, as Qt asks. At quit: cookies and history. At
+    // start: history and the cache (the cookie database is already gone,
+    // deleted in main.rs before the engine opened it). Returns whether a
+    // cache clear started; pages wait for profile.clearHttpCacheCompleted.
+    function clearOnExit(atStart) {
         const items = Privacy.clearOnExit()
-        if (items.includes("cookies"))
+        if (items.includes("cookies") && !atStart)
             Privacy.clearCookies(window.profile)
         if (items.includes("history")) {
             History.clear()
             History.save()
         }
-        if (!items.includes("cache"))
+        if (!atStart || !items.includes("cache"))
             return false
         window.profile.clearHttpCache()
         return true
@@ -188,7 +189,7 @@ ApplicationWindow {
         Privacy.apply(window.profile)
         // Again at start, in case the last quit was cut short; the rest of
         // startup waits for it.
-        if (clearOnExit())
+        if (clearOnExit(true))
             waitingForCacheClear = true
         else
             finishStartup()
@@ -261,7 +262,7 @@ ApplicationWindow {
             if (window.startupFinished)
                 Tabs.saveSession()
             History.save()
-            window.clearOnExit()
+            window.clearOnExit(false)
         }
     }
 

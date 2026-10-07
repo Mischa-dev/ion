@@ -93,7 +93,8 @@ vim = false                  # j/k scroll, gg/G, d/u, H/L back/forward,
 [privacy]
 globalPrivacyControl = true  # Sec-GPC header and navigator.globalPrivacyControl
 blockThirdPartyCookies = true
-clearOnExit = []             # any of "cookies", "cache", "history"
+clearOnExit = []             # any of "cookies", "cache", "history" (the cache
+                             # is cleared as Ion next starts)
 
 [sites."example.com"]        # per-site settings; a host covers its subdomains,
 javascript = true            # "*" covers every site, the most specific wins
