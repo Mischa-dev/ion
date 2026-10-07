@@ -68,9 +68,6 @@ Rectangle {
             remove: Transition {
                 NumberAnimation { property: "opacity"; to: 0; duration: Theme.animationMs }
             }
-            displaced: Transition {
-                NumberAnimation { properties: "x,y"; duration: Theme.animationSlowMs; easing.type: Easing.OutCubic }
-            }
             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
             delegate: Rectangle {
