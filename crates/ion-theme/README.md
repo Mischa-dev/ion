@@ -6,11 +6,12 @@ QML singleton, so every surface re-themes together with no restart.
 
 ## Theme sources
 
-Chosen with `Theme.source` (from config's `theme.source`):
+Chosen with `theme.source` in Ion's config (`docs/CONFIG.md`), which the
+`Theme` QML singleton binds to:
 
 | Source | What it does |
 | --- | --- |
-| `builtin` (default) | `Theme.themeName` picks a theme. `auto` (default) is Ion Dark or Ion Light to match the system. |
+| `builtin` (default) | `theme.name` picks a theme. `auto` (default) is Ion Dark or Ion Light to match the system. |
 | `dms` | Reads the palette file DankMaterialShell writes through Ion's matugen template, and re-themes when it changes. |
 | `system` | Ion Dark or Ion Light to match the system, with the system accent color (macOS, KDE, …). |
 | `manual` | Reads a palette file you maintain (by hand or from Nix) and re-themes when it changes. |
@@ -19,8 +20,8 @@ Built-in themes: `ion-dark`, `ion-light`, `catppuccin-mocha`,
 `catppuccin-latte`, `nord`. Community themes are palette files dropped into
 `~/.config/ion/themes/<id>.toml` and selected by `<id>`; they live-reload too.
 
-Paths: `~/.config/ion` is `$XDG_CONFIG_HOME/ion` when that is set, on Linux and
-macOS alike. `Theme.palettePath` overrides the file for `dms` and `manual`
+Paths: `~/.config/ion` is Ion's config directory (`$ION_CONFIG_DIR`, else `$XDG_CONFIG_HOME/ion`), on Linux and
+macOS alike. `theme.palette` overrides the file for `dms` and `manual`
 (default `~/.config/ion/dms-palette.toml` and `~/.config/ion/palette.toml`).
 
 If a palette file is missing or invalid, Ion keeps the last good palette,

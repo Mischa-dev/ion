@@ -27,8 +27,14 @@ pub fn names() -> impl Iterator<Item = &'static str> {
     THEMES.iter().map(|(id, _)| *id)
 }
 
-/// A built-in theme by id, e.g. `"nord"`.
+/// A built-in theme by id, e.g. `"nord"`. `"dark"` and `"light"` are short
+/// for Ion's own themes.
 pub fn get(id: &str) -> Option<Palette> {
+    let id = match id {
+        "dark" => DEFAULT_DARK,
+        "light" => DEFAULT_LIGHT,
+        id => id,
+    };
     THEMES.iter().find(|(name, _)| *name == id).map(|(_, src)| {
         Palette::from_toml(src, id).unwrap_or_else(|e| panic!("built-in theme {id}: {e}"))
     })
@@ -63,6 +69,12 @@ mod tests {
     fn defaults_match_their_scheme() {
         assert_eq!(get(DEFAULT_DARK).unwrap().scheme, Scheme::Dark);
         assert_eq!(get(DEFAULT_LIGHT).unwrap().scheme, Scheme::Light);
+    }
+
+    #[test]
+    fn short_names_pick_ion_themes() {
+        assert_eq!(get("dark"), get(DEFAULT_DARK));
+        assert_eq!(get("light"), get(DEFAULT_LIGHT));
     }
 
     #[test]

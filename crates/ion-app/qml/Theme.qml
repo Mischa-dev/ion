@@ -11,7 +11,7 @@ import Ion
 QtObject {
     id: theme
 
-    // Theme selection, set from config or a theme picker.
+    // Theme selection, bound to the [theme] config section (docs/CONFIG.md).
     // source: "builtin" (default) | "dms" | "system" | "manual"
     property alias source: engine.source
     // Built-in or installed theme id for "builtin"; "auto" follows the system
@@ -58,6 +58,9 @@ QtObject {
 
     readonly property ThemeEngine engine: ThemeEngine {
         id: engine
+        source: Config.themeSource
+        themeName: Config.themeName
+        palettePath: Config.revision, Config.value("theme.palette") ?? ""
         // An unknown scheme (common on Linux without a platform theme) counts
         // as dark, Ion's default look.
         systemDark: Qt.styleHints.colorScheme !== Qt.ColorScheme.Light

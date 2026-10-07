@@ -46,19 +46,21 @@ impl std::error::Error for ThemeError {}
 /// Ion's config directory and the theme files in it.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Dirs {
-    /// `$XDG_CONFIG_HOME/ion`, else `~/.config/ion` (on macOS too, so one
-    /// home-manager config fits both platforms).
+    /// The same directory `ion-config` uses: `$ION_CONFIG_DIR`, else
+    /// `$XDG_CONFIG_HOME/ion`, else `~/.config/ion` (on macOS too).
     pub config: Option<PathBuf>,
 }
 
 impl Dirs {
     pub fn from_env() -> Self {
-        let xdg = std::env::var_os("XDG_CONFIG_HOME")
-            .map(PathBuf::from)
-            .filter(|p| p.is_absolute());
-        let config = xdg
-            .or_else(|| home().map(|h| h.join(".config")))
-            .map(|base| base.join("ion"));
+        let var = |name: &str| {
+            std::env::var_os(name)
+                .map(PathBuf::from)
+                .filter(|p| p.is_absolute())
+        };
+        let config = var("ION_CONFIG_DIR")
+            .or_else(|| var("XDG_CONFIG_HOME").map(|d| d.join("ion")))
+            .or_else(|| home().map(|h| h.join(".config").join("ion")));
         Self { config }
     }
 
