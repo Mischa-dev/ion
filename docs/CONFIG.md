@@ -70,6 +70,12 @@ enable = true
 # ublock-quick-fixes along), ublock-privacy; or https:// URLs of other lists.
 lists = ["easylist", "easyprivacy", "ublock-filters"]
 
+[downloads]
+# directory = "~/Downloads"  # empty: the system's download folder
+[downloads.folders]          # per type: document, image, audio, video, archive, other
+# image = "~/Pictures/Downloads"
+# video = "~/Videos"
+
 [shortcuts]                  # command id = Qt key sequence
 # palette = "Ctrl+K"
 

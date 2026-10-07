@@ -217,6 +217,19 @@ in
           auditRetentionDays = setting types.ints.positive "Days of agent activity log kept.";
         };
 
+        downloads = {
+          directory = setting types.str "Download folder; empty uses the system's. `~` means home.";
+          folders = mkOption {
+            type = types.attrsOf types.str;
+            default = { };
+            example = {
+              image = "~/Pictures/Downloads";
+              video = "~/Videos";
+            };
+            description = "Per-type download folders: document, image, audio, video, archive or other.";
+          };
+        };
+
         shortcuts = mkOption {
           type = types.attrsOf types.str;
           default = { };

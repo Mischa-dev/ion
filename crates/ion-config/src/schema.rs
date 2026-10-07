@@ -24,6 +24,7 @@ pub struct Config {
     /// Ion's built-in bangs are merged in by `ion-bangs`; entries here win.
     pub bangs: BTreeMap<String, String>,
     pub adblock: Adblock,
+    pub downloads: Downloads,
     /// Shortcut remaps: command id (for example `"palette"`) to a Qt key
     /// sequence (for example `"Ctrl+K"`). Unlisted commands keep their default.
     pub shortcuts: BTreeMap<String, String>,
@@ -360,6 +361,18 @@ impl Default for Safety {
             audit_retention_days: 30,
         }
     }
+}
+
+/// Where downloads are saved.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Downloads {
+    /// Folder for downloads; empty uses the system's download folder.
+    /// A leading `~` means the home directory.
+    pub directory: String,
+    /// Per-type folders: `document`, `image`, `audio`, `video`, `archive` or
+    /// `other` to a folder. Types not listed go to `directory`.
+    pub folders: BTreeMap<String, String>,
 }
 
 /// The lowercase word each enum value has in the TOML file.
