@@ -1,10 +1,11 @@
 //! Ranking for the Ctrl/Cmd+K command palette.
 //!
-//! One query searches open tabs, browsing history, saved sessions, Ion
+//! One query searches open tabs, bookmarks, browsing history, saved sessions, Ion
 //! commands and bangs together, plus a "open / search for what I typed" entry
 //! resolved by the URL bar's [`Omnibox`]. Two prefixes narrow it down:
 //!
 //! - `>` lists commands only.
+//! - `*` lists bookmarks only.
 //! - `!` lists bangs while the trigger is being typed; once a known bang is
 //!   followed by a query, the only result is the expanded search.
 //!
@@ -41,6 +42,8 @@ pub struct Sources<'a> {
     pub current_tab: Option<usize>,
     /// History matches for the query, best first.
     pub history: &'a [TabEntry],
+    /// Bookmark matches for the query, best first.
+    pub bookmarks: &'a [TabEntry],
     /// Names of saved sessions.
     pub sessions: &'a [String],
 }
@@ -49,6 +52,7 @@ pub struct Sources<'a> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     Tab,
+    Bookmark,
     History,
     Session,
     Command,
@@ -63,6 +67,7 @@ impl Kind {
     pub fn as_str(self) -> &'static str {
         match self {
             Kind::Tab => "tab",
+            Kind::Bookmark => "bookmark",
             Kind::History => "history",
             Kind::Session => "session",
             Kind::Command => "command",
@@ -119,12 +124,17 @@ impl Palette {
             tabs,
             current_tab,
             history,
+            bookmarks,
             sessions,
         } = *sources;
         let input = input.trim_start();
 
         if let Some(rest) = input.strip_prefix('>') {
             return finish(commands(rest.trim()));
+        }
+
+        if let Some(rest) = input.strip_prefix('*') {
+            return finish(bookmark_items(bookmarks, &[], rest.trim()));
         }
 
         if let Some(trigger) = input.strip_prefix('!') {
@@ -158,7 +168,9 @@ impl Palette {
         }
 
         let mut items = tab_items(tabs, current_tab, query);
-        items.extend(history_items(history, tabs, query));
+        items.extend(bookmark_items(bookmarks, tabs, query));
+        let known: Vec<TabEntry> = tabs.iter().chain(bookmarks).cloned().collect();
+        items.extend(history_items(history, &known, query));
         items.extend(session_items(sessions, query));
         items.extend(commands(query));
         items.extend(self.bangs.iter().filter_map(|bang| {
@@ -258,7 +270,35 @@ fn tab_items(tabs: &[TabEntry], current: Option<usize>, query: &str) -> Vec<Item
         .collect()
 }
 
-/// History pages that aren't already open in a tab.
+/// Bookmarks that aren't already open in a tab. An empty query lists them all
+/// in the order given.
+fn bookmark_items(bookmarks: &[TabEntry], tabs: &[TabEntry], query: &str) -> Vec<Item> {
+    bookmarks
+        .iter()
+        .filter(|page| !tabs.iter().any(|tab| tab.url == page.url))
+        .filter_map(|page| {
+            let score = if query.is_empty() {
+                0
+            } else {
+                fuzzy::score(query, &page.title).max(fuzzy::score(query, &page.url))?
+            };
+            Some(Item {
+                kind: Kind::Bookmark,
+                title: if page.title.is_empty() {
+                    page.url.clone()
+                } else {
+                    page.title.clone()
+                },
+                subtitle: page.url.clone(),
+                hint: String::new(),
+                action: Action::Open(page.url.clone()),
+                score,
+            })
+        })
+        .collect()
+}
+
+/// History pages that aren't already open in a tab or listed as a bookmark.
 fn history_items(history: &[TabEntry], tabs: &[TabEntry], query: &str) -> Vec<Item> {
     history
         .iter()
@@ -372,6 +412,10 @@ mod tests {
     fn query(input: &str) -> Vec<Item> {
         let tabs = tabs();
         let history = history();
+        let bookmarks = vec![TabEntry {
+            title: "Nix manual".into(),
+            url: "https://nixos.org/manual/".into(),
+        }];
         let sessions = vec!["work".to_owned()];
         palette().query(
             input,
@@ -379,9 +423,23 @@ mod tests {
                 tabs: &tabs,
                 current_tab: Some(1),
                 history: &history,
+                bookmarks: &bookmarks,
                 sessions: &sessions,
             },
         )
+    }
+
+    #[test]
+    fn bookmarks_are_found_and_star_prefix_lists_only_them() {
+        let items = query("nix manual");
+        assert_eq!(items[0].kind, Kind::Bookmark);
+        assert_eq!(
+            items[0].action,
+            Action::Open("https://nixos.org/manual/".into())
+        );
+        let items = query("*");
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].kind, Kind::Bookmark);
     }
 
     #[test]

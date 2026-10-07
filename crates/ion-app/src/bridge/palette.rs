@@ -1,6 +1,9 @@
 //! `PaletteSearch` QML element: ranks results for the command palette using
 //! `ion_bangs::Palette`.
 
+// `query` takes one argument per palette source; QML can't pass a struct.
+#![allow(clippy::too_many_arguments)]
+
 #[cxx_qt::bridge]
 pub mod qobject {
     unsafe extern "C++" {
@@ -21,8 +24,8 @@ pub mod qobject {
         /// Results for `input` as a list of `{ kind, title, subtitle, hint,
         /// action, value }` objects, best first. `titles` and `urls` describe
         /// the open tabs in order and `current` is the active tab's index;
-        /// `history` is `History.search()`'s JSON, best first; `sessions` are
-        /// saved session names.
+        /// `history` is `History.search()`'s JSON, best first, and `bookmarks`
+        /// is `Bookmarks.search()`'s; `sessions` are saved session names.
         ///
         /// `action` is `tab` (value: tab index), `open` (value: URL),
         /// `session` (value: session name), `run` (value: command id) or
@@ -35,6 +38,7 @@ pub mod qobject {
             urls: &QStringList,
             current: i32,
             history: &QString,
+            bookmarks: &QString,
             sessions: &QStringList,
         ) -> QVariant;
     }
@@ -87,7 +91,8 @@ fn strings(list: &QStringList) -> Vec<String> {
         .collect()
 }
 
-/// Pages from `History.search()`'s JSON array of `{ url, title, … }`.
+/// Pages from `History.search()`'s or `Bookmarks.search()`'s JSON array of
+/// `{ url, title, … }`.
 fn history_entries(json: &str) -> Vec<TabEntry> {
     let text =
         |value: &serde_json::Value, key: &str| value[key].as_str().unwrap_or_default().to_owned();
@@ -120,15 +125,18 @@ impl qobject::PaletteSearch {
         urls: &QStringList,
         current: i32,
         history: &QString,
+        bookmarks: &QString,
         sessions: &QStringList,
     ) -> QVariant {
         let tabs = entries(titles, urls);
         let history = history_entries(&history.to_string());
+        let bookmarks = history_entries(&bookmarks.to_string());
         let sessions = strings(sessions);
         let sources = Sources {
             tabs: &tabs,
             current_tab: usize::try_from(current).ok(),
             history: &history,
+            bookmarks: &bookmarks,
             sessions: &sessions,
         };
 

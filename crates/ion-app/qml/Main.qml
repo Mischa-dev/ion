@@ -60,6 +60,17 @@ ApplicationWindow {
         window.focusUrlBar()
     }
 
+    // Bookmark the current page, or remove its bookmark (Ctrl+D, the URL bar star).
+    function toggleBookmark() {
+        const view = window.currentView
+        if (view)
+            Bookmarks.toggle(view.url.toString(), view.title)
+    }
+
+    function showImport() {
+        importDialog.show()
+    }
+
     function focusUrlBar() {
         navBar.urlBar.forceActiveFocus()
         navBar.urlBar.selectAll()
@@ -116,6 +127,8 @@ ApplicationWindow {
     // Command palette (Ctrl/Cmd+K).
     CommandPalette { id: palette; browser: window }
 
+    ImportDialog { id: importDialog }
+
     header: ColumnLayout {
         spacing: 0
 
@@ -134,6 +147,7 @@ ApplicationWindow {
             id: navBar
             Layout.fillWidth: true
             view: window.currentView
+            onBookmarkToggled: window.toggleBookmark()
         }
     }
 
@@ -242,6 +256,7 @@ ApplicationWindow {
     Shortcut { sequences: [StandardKey.Back]; onActivated: window.currentView?.goBack() }
     Shortcut { sequences: [StandardKey.Forward]; onActivated: window.currentView?.goForward() }
     Shortcut { sequences: [StandardKey.Quit]; onActivated: Qt.quit() }
+    Shortcut { sequence: "Ctrl+D"; onActivated: window.toggleBookmark() }
     Shortcut {
         sequence: { Config.revision; return Config.value("shortcuts.palette") || "Ctrl+K" }
         onActivated: palette.show()

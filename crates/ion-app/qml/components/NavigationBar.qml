@@ -10,6 +10,8 @@ Rectangle {
     property var view   // BrowserTab of the current tab, may be null
     property alias urlBar: urlBar
 
+    signal bookmarkToggled()
+
     implicitHeight: Theme.urlBarHeight + Theme.spacing * 2
 
     // Switching tabs replaces any half-typed text with the new tab's address.
@@ -51,6 +53,14 @@ Rectangle {
                 if (bar.view)
                     bar.view.url = target
             }
+        }
+        IconButton {
+            readonly property string pageUrl: (bar.view?.url ?? "").toString()
+            readonly property bool bookmarked: { Bookmarks.revision; return Bookmarks.contains(pageUrl) }
+            glyph: bookmarked ? "★" : "☆"
+            tip: bookmarked ? qsTr("Remove bookmark") : qsTr("Bookmark this page")
+            enabled: pageUrl.startsWith("http") || pageUrl.startsWith("file:")
+            onClicked: bar.bookmarkToggled()
         }
     }
 

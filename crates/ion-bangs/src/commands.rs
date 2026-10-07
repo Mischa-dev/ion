@@ -52,6 +52,19 @@ pub const COMMANDS: &[Command] = &[
     command("reload", "Reload page", "refresh", "Ctrl+R"),
     command("back", "Go back", "history previous", "Alt+Left"),
     command("forward", "Go forward", "history next", "Alt+Right"),
+    command(
+        "bookmark-page",
+        "Bookmark this page",
+        "star favorite save remove unbookmark",
+        "Ctrl+D",
+    ),
+    command("bookmarks", "Show bookmarks", "favorites starred list", ""),
+    command(
+        "import-browser-data",
+        "Import bookmarks and history",
+        "chrome firefox brave chromium vivaldi edge migrate",
+        "",
+    ),
     command("quit", "Quit Ion", "exit close window", "Ctrl+Q"),
 ];
 
