@@ -3,7 +3,7 @@
 use std::fmt;
 
 use adblock::Engine;
-use adblock::lists::{FilterSet, ParseOptions};
+use adblock::lists::{FilterFormat, FilterSet, ParseOptions, RuleTypes};
 use adblock::request::Request;
 
 use crate::RequestInfo;
@@ -27,11 +27,19 @@ impl fmt::Display for DeserializeError {
 impl std::error::Error for DeserializeError {}
 
 impl Blocker {
-    /// Compile the given filter list texts. Unparseable lines are skipped.
+    /// Compile the given filter list texts, each either in Adblock Plus syntax
+    /// or a hosts file. Unparseable lines are skipped. Only network rules are
+    /// kept: Ion doesn't do cosmetic filtering, so element-hiding rules would
+    /// only cost memory.
     pub fn from_lists<'a>(lists: impl IntoIterator<Item = &'a str>) -> Self {
         let mut set = FilterSet::new(false);
         for text in lists {
-            set.add_filter_list(text.to_owned(), ParseOptions::default());
+            let options = ParseOptions {
+                format: format_of(text),
+                rule_types: RuleTypes::NetworkOnly,
+                ..ParseOptions::default()
+            };
+            set.add_filter_list(text.to_owned(), options);
         }
         Self {
             engine: Engine::new_with_filter_set(set),
@@ -63,6 +71,23 @@ impl Blocker {
             return false;
         };
         self.engine.check_network_request(&req).should_block()
+    }
+}
+
+/// Hosts files (`0.0.0.0 ads.example`) need their own parser; the first rule
+/// line tells them apart from Adblock Plus syntax.
+fn format_of(text: &str) -> FilterFormat {
+    let first_rule = text
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty() && !line.starts_with(['!', '#', '[']));
+    let is_hosts = first_rule
+        .and_then(|line| line.split_whitespace().next())
+        .is_some_and(|addr| addr.parse::<std::net::IpAddr>().is_ok());
+    if is_hosts {
+        FilterFormat::Hosts
+    } else {
+        FilterFormat::Standard
     }
 }
 
@@ -124,6 +149,16 @@ mod tests {
             ResourceType::Xhr,
         );
         assert!(!blocker.should_block(&first));
+    }
+
+    #[test]
+    fn parses_hosts_files() {
+        let hosts = "# hosts\n127.0.0.1 localhost\n0.0.0.0 ads.example\n";
+        assert!(matches!(format_of(hosts), FilterFormat::Hosts));
+        assert!(matches!(format_of(LIST), FilterFormat::Standard));
+        let blocker = Blocker::from_lists([hosts]);
+        assert!(blocker.should_block(&script("https://ads.example/x.js")));
+        assert!(!blocker.should_block(&script("https://news.example.org/app.js")));
     }
 
     #[test]

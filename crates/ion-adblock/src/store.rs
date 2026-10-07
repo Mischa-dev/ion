@@ -12,7 +12,7 @@ use std::time::{Duration, SystemTime};
 use crate::{Blocker, FilterList};
 
 /// Bump when the engine file layout or the adblock-rust major version changes.
-const ENGINE_FORMAT: &str = "ion-adblock-engine/1 adblock/0.13";
+const ENGINE_FORMAT: &str = "ion-adblock-engine/2 adblock/0.13";
 
 pub struct Store {
     dir: PathBuf,

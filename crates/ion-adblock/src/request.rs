@@ -22,7 +22,8 @@ pub enum ResourceType {
 impl ResourceType {
     /// Map a `QWebEngineUrlRequestInfo::ResourceType` value (Qt 6.11).
     /// Workers load scripts, favicons are images, and navigation preloads
-    /// are the frames they belong to.
+    /// are the frames they belong to. JSON module imports (21) have no filter
+    /// type of their own, so they are `other`, like in uBlock Origin.
     pub fn from_webengine(code: i32) -> Self {
         match code {
             0 | 19 => Self::MainFrame,
@@ -33,7 +34,7 @@ impl ResourceType {
             5 => Self::Font,
             7 | 17 => Self::Object,
             8 => Self::Media,
-            13 | 21 => Self::Xhr,
+            13 => Self::Xhr,
             14 => Self::Ping,
             16 => Self::CspReport,
             254 => Self::WebSocket,
@@ -98,6 +99,8 @@ mod tests {
         assert_eq!(ResourceType::from_webengine(19), ResourceType::MainFrame);
         assert_eq!(ResourceType::from_webengine(254), ResourceType::WebSocket);
         assert_eq!(ResourceType::from_webengine(16), ResourceType::CspReport);
+        // JSON module imports, not XMLHttpRequests.
+        assert_eq!(ResourceType::from_webengine(21), ResourceType::Other);
         assert_eq!(ResourceType::CspReport.filter_type(), "csp_report");
         assert_eq!(ResourceType::from_webengine(6), ResourceType::Other);
         assert_eq!(ResourceType::from_webengine(255), ResourceType::Other);
