@@ -87,7 +87,13 @@ pub fn css_script(sites: &BTreeMap<String, SiteTheme>, base: &str) -> String {
     format!(
         r#"(function () {{
   const css = {map};
-  const host = location.hostname.toLowerCase().replace(/\.$/, "");
+  // srcdoc and about:blank frames have no host of their own but share the
+  // embedding page's origin, so match that.
+  let host = location.hostname;
+  if (!host) {{
+    try {{ host = new URL(self.origin).hostname; }} catch {{ host = ""; }}
+  }}
+  host = host.toLowerCase().replace(/\.$/, "");
   const parts = host.split(".");
   let text = {base};
   for (let i = parts.length - 1; i >= 0; i--) {{
@@ -227,6 +233,8 @@ mod tests {
         );
         // Both scripts share the isolated-world state.
         assert!(script.contains("window.__ionSiteCss ??="));
+        // Hostless frames match the origin they inherit.
+        assert!(script.contains("new URL(self.origin).hostname"));
         assert!(clear_css_script().contains("window.__ionSiteCss.style?.remove()"));
     }
 
