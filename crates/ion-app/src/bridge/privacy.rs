@@ -56,24 +56,32 @@ pub mod qobject {
 #[derive(Default)]
 pub struct PrivacyRust;
 
-/// With `history` in `[privacy] clearOnExit`, delete the engine's record of
-/// visited links (which colors links as visited) for the "Default" profile.
-/// QML has no call for it, so this removes the file before the engine opens
-/// it; call once the application name is set and before QML loads.
-pub fn forget_visited_links() {
+/// Delete the "Default" profile's files for what `[privacy] clearOnExit`
+/// lists, before the engine opens them: the cookie database for `cookies`
+/// (so no page can see a cookie from before), and the visited-links table
+/// for `history` (QML has no call for it). Call once the application name is
+/// set and before QML loads.
+pub fn clear_profile_files() {
+    use ion_config::BrowsingData;
     let config = ion_config::global().config();
-    if !config
-        .privacy
-        .clear_on_exit
-        .contains(&ion_config::BrowsingData::History)
-    {
+    let mut files = Vec::new();
+    for data in &config.privacy.clear_on_exit {
+        match data {
+            BrowsingData::Cookies => files.extend(["Cookies", "Cookies-journal"]),
+            BrowsingData::History => files.push("Visited Links"),
+            BrowsingData::Cache => {}
+        }
+    }
+    if files.is_empty() {
         return;
     }
     let dir = qobject::profile_storage_path(&cxx_qt_lib::QString::from("Default")).to_string();
-    let file = std::path::Path::new(&dir).join("Visited Links");
-    if let Err(err) = std::fs::remove_file(&file) {
-        if err.kind() != std::io::ErrorKind::NotFound {
-            eprintln!("ion: could not delete {}: {err}", file.display());
+    for name in files {
+        let file = std::path::Path::new(&dir).join(name);
+        if let Err(err) = std::fs::remove_file(&file) {
+            if err.kind() != std::io::ErrorKind::NotFound {
+                eprintln!("ion: could not delete {}: {err}", file.display());
+            }
         }
     }
 }

@@ -122,8 +122,8 @@ ApplicationWindow {
 
     // Delete what `[privacy] clearOnExit` lists. Returns whether a cache
     // clear started; it finishes with profile.clearHttpCacheCompleted, and
-    // pages shouldn't load before then. Cookie deletion needs no wait: the
-    // cookie store handles it before any later request reads cookies.
+    // pages shouldn't load before then. At start the cookie database is
+    // already gone (deleted before the engine opened it, in main.rs).
     function clearOnExit() {
         const items = Privacy.clearOnExit()
         if (items.includes("cookies"))
