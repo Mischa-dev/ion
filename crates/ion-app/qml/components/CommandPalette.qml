@@ -17,7 +17,6 @@ Popup {
     property var results: []
 
     readonly property int rowHeight: Theme.tabHeight + Theme.spacing * 2
-    readonly property bool mac: Qt.platform.os === "osx" || Qt.platform.os === "macos"
 
     // Open with `text` already typed, e.g. ">" for commands only.
     function show(text) {
@@ -96,27 +95,6 @@ Popup {
         case "quit": Qt.quit(); break
         default: console.warn("CommandPalette: unknown command", id)
         }
-    }
-
-    function glyph(kind) {
-        switch (kind) {
-        case "tab": return "▭"
-        case "history": return "↺"
-        case "session": return "▤"
-        case "setting": return "⚙"
-        case "command": return "›"
-        case "bang": return "!"
-        case "open": return "↗"
-        default: return "⌕"
-        }
-    }
-
-    // Shortcut hints are written as "Ctrl+…"; show them the macOS way there.
-    function hintText(hint) {
-        if (!mac)
-            return hint
-        return hint.replace("Alt+Left", "Ctrl+[").replace("Alt+Right", "Ctrl+]")
-            .replace("Ctrl+", "⌘").replace("Shift+", "⇧")
     }
 
     PaletteSearch { id: search }
@@ -201,66 +179,14 @@ Popup {
             highlightMoveDuration: 0
             model: root.results
 
-            delegate: Rectangle {
-                id: row
-
+            delegate: CommandPaletteRow {
                 required property var modelData
-                required property int index
 
                 width: ListView.view.width
                 height: root.rowHeight
-                radius: Theme.radius
-                color: ListView.isCurrentItem ? Theme.surfaceRaised : rowMouse.containsMouse ? Theme.surfaceHover : "transparent"
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Theme.spacing * 2
-                    anchors.rightMargin: Theme.spacing * 2
-                    spacing: Theme.spacing * 2
-
-                    Text {
-                        Layout.preferredWidth: Theme.iconSize
-                        text: root.glyph(row.modelData.kind)
-                        color: row.ListView.isCurrentItem ? Theme.accent : Theme.textMuted
-                        font.pixelSize: Theme.fontSize + 2
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 0
-
-                        Text {
-                            Layout.fillWidth: true
-                            text: row.modelData.title
-                            color: Theme.text
-                            font.pixelSize: Theme.fontSize
-                            elide: Text.ElideRight
-                        }
-                        Text {
-                            Layout.fillWidth: true
-                            visible: text.length > 0
-                            text: row.modelData.subtitle
-                            color: Theme.textMuted
-                            font.pixelSize: Theme.fontSize - 2
-                            elide: Text.ElideMiddle
-                        }
-                    }
-
-                    Text {
-                        visible: text.length > 0
-                        text: root.hintText(row.modelData.hint)
-                        color: Theme.textMuted
-                        font.pixelSize: Theme.fontSize - 1
-                    }
-                }
-
-                MouseArea {
-                    id: rowMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: mouse => root.choose(row.modelData, mouse.modifiers & Qt.ControlModifier)
-                }
+                item: modelData
+                current: ListView.isCurrentItem
+                onChosen: modifiers => root.choose(modelData, modifiers & Qt.ControlModifier)
             }
         }
 
