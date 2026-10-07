@@ -41,6 +41,12 @@ pub mod qobject {
         fn request_resource_type(info: &QWebEngineUrlRequestInfo) -> i32;
         #[cxx_name = "blockRequest"]
         fn block_request(info: Pin<&mut QWebEngineUrlRequestInfo>);
+        #[cxx_name = "setRequestHeader"]
+        fn set_request_header(
+            info: Pin<&mut QWebEngineUrlRequestInfo>,
+            name: &QString,
+            value: &QString,
+        );
         #[cxx_name = "redirectRequest"]
         fn redirect_request(info: Pin<&mut QWebEngineUrlRequestInfo>, url: &QString);
     }
@@ -467,6 +473,15 @@ impl qobject::Adblock {
 
         let verdict = self.as_mut().rust_mut().shield.decide(&request);
         let blocked = verdict.is_block();
+        // The profile has one interceptor, so the privacy signal rides here.
+        let mut info = info;
+        if !blocked && ion_config::global().config().privacy.global_privacy_control {
+            qobject::set_request_header(
+                info.as_mut(),
+                &QString::from("Sec-GPC"),
+                &QString::from("1"),
+            );
+        }
         match verdict {
             Verdict::Allow => {}
             Verdict::Block => {

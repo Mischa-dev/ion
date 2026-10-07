@@ -1,6 +1,9 @@
 //! `PaletteSearch` QML element: ranks results for the command palette using
 //! `ion_bangs::Palette`.
 
+// `query` takes one argument per palette source; QML can't pass a struct.
+#![allow(clippy::too_many_arguments)]
+
 #[cxx_qt::bridge]
 pub mod qobject {
     unsafe extern "C++" {
@@ -21,8 +24,8 @@ pub mod qobject {
         /// Results for `input` as a list of `{ kind, title, subtitle, hint,
         /// action, value }` objects, best first. `titles` and `urls` describe
         /// the open tabs in order and `current` is the active tab's index;
-        /// `history` is `History.search()`'s JSON, best first; `sessions` are
-        /// saved session names.
+        /// `history` is `History.search()`'s JSON, best first, and `bookmarks`
+        /// is `Bookmarks.search()`'s; `sessions` are saved session names.
         ///
         /// `action` is `tab` (value: tab index), `open` (value: URL),
         /// `session` (value: session name), `save-session` (value: name for
@@ -37,12 +40,13 @@ pub mod qobject {
             urls: &QStringList,
             current: i32,
             history: &QString,
+            bookmarks: &QString,
             sessions: &QStringList,
         ) -> QVariant;
 
         /// Suggestions for the URL bar, in the same row format as `query`.
         /// The first row is what Enter does with `input` as typed; the rest
-        /// are bang completions, other open tabs and history pages.
+        /// are bang completions, other open tabs, bookmarks and history pages.
         #[qinvokable]
         fn suggest(
             self: &PaletteSearch,
@@ -51,6 +55,7 @@ pub mod qobject {
             urls: &QStringList,
             current: i32,
             history: &QString,
+            bookmarks: &QString,
         ) -> QVariant;
 
         /// `input` with an address filled in from `urls` (open tabs) or
@@ -113,7 +118,8 @@ fn strings(list: &QStringList) -> Vec<String> {
         .collect()
 }
 
-/// Pages from `History.search()`'s JSON array of `{ url, title, … }`.
+/// Pages from `History.search()`'s or `Bookmarks.search()`'s JSON array of
+/// `{ url, title, … }`.
 fn history_entries(json: &str) -> Vec<TabEntry> {
     let text =
         |value: &serde_json::Value, key: &str| value[key].as_str().unwrap_or_default().to_owned();
@@ -146,10 +152,12 @@ impl qobject::PaletteSearch {
         urls: &QStringList,
         current: i32,
         history: &QString,
+        bookmarks: &QString,
         sessions: &QStringList,
     ) -> QVariant {
         let tabs = entries(titles, urls);
         let history = history_entries(&history.to_string());
+        let bookmarks = history_entries(&bookmarks.to_string());
         let sessions = strings(sessions);
         let settings = ion_bangs::settings::options(
             &ion_config::global().config(),
@@ -159,6 +167,7 @@ impl qobject::PaletteSearch {
             tabs: &tabs,
             current_tab: usize::try_from(current).ok(),
             history: &history,
+            bookmarks: &bookmarks,
             sessions: &sessions,
             settings: &settings,
         };
@@ -173,13 +182,16 @@ impl qobject::PaletteSearch {
         urls: &QStringList,
         current: i32,
         history: &QString,
+        bookmarks: &QString,
     ) -> QVariant {
         let tabs = entries(titles, urls);
         let history = history_entries(&history.to_string());
+        let bookmarks = history_entries(&bookmarks.to_string());
         let sources = Sources {
             tabs: &tabs,
             current_tab: usize::try_from(current).ok(),
             history: &history,
+            bookmarks: &bookmarks,
             ..Sources::default()
         };
         rows(self.palette().suggest(&input.to_string(), &sources))

@@ -31,6 +31,8 @@ ApplicationWindow {
     }
     // Set in Component.onCompleted: instance() is null until the prototype is complete.
     property WebEngineProfile profile: null
+    // Folders of the Chrome extensions Ion loaded at startup.
+    property var extensionPaths: []
 
     // Tabs live in the Rust `Tabs` model (bridge/tabs.rs), which also saves them
     // so the next start reopens them. These helpers return the new tab's view.
@@ -87,6 +89,21 @@ ApplicationWindow {
         window.focusUrlBar()
     }
 
+    // Bookmark the current page, or remove its bookmark (Ctrl+D, the URL bar star).
+    function toggleBookmark() {
+        const view = window.currentView
+        if (view)
+            Bookmarks.toggle(view.url.toString(), view.title)
+    }
+
+    function showExtensions() {
+        extensionsDialog.show()
+    }
+
+    function showImport() {
+        importDialog.show()
+    }
+
     // Keyboard focus follows the visible page (so Space, arrows and Find work
     // right after switching tabs), unless the person is typing in the URL bar.
     onCurrentViewChanged: Qt.callLater(focusPage)
@@ -103,6 +120,13 @@ ApplicationWindow {
     Component.onCompleted: {
         profile = profilePrototype.instance()
         Adblock.attach(window.profile)
+        Privacy.apply(window.profile)
+        // Chrome extensions from config and Ion's extensions folder.
+        const extensionManager = window.profile.extensionManager
+        if (extensionManager) {
+            extensionPaths = Extensions.paths()
+            extensionPaths.forEach(path => extensionManager.loadExtension(path))
+        }
         if (Config.value("general.restoreSession"))
             Tabs.restoreLastSession()
         // URLs on the command line (`ion %U` from the desktop file) open as new
@@ -111,6 +135,17 @@ ApplicationWindow {
         urls.forEach((arg, i) => openTab(urlBarResolver.resolve(arg), i === 0))
         if (Tabs.count === 0)
             openTab(homeUrl)
+    }
+
+    // Extensions load switched off; turn on each one that loaded cleanly.
+    // Switching one off in the Extensions dialog lasts until Ion restarts.
+    Connections {
+        target: window.profile?.extensionManager ?? null
+        ignoreUnknownSignals: true
+        function onLoadFinished(extension) {
+            if (extension.isLoaded && !extension.isEnabled && extension.error.length === 0)
+                window.profile.extensionManager.setExtensionEnabled(extension, true)
+        }
     }
 
     // Save tabs shortly after they change, and history less eagerly; both are
@@ -150,6 +185,11 @@ ApplicationWindow {
         target: History
         function onChanged() { historySaveTimer.restart() }
     }
+    // `[privacy]` cookie settings follow config changes live.
+    Connections {
+        target: Config
+        function onRevisionChanged() { Privacy.apply(window.profile) }
+    }
     Connections {
         target: Qt.application
         function onAboutToQuit() {
@@ -169,8 +209,15 @@ ApplicationWindow {
     // Command palette (Ctrl/Cmd+K).
     CommandPalette { id: palette; browser: window }
 
+    ImportDialog { id: importDialog }
+    ExtensionsDialog { id: extensionsDialog; browser: window }
+
+    // Per-site CSS and userscripts, installed on the profile.
+    SiteScripts { profile: window.profile }
+
     header: ColumnLayout {
         spacing: 0
+        visible: !fullScreen.active
 
         TabStrip {
             Layout.fillWidth: true
@@ -193,6 +240,8 @@ ApplicationWindow {
             id: navBar
             Layout.fillWidth: true
             view: window.currentView
+            downloads: downloads
+            onBookmarkToggled: window.toggleBookmark()
         }
     }
 
@@ -208,7 +257,7 @@ ApplicationWindow {
             Layout.fillHeight: true
             // Above the page, which an expanded collapsed sidebar covers.
             z: 1
-            visible: window.verticalTabs
+            visible: window.verticalTabs && !fullScreen.active
             collapsed: {
                 Config.revision
                 return Config.value("ui.collapseSidebar") === true
@@ -280,7 +329,8 @@ ApplicationWindow {
                     onTitleChanged: {
                         if (deferred)
                             return
-                        Tabs.setTitle(index, title)
+                        // The new-tab page has no title of its own; the strip says "New Tab".
+                        Tabs.setTitle(index, showNewTabPage && Basics.isNewTabUrl(url) ? "" : title)
                         History.updateTitle(url.toString(), title)
                     }
                     onIconChanged: {
@@ -293,11 +343,25 @@ ApplicationWindow {
                     }
                     onNewTabRequested: request => {
                         const background = request.destination === WebEngineNewWindowRequest.InNewBackgroundTab
-                        request.openIn(window.openPageTab(!background))
+                        const tab = window.openPageTab(!background)
+                        tab.showNewTabPage = false
+                        request.openIn(tab)
                     }
+                    onOpenInNewTab: target => window.openTab(target, false)
                 }
             }
         }
+    }
+
+    DownloadsPanel { id: downloads; profile: window.profile }
+    NotificationToasts { profile: window.profile }
+    FullScreenController {
+        id: fullScreen
+        window: window
+        view: window.currentView
+        // Esc leaves page fullscreen; an open downloads panel would make the
+        // two Esc shortcuts ambiguous so neither fired.
+        onPageActiveChanged: if (pageActive) downloads.close()
     }
 
     // Keyboard shortcuts. "Ctrl" maps to Cmd on macOS automatically.
@@ -309,6 +373,8 @@ ApplicationWindow {
     Shortcut { sequences: ["Ctrl+Shift+Tab", "Ctrl+PgUp"]; onActivated: Tabs.cycle(-1) }
     Shortcut { sequence: "Ctrl+Shift+PgDown"; onActivated: Tabs.moveTab(Tabs.currentIndex, Tabs.neighbour(Tabs.currentIndex, 1)) }
     Shortcut { sequence: "Ctrl+Shift+PgUp"; onActivated: Tabs.moveTab(Tabs.currentIndex, Tabs.neighbour(Tabs.currentIndex, -1)) }
+    Shortcut { sequence: "Ctrl+Alt+PgDown"; onActivated: Tabs.cycleWorkspace(1) }
+    Shortcut { sequence: "Ctrl+Alt+PgUp"; onActivated: Tabs.cycleWorkspace(-1) }
     // Ctrl+1…8 pick a tab of the workspace by position, Ctrl+9 its last one.
     Shortcut { sequence: "Ctrl+1"; onActivated: Tabs.activateNth(0) }
     Shortcut { sequence: "Ctrl+2"; onActivated: Tabs.activateNth(1) }
@@ -323,6 +389,11 @@ ApplicationWindow {
     Shortcut { sequences: [StandardKey.Back]; onActivated: window.currentView?.goBack() }
     Shortcut { sequences: [StandardKey.Forward]; onActivated: window.currentView?.goForward() }
     Shortcut { sequences: [StandardKey.Quit]; onActivated: Qt.quit() }
+    Shortcut { sequences: [StandardKey.ZoomIn, "Ctrl+="]; onActivated: window.currentView?.zoomIn() }
+    Shortcut { sequences: [StandardKey.ZoomOut]; onActivated: window.currentView?.zoomOut() }
+    Shortcut { sequences: ["Ctrl+0"]; onActivated: window.currentView?.resetZoom() }
+    Shortcut { sequence: "Ctrl+D"; onActivated: window.toggleBookmark() }
+    Shortcut { sequence: "Ctrl+Alt+R"; onActivated: window.currentView?.reader.toggle() }
     Shortcut {
         sequence: { Config.revision; return Config.value("shortcuts.palette") || "Ctrl+K" }
         onActivated: palette.show()

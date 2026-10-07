@@ -45,6 +45,12 @@ pub mod qobject {
         /// Write history to disk.
         #[qinvokable]
         fn save(self: &History) -> bool;
+
+        /// Merge another browser's history (one of `Bookmarks.importSources()`).
+        /// Returns how many pages were new, or -1 if it couldn't be read.
+        #[qinvokable]
+        #[cxx_name = "importFrom"]
+        fn import_from(self: Pin<&mut History>, browser: &QString) -> i32;
     }
 }
 
@@ -129,6 +135,21 @@ impl qobject::History {
     fn clear(mut self: Pin<&mut Self>) {
         self.as_mut().rust_mut().history.clear();
         self.changed();
+    }
+
+    fn import_from(mut self: Pin<&mut Self>, browser: &QString) -> i32 {
+        let Some(imported) = super::bookmarks::read_profile(&browser.to_string()) else {
+            return -1;
+        };
+        let added = self
+            .as_mut()
+            .rust_mut()
+            .history
+            .merge(imported.history, history::now());
+        if added > 0 {
+            self.changed();
+        }
+        i32::try_from(added).unwrap_or(i32::MAX)
     }
 
     fn save(&self) -> bool {

@@ -139,6 +139,23 @@ in
                 "darken"
               ])
               "What web pages see: the theme's light/dark (`match`), the system's, or `match` plus darkening pages without a dark style.";
+          pageControls = setting types.bool "Give web page scrollbars, checkboxes and text selection the theme's colors, unless the page styles them itself.";
+          sites = mkOption {
+            type = types.attrsOf (
+              types.submodule {
+                options = {
+                  darken = setting types.bool "Darken this site under a dark theme (true) or never (false); unset follows `theme.pages`.";
+                  css = setting types.lines "CSS added to this site's pages.";
+                };
+              }
+            );
+            default = { };
+            example = {
+              "example.com".css = "body { max-width: 50em; margin: auto }";
+              "github.com".darken = false;
+            };
+            description = "Per-site theming, keyed by site. A site also covers its subdomains; the most specific entry wins.";
+          };
         };
 
         bangs = mkOption {
@@ -153,6 +170,34 @@ in
         adblock = {
           enable = setting types.bool "Whether to block ads and trackers.";
           lists = setting (types.listOf types.str) "Filter lists, by well-known name or URL.";
+        };
+
+        extensions =
+          setting (types.listOf (types.coercedTo types.package toString types.str))
+            "Unpacked Chrome extension folders (Manifest V3), or packages that build one, to load at startup.";
+
+        keyboard = {
+          vim = setting types.bool "Vim-style keys and link hints in pages.";
+        };
+
+        privacy = {
+          globalPrivacyControl = setting types.bool "Send the Global Privacy Control signal to sites.";
+          blockThirdPartyCookies = setting types.bool "Refuse cookies from sites other than the one in the address bar.";
+        };
+
+        sites = mkOption {
+          type = types.attrsOf (
+            types.submodule {
+              options = {
+                javascript = setting types.bool "Run JavaScript on the site.";
+              };
+            }
+          );
+          default = { };
+          example = {
+            "example.com".javascript = false;
+          };
+          description = "Per-site settings keyed by host (site CSS is `theme.sites`); a host also covers its subdomains, `*` covers every site.";
         };
 
         agents = mkOption {

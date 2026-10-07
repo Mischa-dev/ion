@@ -8,7 +8,10 @@ Rectangle {
     id: bar
 
     property var view   // BrowserTab of the current tab, may be null
+    property DownloadsPanel downloads   // may be null
     property alias urlBar: urlBar
+
+    signal bookmarkToggled()
 
     implicitHeight: Theme.urlBarHeight + Theme.spacing * 2
 
@@ -58,8 +61,35 @@ Rectangle {
                     urlBar.focus = false
             }
         }
+        IconButton {
+            readonly property bool reading: bar.view?.reader.active ?? false
+            glyph: "¶"
+            tip: reading ? qsTr("Leave reader mode") : qsTr("Reader mode")
+            enabled: bar.view !== null
+            opacity: reading ? 1 : 0.7
+            onClicked: bar.view.reader.toggle()
+        }
+        IconButton {
+            readonly property string pageUrl: (bar.view?.url ?? "").toString()
+            // Reading revision makes the binding re-run when bookmarks change.
+            readonly property bool bookmarked: Bookmarks.revision >= 0 && Bookmarks.contains(pageUrl)
+            glyph: bookmarked ? "★" : "☆"
+            tip: bookmarked ? qsTr("Remove bookmark") : qsTr("Bookmark this page")
+            enabled: pageUrl.startsWith("http") || pageUrl.startsWith("file:")
+            onClicked: bar.bookmarkToggled()
+        }
+
+        IconButton {
+            readonly property real factor: bar.view?.zoomFactor ?? 1
+            visible: bar.view !== null && !Zoom.isDefault(factor)
+            implicitWidth: Theme.urlBarHeight * 1.6
+            glyph: Zoom.label(factor)
+            tip: qsTr("Reset zoom")
+            onClicked: bar.view.resetZoom()
+        }
 
         AdblockButton { view: bar.view }
+        DownloadsButton { panel: bar.downloads }
     }
 
     // Hairline between the browser chrome and the page.

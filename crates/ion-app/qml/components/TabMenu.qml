@@ -4,7 +4,7 @@ import Ion
 
 // Right-click menu for one tab in either strip. `browser` is the main window,
 // for its tab helpers.
-Menu {
+IonMenu {
     // Not `menu`: inside a MenuItem that name is the item's own (sub)menu.
     id: root
 
@@ -38,7 +38,7 @@ Menu {
         popup()
     }
 
-    MenuItem {
+    IonMenuItem {
         text: root.browser.verticalTabs ? qsTr("New tab below") : qsTr("New tab to the right")
         onTriggered: {
             Tabs.openTabAt(root.index + 1, "", true)
@@ -46,38 +46,38 @@ Menu {
         }
     }
 
-    MenuSeparator {}
+    IonMenuSeparator {}
 
-    MenuItem {
+    IonMenuItem {
         text: qsTr("Reload")
         onTriggered: root.view?.reload()
     }
-    MenuItem {
+    IonMenuItem {
         text: qsTr("Duplicate")
         onTriggered: Tabs.openTabAt(root.index + 1, Tabs.urlAt(root.index), true)
     }
-    MenuItem {
+    IonMenuItem {
         text: root.view?.audioMuted ? qsTr("Unmute tab") : qsTr("Mute tab")
         onTriggered: {
             if (root.view)
                 root.view.audioMuted = !root.view.audioMuted
         }
     }
-    MenuItem {
+    IonMenuItem {
         text: qsTr("Suspend")
         // The current tab is always awake; see general.suspendTabsAfter.
         enabled: !root.isCurrent && !(root.view?.suspended ?? true)
         onTriggered: Tabs.setSuspended(root.index, true)
     }
 
-    Menu {
+    IonMenu {
         id: moveMenu
         palette: root.palette
         title: qsTr("Move to workspace")
 
         Instantiator {
             model: root.workspaces.filter(w => w.id !== Tabs.workspaceAt(root.index))
-            delegate: MenuItem {
+            delegate: IonMenuItem {
                 required property var modelData
                 text: modelData.name
                 onTriggered: Tabs.moveToWorkspace(root.index, modelData.id)
@@ -86,21 +86,21 @@ Menu {
             onObjectRemoved: (index, object) => moveMenu.removeItem(object)
         }
 
-        MenuSeparator {}
+        IonMenuSeparator {}
 
-        MenuItem {
+        IonMenuItem {
             text: qsTr("New workspace…")
             onTriggered: root.workspaceMenu.create(root.index)
         }
     }
 
-    MenuSeparator {}
+    IonMenuSeparator {}
 
-    MenuItem {
+    IonMenuItem {
         text: qsTr("Close tab")
         onTriggered: root.browser.closeTab(root.index)
     }
-    MenuItem {
+    IonMenuItem {
         text: qsTr("Close other tabs")
         enabled: {
             root.workspaces // re-read each time the menu opens
@@ -108,7 +108,7 @@ Menu {
         }
         onTriggered: root.browser.closeOtherTabs(root.index)
     }
-    MenuItem {
+    IonMenuItem {
         text: root.browser.verticalTabs ? qsTr("Close tabs below") : qsTr("Close tabs to the right")
         enabled: {
             root.workspaces
@@ -116,7 +116,7 @@ Menu {
         }
         onTriggered: root.browser.closeTabsAfter(root.index)
     }
-    MenuItem {
+    IonMenuItem {
         text: qsTr("Reopen closed tab")
         enabled: Tabs.closedCount > 0
         onTriggered: Tabs.reopenClosedTab()

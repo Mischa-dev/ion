@@ -79,7 +79,8 @@ TextField {
                 select(typed.length, filled.length)
             }
         }
-        suggestions = search.suggest(text, titles, urls, Tabs.currentIndex, history)
+        const bookmarks = query.startsWith("!") ? "[]" : Bookmarks.search(query, Theme.paletteMaxRows)
+        suggestions = search.suggest(text, titles, urls, Tabs.currentIndex, history, bookmarks)
         list.currentIndex = 0
     }
 

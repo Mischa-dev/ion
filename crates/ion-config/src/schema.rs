@@ -27,8 +27,52 @@ pub struct Config {
     /// Shortcut remaps: command id (for example `"palette"`) to a Qt key
     /// sequence (for example `"Ctrl+K"`). Unlisted commands keep their default.
     pub shortcuts: BTreeMap<String, String>,
+    /// Per-site settings, keyed by host. `"example.com"` also covers its
+    /// subdomains; the most specific key wins. `"*"` covers every site.
+    pub sites: BTreeMap<String, Site>,
+    pub privacy: Privacy,
+    pub keyboard: Keyboard,
+    /// Unpacked Chrome extension folders (Manifest V3) loaded at startup,
+    /// on top of those in Ion's own extensions folder.
+    pub extensions: Vec<String>,
     pub agents: Agents,
     pub safety: Safety,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Keyboard {
+    /// Vim-style keys in pages: j/k to scroll, f for link hints, H/L for
+    /// back and forward.
+    pub vim: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Privacy {
+    /// Tell sites not to sell or share your data: the `Sec-GPC: 1` header
+    /// and `navigator.globalPrivacyControl`.
+    pub global_privacy_control: bool,
+    /// Refuse cookies set by sites other than the one in the address bar.
+    pub block_third_party_cookies: bool,
+}
+
+impl Default for Privacy {
+    fn default() -> Self {
+        Self {
+            global_privacy_control: true,
+            block_third_party_cookies: true,
+        }
+    }
+}
+
+/// Settings for one site. Unset fields fall back to less specific keys.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Site {
+    /// Run JavaScript on the site.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub javascript: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -142,6 +186,13 @@ pub struct Theme {
     pub palette: Option<PathBuf>,
     /// What web pages see of the theme.
     pub pages: PageTheming,
+    /// Give page scrollbars, form controls and text selection Ion's colors,
+    /// unless the page styles them itself.
+    pub page_controls: bool,
+    /// Per-site theming, keyed by site (`example.com` also covers its
+    /// subdomains; the most specific entry wins).
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub sites: BTreeMap<String, SiteTheme>,
 }
 
 impl Default for Theme {
@@ -151,6 +202,8 @@ impl Default for Theme {
             name: "auto".into(),
             palette: None,
             pages: PageTheming::default(),
+            page_controls: true,
+            sites: BTreeMap::new(),
         }
     }
 }
@@ -169,6 +222,19 @@ pub enum ThemeSource {
     /// A palette file named by `theme.palette` (default
     /// `<config dir>/palette.toml`).
     Manual,
+}
+
+/// Theming for one site.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct SiteTheme {
+    /// Darken the site under a dark theme (`true`) or never (`false`); unset
+    /// follows `theme.pages`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub darken: Option<bool>,
+    /// CSS added to the site's pages.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub css: String,
 }
 
 /// How web pages follow the theme.
@@ -370,6 +436,10 @@ mod tests {
             [theme]
             source = "dms"
 
+            [theme.sites."example.com"]
+            darken = false
+            css = "body { max-width: 50em }"
+
             [ui]
             density = "compact"
             cornerRadius = 8
@@ -382,14 +452,28 @@ mod tests {
 
             [adblock]
             lists = ["easylist", "easyprivacy", "ublock-filters"]
+
+            [privacy]
+            blockThirdPartyCookies = false
+
+            [sites."example.com"]
+            javascript = false
             "#,
         )
         .unwrap();
         assert_eq!(config.theme.source, ThemeSource::Dms);
+        assert_eq!(config.theme.sites["example.com"].darken, Some(false));
+        assert_eq!(
+            config.theme.sites["example.com"].css,
+            "body { max-width: 50em }"
+        );
         assert_eq!(config.ui.density, Density::Compact);
         assert_eq!(config.ui.tabs, TabLayout::Vertical);
         assert_eq!(config.bangs["gh"], "https://github.com/search?q={}");
         assert_eq!(config.general, General::default());
+        assert_eq!(config.sites["example.com"].javascript, Some(false));
+        assert!(!config.privacy.block_third_party_cookies);
+        assert!(config.privacy.global_privacy_control);
     }
 
     #[test]
