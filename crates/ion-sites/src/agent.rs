@@ -48,11 +48,12 @@ fn without_qtwebengine(engine: &str) -> String {
         .join(" ")
 }
 
-/// Whether `user_agent` names a Chromium browser. The engine's client hints
-/// (`Sec-CH-UA*`, `navigator.userAgentData`) only fit those; Firefox and
+/// Whether pages sent `user_agent` should keep the engine's client hints
+/// (`Sec-CH-UA*`, `navigator.userAgentData`). Only the `"chrome"` preset
+/// matches them; any other value would contradict them, and Firefox and
 /// Safari send none.
-pub fn is_chromium(user_agent: &str) -> bool {
-    user_agent.contains("Chrome/") || user_agent.contains("Chromium/")
+pub fn keeps_client_hints(user_agent: &str, engine: &str) -> bool {
+    user_agent == without_qtwebengine(engine)
 }
 
 /// The user agent to send for pages at `url`: the most specific matching
@@ -68,19 +69,24 @@ pub fn for_url(sites: &BTreeMap<String, Site>, url: &str, engine: &str) -> Optio
 /// A page script that makes `navigator.userAgent` (and `appVersion`) agree
 /// with the header on sites that override it. `None` when no entry does.
 pub fn script(sites: &BTreeMap<String, Site>, engine: &str) -> Option<Script> {
-    let mut entries: Vec<(String, Option<String>)> = sites
+    // (site, user agent or null for the engine's, keep client hints)
+    let mut entries: Vec<(String, Option<String>, bool)> = sites
         .iter()
         .filter_map(|(key, site)| {
             let value = site.user_agent.as_deref()?;
             let key = key.trim().trim_end_matches('.').to_ascii_lowercase();
-            Some((key, resolve(value, engine)))
+            let ua = resolve(value, engine);
+            let hints = ua
+                .as_deref()
+                .is_none_or(|ua| keeps_client_hints(ua, engine));
+            Some((key, ua, hints))
         })
         .collect();
-    if entries.iter().all(|(_, ua)| ua.is_none()) {
+    if entries.iter().all(|(_, ua, _)| ua.is_none()) {
         return None;
     }
     // Least specific first, like `rules::matching`; the page keeps the last hit.
-    entries.sort_by_key(|(key, _)| if key == "*" { 0 } else { key.len() + 1 });
+    entries.sort_by_key(|(key, _, _)| if key == "*" { 0 } else { key.len() + 1 });
     let entries = serde_json::to_string(&entries).unwrap_or_else(|_| "[]".to_owned());
     let source = format!(
         r#"(() => {{
@@ -91,13 +97,13 @@ pub fn script(sites: &BTreeMap<String, Site>, engine: &str) -> Option<Script> {
     const k = key.startsWith("*.") ? key.slice(2) : key;
     return host === k || host.endsWith("." + k);
   }};
-  let ua = null;
-  for (const [key, value] of entries) if (covers(key)) ua = value;
+  let ua = null, hints = true;
+  for (const [key, value, keep] of entries) if (covers(key)) [ua, hints] = [value, keep];
   if (!ua) return;
   const get = (value) => ({{ get: () => value, configurable: true, enumerable: true }});
   Object.defineProperty(Navigator.prototype, "userAgent", get(ua));
   Object.defineProperty(Navigator.prototype, "appVersion", get(ua.replace(/^Mozilla\//, "")));
-  if (!/Chrom(e|ium)\//.test(ua) && "userAgentData" in Navigator.prototype)
+  if (!hints && "userAgentData" in Navigator.prototype)
     Object.defineProperty(Navigator.prototype, "userAgentData", get(undefined));
 }})();
 "#
@@ -144,9 +150,21 @@ mod tests {
         assert_eq!(resolve(" default ", ENGINE), None);
         assert_eq!(resolve("", ENGINE), None);
         assert_eq!(resolve("MyAgent/1.0", ENGINE).unwrap(), "MyAgent/1.0");
-        assert!(is_chromium(&resolve("chrome", ENGINE).unwrap()));
-        assert!(!is_chromium(&resolve("firefox", ENGINE).unwrap()));
-        assert!(!is_chromium(&resolve("safari", ENGINE).unwrap()));
+        assert!(keeps_client_hints(
+            &resolve("chrome", ENGINE).unwrap(),
+            ENGINE
+        ));
+        assert!(!keeps_client_hints(
+            &resolve("firefox", ENGINE).unwrap(),
+            ENGINE
+        ));
+        assert!(!keeps_client_hints(
+            &resolve("safari", ENGINE).unwrap(),
+            ENGINE
+        ));
+        let old_chrome = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) \
+                          Chrome/99.0.0.0 Safari/537.36";
+        assert!(!keeps_client_hints(old_chrome, ENGINE));
     }
 
     #[test]
@@ -175,6 +193,6 @@ mod tests {
         assert!(script(&sites(&[("a.org", "default")]), ENGINE).is_none());
         let s = script(&sites(&[("a.org", "x/\"1</script>")]), ENGINE).unwrap();
         assert_eq!(s.world, World::Main);
-        assert!(s.source.contains(r#"[["a.org","x/\"1</script>"]]"#));
+        assert!(s.source.contains(r#"[["a.org","x/\"1</script>",false]]"#));
     }
 }

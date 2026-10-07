@@ -469,9 +469,10 @@ impl qobject::Adblock {
                     &QString::from("User-Agent"),
                     &QString::from(agent.as_str()),
                 );
-                // Firefox and Safari send no client hints; blank the engine's
-                // so they don't name Chromium next to the override.
-                if !ion_sites::agent::is_chromium(&agent) {
+                // Only the "chrome" preset matches the engine's client hints;
+                // blank them for anything else (Firefox and Safari send none).
+                if !ion_sites::agent::keeps_client_hints(&agent, super::sites::engine_user_agent())
+                {
                     for name in CLIENT_HINTS {
                         qobject::set_request_header(
                             info.as_mut(),

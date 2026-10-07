@@ -100,7 +100,7 @@ javascript = true            # "*" covers every site, the most specific wins
                              # (CSS for a site goes in [theme.sites] above)
 # userAgent = "chrome"       # "chrome" (the engine's, minus "QtWebEngine"),
                              # "firefox", "safari", "default" or a full string;
-                             # non-Chrome values also blank Chromium's client hints
+                             # values other than "chrome" also blank client hints
 ```
 
 ## User scripts and styles

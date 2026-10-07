@@ -157,8 +157,15 @@ ApplicationWindow {
             extensionPaths = Extensions.paths()
             extensionPaths.forEach(path => extensionManager.loadExtension(path))
         }
-        if (Config.value("general.restoreSession"))
+        if (Config.value("general.restoreSession")) {
+            // Restoring replaces every tab; keep any opened while waiting
+            // (Ctrl+T, a URL handed over by a second launch).
+            const early = []
+            for (let i = 0; i < Tabs.count; i++)
+                early.push(Tabs.urlAt(i))
             Tabs.restoreLastSession()
+            early.forEach((target, i) => openTab(target, i === 0))
+        }
         // URLs on the command line (`ion %U` from the desktop file) open as new
         // tabs after the restored ones; the first one becomes current.
         const urls = Qt.application.arguments.slice(1).filter(arg => !arg.startsWith("-"))
@@ -227,7 +234,12 @@ ApplicationWindow {
     }
     Connections {
         target: Tabs
-        function onSessionChanged() { sessionSaveTimer.restart() }
+        // Not before startup restores the saved session, or it would be
+        // overwritten by tabs opened while waiting.
+        function onSessionChanged() {
+            if (window.startupFinished)
+                sessionSaveTimer.restart()
+        }
     }
     Connections {
         target: History
