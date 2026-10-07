@@ -765,6 +765,7 @@ dependencies = [
  "cxx-qt-lib",
  "ion-adblock",
  "ion-bangs",
+ "ion-basics",
  "ion-bookmarks",
  "ion-config",
  "ion-core",
@@ -783,6 +784,13 @@ version = "0.1.0"
 dependencies = [
  "ion-config",
  "ion-core",
+ "url",
+]
+
+[[package]]
+name = "ion-basics"
+version = "0.1.0"
+dependencies = [
  "url",
 ]
 
