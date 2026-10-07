@@ -25,6 +25,9 @@ impl Default for HttpFetch {
     fn default() -> Self {
         let config = ureq::Agent::config_builder()
             .timeout_global(Some(Duration::from_secs(60)))
+            // Lists are only fetched over HTTPS; this also refuses redirects
+            // that would downgrade to plain HTTP.
+            .https_only(true)
             .user_agent(concat!("Ion/", env!("CARGO_PKG_VERSION")))
             .build();
         Self {
