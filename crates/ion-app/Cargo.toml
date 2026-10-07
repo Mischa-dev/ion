@@ -12,6 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 ion-core.workspace = true
+ion-config.workspace = true
 ion-session.workspace = true
 cxx.workspace = true
 cxx-qt.workspace = true

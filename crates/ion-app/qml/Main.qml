@@ -7,7 +7,8 @@ import Ion
 ApplicationWindow {
     id: window
 
-    readonly property string homeUrl: "https://duckduckgo.com/"
+    readonly property string homeUrl: Config.homePage
+    readonly property bool verticalTabs: Config.tabLayout === "vertical"
     // Bumped whenever the view stack gains or loses a view, so `currentView`
     // re-evaluates even when the count and current index happen to stay the same.
     property int viewsRevision: 0
@@ -28,8 +29,7 @@ ApplicationWindow {
         id: profilePrototype
         storageName: "Default"
     }
-    // Assigned in Component.onCompleted: instance() is still null while bindings
-    // are first evaluated, which silently left every tab off-the-record.
+    // Set in Component.onCompleted: instance() is null until the prototype is complete.
     property WebEngineProfile profile: null
 
     // Tabs live in the Rust `Tabs` model (bridge/tabs.rs), which also saves them
@@ -67,7 +67,8 @@ ApplicationWindow {
 
     Component.onCompleted: {
         profile = profilePrototype.instance()
-        Tabs.restoreLastSession()
+        if (Config.value("general.restoreSession"))
+            Tabs.restoreLastSession()
         // URLs on the command line (`ion %U` from the desktop file) open as new
         // tabs after the restored ones; the first one becomes current.
         const urls = Qt.application.arguments.slice(1).filter(arg => !arg.startsWith("-"))
@@ -91,7 +92,6 @@ ApplicationWindow {
     Connections {
         target: Tabs
         function onSessionChanged() { sessionSaveTimer.restart() }
-        function onVerticalTabsChanged() { sessionSaveTimer.restart() }
     }
     Connections {
         target: History
@@ -105,14 +105,18 @@ ApplicationWindow {
         }
     }
 
-    Omnibox { id: urlBarResolver }
+    Omnibox {
+        id: urlBarResolver
+        searchEngineName: Config.searchEngineName
+        searchTemplate: Config.searchTemplate
+    }
 
     header: ColumnLayout {
         spacing: 0
 
         TabStrip {
             Layout.fillWidth: true
-            visible: !Tabs.verticalTabs
+            visible: !window.verticalTabs
             tabs: Tabs
             currentIndex: Tabs.currentIndex
             onActivated: index => Tabs.activate(index)
@@ -136,7 +140,7 @@ ApplicationWindow {
 
         VerticalTabStrip {
             Layout.fillHeight: true
-            visible: Tabs.verticalTabs
+            visible: window.verticalTabs
             tabs: Tabs
             currentIndex: Tabs.currentIndex
             onActivated: index => Tabs.activate(index)

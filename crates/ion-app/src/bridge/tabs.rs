@@ -37,7 +37,6 @@ pub mod qobject {
         #[qproperty(i32, current_index, cxx_name = "currentIndex", READ, NOTIFY)]
         #[qproperty(i32, closed_count, cxx_name = "closedCount", READ, NOTIFY)]
         #[qproperty(bool, restoring, READ, NOTIFY)]
-        #[qproperty(bool, vertical_tabs, cxx_name = "verticalTabs")]
         #[namespace = "ion"]
         type Tabs = super::TabsRust;
     }
@@ -210,7 +209,6 @@ pub struct TabsRust {
     current_index: i32,
     closed_count: i32,
     restoring: bool,
-    vertical_tabs: bool,
 }
 
 impl Default for TabsRust {
@@ -222,7 +220,6 @@ impl Default for TabsRust {
             current_index: -1,
             closed_count: 0,
             restoring: false,
-            vertical_tabs: false,
         }
     }
 }
@@ -424,31 +421,20 @@ impl qobject::Tabs {
         self.sync();
     }
 
-    fn restore_last_session(mut self: Pin<&mut Self>) -> bool {
+    fn restore_last_session(self: Pin<&mut Self>) -> bool {
         let Some(store) = self.store.clone() else {
             return false;
         };
         match store.load_last() {
-            Ok(Some(session)) => {
-                self.as_mut().set_vertical_tabs(session.vertical_tabs);
-                if session.tabs.is_empty() {
-                    return false;
-                }
+            Ok(Some(session)) if !session.tabs.is_empty() => {
                 self.replace_with(&session);
                 true
             }
-            Ok(None) => false,
+            Ok(_) => false,
             Err(err) => {
                 warn("could not restore the last session", err);
                 false
             }
-        }
-    }
-
-    fn snapshot(&self) -> Session {
-        Session {
-            vertical_tabs: self.vertical_tabs,
-            ..self.list.to_session()
         }
     }
 
@@ -457,7 +443,7 @@ impl qobject::Tabs {
             return false;
         };
         store
-            .save_last(&self.snapshot())
+            .save_last(&self.list.to_session())
             .map_err(|err| warn("could not save the session", err))
             .is_ok()
     }

@@ -28,9 +28,6 @@ pub struct Session {
     /// Index of the current tab.
     #[serde(default)]
     pub current: usize,
-    /// Tab strip shown as a vertical sidebar. Only read from the last session.
-    #[serde(default)]
-    pub vertical_tabs: bool,
 }
 
 fn default_version() -> u32 {
@@ -43,7 +40,6 @@ impl Default for Session {
             version: SESSION_VERSION,
             tabs: Vec::new(),
             current: 0,
-            vertical_tabs: false,
         }
     }
 }
@@ -212,7 +208,6 @@ mod tests {
         assert_eq!(store.load_last().unwrap(), None);
         let mut s = session(&["https://a.example/", "https://b.example/"]);
         s.current = 1;
-        s.vertical_tabs = true;
         store.save_last(&s).unwrap();
         assert_eq!(store.load_last().unwrap(), Some(s));
         std::fs::remove_dir_all(dir).unwrap();
@@ -274,7 +269,6 @@ mod tests {
         let s = Session::from_json(r#"{"tabs":[{"url":"a"}]}"#).unwrap();
         assert_eq!(s.version, SESSION_VERSION);
         assert_eq!(s.current, 0);
-        assert!(!s.vertical_tabs);
         assert_eq!(s.tabs[0].title, "");
     }
 

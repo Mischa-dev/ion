@@ -45,8 +45,9 @@ Item {
         MenuItem {
             text: qsTr("Vertical tabs")
             checkable: true
-            checked: Tabs.verticalTabs
-            onTriggered: Tabs.verticalTabs = checked
+            // Writes `ui.tabs` to the local config, like any other setting.
+            checked: Config.tabLayout === "vertical"
+            onTriggered: Config.set("ui.tabs", checked ? "vertical" : "horizontal")
         }
 
         MenuSeparator {}
