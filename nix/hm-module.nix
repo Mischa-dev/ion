@@ -92,6 +92,14 @@ in
           ]) "Where Ion's palette comes from.";
           name = setting types.str "Built-in theme to use with `source = \"builtin\"`.";
           palette = setting types.str "Palette file for the `manual` and `dms` sources.";
+          pages =
+            setting
+              (types.enum [
+                "match"
+                "system"
+                "darken"
+              ])
+              "What web pages see: the theme's light/dark (`match`), the system's, or `match` plus darkening pages without a dark style.";
         };
 
         bangs = mkOption {

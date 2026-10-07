@@ -20,6 +20,8 @@ QtObject {
     // Palette file for "dms" / "manual"; empty uses ~/.config/ion/dms-palette.toml
     // or ~/.config/ion/palette.toml.
     property alias palettePath: engine.palettePath
+    // What web pages see: "match" (default) | "system" | "darken".
+    property alias pages: engine.pages
 
     readonly property string name: engine.name
     readonly property bool dark: engine.dark
@@ -80,6 +82,7 @@ QtObject {
         source: Config.themeSource
         themeName: Config.themeName
         palettePath: Config.revision, Config.value("theme.palette") ?? ""
+        pages: Config.revision, Config.value("theme.pages") ?? ""
         // An unknown scheme (common on Linux without a platform theme) counts
         // as dark, Ion's default look.
         systemDark: Qt.styleHints.colorScheme !== Qt.ColorScheme.Light

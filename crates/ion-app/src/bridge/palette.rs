@@ -25,7 +25,8 @@ pub mod qobject {
         /// saved session names.
         ///
         /// `action` is `tab` (value: tab index), `open` (value: URL),
-        /// `session` (value: session name), `run` (value: command id), `set`
+        /// `session` (value: session name), `save-session` (value: name for
+        /// the open tabs), `run` (value: command id), `set`
         /// (value: `[key, value, key, value, …]` for `Config.set`) or
         /// `complete` (value: new palette input).
         #[qinvokable]
@@ -184,6 +185,10 @@ fn rows(items: Vec<Item>) -> QVariant {
             }
             Action::Open(url) => ("open", QVariant::from(&QString::from(url.as_str()))),
             Action::OpenSession(name) => ("session", QVariant::from(&QString::from(name.as_str()))),
+            Action::SaveSession(name) => (
+                "save-session",
+                QVariant::from(&QString::from(name.as_str())),
+            ),
             Action::Run(id) => ("run", QVariant::from(&QString::from(*id))),
             Action::Set(changes) => {
                 let mut pairs = QList::<QVariant>::default();
