@@ -79,7 +79,7 @@ ColumnLayout {
 
             Timer {
                 // Long enough to read a sentence; hovering keeps it open.
-                interval: Theme.animationMs * 50
+                interval: Theme.toastMs
                 running: !toastMouse.containsMouse
                 onTriggered: toasts.close(toast.notification)
             }

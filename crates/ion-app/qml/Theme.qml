@@ -76,6 +76,9 @@ QtObject {
     // so a click already on its way can't land on it (docs/SAFETY.md). Not
     // scaled by motion settings: it is a safety delay, not an animation.
     readonly property int promptArmMs: 400
+    // How long a web notification toast stays up, long enough to read a
+    // sentence. Fixed: reading time shouldn't follow animation speed.
+    readonly property int toastMs: 6000
 
     // Command palette
     readonly property int paletteWidth: 640
