@@ -130,17 +130,12 @@ ApplicationWindow {
         return true
     }
 
-    // Set while startup waits for clearOnExit's cache clear to finish.
+    // Set while startup waits for clearOnExit's cache clear to finish. No
+    // timeout: Qt forbids navigating the profile before the clear completes.
     property bool waitingForCacheClear: false
     Connections {
         target: window.waitingForCacheClear ? window.profile : null
         function onClearHttpCacheCompleted() { window.openStartupTabs() }
-    }
-    Timer {
-        // In case the engine never reports the clear as done.
-        running: window.waitingForCacheClear
-        interval: 5000
-        onTriggered: window.openStartupTabs()
     }
 
     // The restored session, then command-line URLs, else the home page.
