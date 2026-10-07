@@ -28,6 +28,9 @@ ApplicationWindow {
     WebEngineProfilePrototype {
         id: profilePrototype
         storageName: "Default"
+        // Site permissions are decided and remembered by Ion's safety model
+        // (Safety, docs/SAFETY.md), so the engine keeps none of its own.
+        persistentPermissionsPolicy: WebEngineProfile.PersistentPermissionsPolicy.AskEveryTime
     }
     // Set in Component.onCompleted: instance() is null until the prototype is complete.
     property WebEngineProfile profile: null

@@ -7,6 +7,9 @@ import Ion
 WebEngineView {
     id: view
 
+    // The tab's id in the `Tabs` model, stable while the tab is open.
+    required property int tabId
+
     // Reader mode for this tab: `reader.toggle()`, `reader.active`.
     readonly property alias reader: readerMode
 
@@ -109,7 +112,7 @@ WebEngineView {
     NewTabPage { view: view }
     AdblockCosmetics { view: view }
     FindBar { view: view }
-    PermissionPrompt { view: view }
+    PermissionPrompt { view: view; tabId: view.tabId }
     ScreenSharePicker { view: view }
     PageDialog { view: view }
     ScreenshotTool {

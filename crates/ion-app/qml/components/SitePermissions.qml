@@ -7,49 +7,32 @@ import Ion
 // Toolbar button for the current site's remembered permissions (camera,
 // location, notifications…). It only shows once the site has a stored
 // Allow or Block; its panel switches each one or resets it to "ask again".
+// Ion's safety model (Safety, docs/SAFETY.md) keeps these answers.
 IconButton {
     id: control
 
     property var view   // BrowserTab of the current tab, may be null
 
     readonly property url origin: view ? Basics.permissionOrigin(view.url) : ""
-    // The stored decisions for this site: webEnginePermission values whose
-    // state is Granted or Denied.
+    // What Safety remembers for this site: [{ type, allowed }] with `type` a
+    // WebEnginePermission.PermissionType.
     property var stored: []
-    // Choices made in the panel, by permission type: the engine can keep
-    // reporting the old state until the page reloads.
-    property var chosen: ({})
 
     function refresh() {
-        if (!view || origin.toString().length === 0) {
-            stored = []
-            return
-        }
-        stored = view.profile.listPermissionsForOrigin(origin).filter(
-            p => p.state === WebEnginePermission.State.Granted || p.state === WebEnginePermission.State.Denied)
+        stored = origin.toString().length > 0 ? JSON.parse(Safety.sitePermissionsFor(origin)) : []
         if (stored.length === 0)
             panel.close()
     }
 
-    onOriginChanged: {
-        chosen = {}
-        refresh()
-    }
-    onViewChanged: refresh()
-    // The engine applies grant/deny/reset a moment later, so re-read after
-    // a short delay rather than at once.
+    onOriginChanged: refresh()
+    Component.onCompleted: refresh()
     Connections {
         target: Basics
-        function onPermissionsChanged() { refreshLater.restart() }
-    }
-    Timer {
-        id: refreshLater
-        interval: 150
-        onTriggered: control.refresh()
+        function onPermissionsChanged() { control.refresh() }
     }
 
     visible: stored.length > 0
-    glyph: stored.length > 0 ? Basics.permissionGlyph(stored[0].permissionType) : ""
+    glyph: stored.length > 0 ? Basics.permissionGlyph(stored[0].type) : ""
     tip: panel.opened ? "" : qsTr("Site permissions")
     onClicked: panel.opened ? panel.close() : panel.open()
 
@@ -88,19 +71,11 @@ IconButton {
             NumberAnimation { property: "opacity"; from: 1; to: 0; duration: Theme.animationMs }
         }
 
-        function apply(permission, action) {
-            if (action === "allow")
-                permission.grant()
-            else if (action === "block")
-                permission.deny()
-            else
-                permission.reset()
-            const chosen = Object.assign({}, control.chosen)
+        function apply(type, action) {
             if (action === "reset")
-                delete chosen[permission.permissionType]
+                Safety.forgetSitePermission(control.origin, type)
             else
-                chosen[permission.permissionType] = action === "allow"
-            control.chosen = chosen
+                Safety.setSitePermission(control.origin, type, action === "allow")
             changed = true
             Basics.notifyPermissionsChanged()
         }
@@ -123,20 +98,18 @@ IconButton {
                 delegate: RowLayout {
                     id: row
                     required property var modelData
-                    readonly property var choice: control.chosen[modelData.permissionType]
-                    readonly property bool granted: choice !== undefined ? choice
-                        : modelData.state === WebEnginePermission.State.Granted
+                    readonly property bool granted: modelData.allowed
 
                     Layout.fillWidth: true
                     spacing: Theme.spacing
 
                     Text {
-                        text: Basics.permissionGlyph(row.modelData.permissionType)
+                        text: Basics.permissionGlyph(row.modelData.type)
                         font.pixelSize: Theme.fontSize + 2
                     }
                     Label {
                         Layout.fillWidth: true
-                        text: Basics.permissionName(row.modelData.permissionType)
+                        text: Basics.permissionName(row.modelData.type)
                         color: Theme.text
                         font.pixelSize: Theme.fontSize
                         elide: Text.ElideRight
@@ -144,19 +117,19 @@ IconButton {
                     Choice {
                         text: qsTr("Allow")
                         selected: row.granted
-                        onClicked: if (!row.granted) panel.apply(row.modelData, "allow")
+                        onClicked: if (!row.granted) panel.apply(row.modelData.type, "allow")
                     }
                     Choice {
                         text: qsTr("Block")
                         selected: !row.granted
-                        onClicked: if (row.granted) panel.apply(row.modelData, "block")
+                        onClicked: if (row.granted) panel.apply(row.modelData.type, "block")
                     }
                     IconButton {
                         implicitWidth: Theme.urlBarHeight * 0.8
                         implicitHeight: implicitWidth
                         glyph: "↺"
                         tip: qsTr("Ask next time")
-                        onClicked: panel.apply(row.modelData, "reset")
+                        onClicked: panel.apply(row.modelData.type, "reset")
                     }
                 }
             }
