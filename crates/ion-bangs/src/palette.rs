@@ -1,14 +1,15 @@
 //! Ranking for the Ctrl/Cmd+K command palette.
 //!
-//! One query searches open tabs, Ion commands and bangs together, plus a
-//! "open / search for what I typed" entry resolved by the URL bar's
-//! [`Omnibox`]. Two prefixes narrow it down:
+//! One query searches open tabs, browsing history, saved sessions, Ion
+//! commands and bangs together, plus a "open / search for what I typed" entry
+//! resolved by the URL bar's [`Omnibox`]. Two prefixes narrow it down:
 //!
 //! - `>` lists commands only.
 //! - `!` lists bangs while the trigger is being typed; once a known bang is
 //!   followed by a query, the only result is the expanded search.
 //!
-//! History and bookmarks join as extra sources once their stores exist.
+//! History arrives already filtered and ordered by the history store; the
+//! palette only re-ranks it against everything else.
 
 use std::sync::Arc;
 
@@ -23,18 +24,33 @@ pub const MAX_RESULTS: usize = 50;
 
 /// Points a bang loses against a tab or command with the same match quality.
 const BANG_PENALTY: i32 = 2;
+/// Points a history page loses against an open tab with the same match quality.
+const HISTORY_PENALTY: i32 = 1;
 
-/// An open tab, as the palette sees it.
+/// An open tab or a history page, as the palette sees it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TabEntry {
     pub title: String,
     pub url: String,
 }
 
+/// Everything besides commands and bangs that the palette searches.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Sources<'a> {
+    pub tabs: &'a [TabEntry],
+    pub current_tab: Option<usize>,
+    /// History matches for the query, best first.
+    pub history: &'a [TabEntry],
+    /// Names of saved sessions.
+    pub sessions: &'a [String],
+}
+
 /// What kind of thing a result is; QML picks the icon from it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     Tab,
+    History,
+    Session,
     Command,
     Bang,
     /// Open the address that was typed.
@@ -47,6 +63,8 @@ impl Kind {
     pub fn as_str(self) -> &'static str {
         match self {
             Kind::Tab => "tab",
+            Kind::History => "history",
+            Kind::Session => "session",
             Kind::Command => "command",
             Kind::Bang => "bang",
             Kind::Open => "open",
@@ -62,6 +80,8 @@ pub enum Action {
     SwitchTab(usize),
     /// Load this URL.
     Open(String),
+    /// Replace the open tabs with this saved session.
+    OpenSession(String),
     /// Run the command with this id.
     Run(&'static str),
     /// Replace the palette's input with this text and keep it open.
@@ -94,7 +114,13 @@ impl Palette {
     }
 
     /// Ranked results for `input`, best first.
-    pub fn query(&self, input: &str, tabs: &[TabEntry], current_tab: Option<usize>) -> Vec<Item> {
+    pub fn query(&self, input: &str, sources: &Sources) -> Vec<Item> {
+        let Sources {
+            tabs,
+            current_tab,
+            history,
+            sessions,
+        } = *sources;
         let input = input.trim_start();
 
         if let Some(rest) = input.strip_prefix('>') {
@@ -132,6 +158,8 @@ impl Palette {
         }
 
         let mut items = tab_items(tabs, current_tab, query);
+        items.extend(history_items(history, tabs, query));
+        items.extend(session_items(sessions, query));
         items.extend(commands(query));
         items.extend(self.bangs.iter().filter_map(|bang| {
             let score = fuzzy::score(query, &bang.name).max(fuzzy::score(query, &bang.trigger))?
@@ -230,6 +258,48 @@ fn tab_items(tabs: &[TabEntry], current: Option<usize>, query: &str) -> Vec<Item
         .collect()
 }
 
+/// History pages that aren't already open in a tab.
+fn history_items(history: &[TabEntry], tabs: &[TabEntry], query: &str) -> Vec<Item> {
+    history
+        .iter()
+        .filter(|page| !tabs.iter().any(|tab| tab.url == page.url))
+        .filter_map(|page| {
+            let score = fuzzy::score(query, &page.title).max(fuzzy::score(query, &page.url))?
+                - HISTORY_PENALTY;
+            Some(Item {
+                kind: Kind::History,
+                title: if page.title.is_empty() {
+                    page.url.clone()
+                } else {
+                    page.title.clone()
+                },
+                subtitle: page.url.clone(),
+                hint: String::new(),
+                action: Action::Open(page.url.clone()),
+                score,
+            })
+        })
+        .collect()
+}
+
+fn session_items(sessions: &[String], query: &str) -> Vec<Item> {
+    sessions
+        .iter()
+        .filter_map(|name| {
+            let score =
+                fuzzy::score(query, name).max(fuzzy::score(query, &format!("{name} session")))?;
+            Some(Item {
+                kind: Kind::Session,
+                title: name.clone(),
+                subtitle: "Saved session".to_owned(),
+                hint: String::new(),
+                action: Action::OpenSession(name.clone()),
+                score,
+            })
+        })
+        .collect()
+}
+
 fn commands(query: &str) -> Vec<Item> {
     COMMANDS
         .iter()
@@ -254,7 +324,8 @@ fn commands(query: &str) -> Vec<Item> {
         .collect()
 }
 
-/// Best first; equal scores keep source order (tabs, commands, bangs, typed).
+/// Best first; equal scores keep source order (tabs, history, sessions,
+/// commands, bangs, typed).
 fn finish(mut items: Vec<Item>) -> Vec<Item> {
     items.sort_by_key(|item| std::cmp::Reverse(item.score));
     items.truncate(MAX_RESULTS);
@@ -284,8 +355,33 @@ mod tests {
         ]
     }
 
+    fn history() -> Vec<TabEntry> {
+        vec![
+            TabEntry {
+                title: "The Rust Book".into(),
+                url: "https://doc.rust-lang.org/book/".into(),
+            },
+            // Already open as a tab, so not listed again.
+            TabEntry {
+                title: "Rust Programming Language".into(),
+                url: "https://www.rust-lang.org/".into(),
+            },
+        ]
+    }
+
     fn query(input: &str) -> Vec<Item> {
-        palette().query(input, &tabs(), Some(1))
+        let tabs = tabs();
+        let history = history();
+        let sessions = vec!["work".to_owned()];
+        palette().query(
+            input,
+            &Sources {
+                tabs: &tabs,
+                current_tab: Some(1),
+                history: &history,
+                sessions: &sessions,
+            },
+        )
     }
 
     #[test]
@@ -304,6 +400,28 @@ mod tests {
         assert_eq!(items[0].action, Action::SwitchTab(1));
         let search = items.iter().position(|i| i.kind == Kind::Search).unwrap();
         assert!(search > 0);
+    }
+
+    #[test]
+    fn history_follows_open_tabs_and_skips_them() {
+        let items = query("rust");
+        let tab = items.iter().position(|i| i.action == Action::SwitchTab(1));
+        let page = items.iter().position(|i| i.kind == Kind::History);
+        assert!(tab < page, "{items:#?}");
+        let pages: Vec<_> = items.iter().filter(|i| i.kind == Kind::History).collect();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(
+            pages[0].action,
+            Action::Open("https://doc.rust-lang.org/book/".into())
+        );
+    }
+
+    #[test]
+    fn sessions_are_found_by_name() {
+        let items = query("work");
+        assert_eq!(items[0].action, Action::OpenSession("work".into()));
+        assert!(query("session").iter().any(|i| i.kind == Kind::Session));
+        assert!(query("").iter().all(|i| i.kind != Kind::Session));
     }
 
     #[test]
@@ -405,6 +523,10 @@ mod tests {
                 url: String::new(),
             })
             .collect();
-        assert_eq!(palette().query("", &many, None).len(), MAX_RESULTS);
+        let sources = Sources {
+            tabs: &many,
+            ..Sources::default()
+        };
+        assert_eq!(palette().query("", &sources).len(), MAX_RESULTS);
     }
 }

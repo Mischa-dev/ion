@@ -35,6 +35,12 @@ pub const COMMANDS: &[Command] = &[
     command("new-tab", "New tab", "open create", "Ctrl+T"),
     command("close-tab", "Close tab", "remove", "Ctrl+W"),
     command("duplicate-tab", "Duplicate tab", "copy clone", ""),
+    command(
+        "reopen-tab",
+        "Reopen closed tab",
+        "undo restore",
+        "Ctrl+Shift+T",
+    ),
     command("next-tab", "Next tab", "switch right", "Ctrl+Tab"),
     command(
         "previous-tab",

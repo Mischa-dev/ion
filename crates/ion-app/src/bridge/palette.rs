@@ -20,10 +20,13 @@ pub mod qobject {
 
         /// Results for `input` as a list of `{ kind, title, subtitle, hint,
         /// action, value }` objects, best first. `titles` and `urls` describe
-        /// the open tabs in order; `current` is the active tab's index.
+        /// the open tabs in order and `current` is the active tab's index;
+        /// `history` is `History.search()`'s JSON, best first; `sessions` are
+        /// saved session names.
         ///
-        /// `action` is `tab` (value: tab index), `open` (value: URL), `run`
-        /// (value: command id) or `complete` (value: new palette input).
+        /// `action` is `tab` (value: tab index), `open` (value: URL),
+        /// `session` (value: session name), `run` (value: command id) or
+        /// `complete` (value: new palette input).
         #[qinvokable]
         fn query(
             self: &PaletteSearch,
@@ -31,6 +34,8 @@ pub mod qobject {
             titles: &QStringList,
             urls: &QStringList,
             current: i32,
+            history: &QString,
+            sessions: &QStringList,
         ) -> QVariant;
     }
 }
@@ -38,7 +43,7 @@ pub mod qobject {
 use std::sync::{Arc, Mutex};
 
 use cxx_qt_lib::{QList, QMap, QMapPair_QString_QVariant, QString, QStringList, QVariant};
-use ion_bangs::{Action, BangTable, Palette, TabEntry};
+use ion_bangs::{Action, BangTable, Palette, Sources, TabEntry};
 use ion_config::Config;
 use ion_core::navigation::{Omnibox, SearchEngine};
 
@@ -82,6 +87,31 @@ fn strings(list: &QStringList) -> Vec<String> {
         .collect()
 }
 
+/// Pages from `History.search()`'s JSON array of `{ url, title, … }`.
+fn history_entries(json: &str) -> Vec<TabEntry> {
+    let text =
+        |value: &serde_json::Value, key: &str| value[key].as_str().unwrap_or_default().to_owned();
+    match serde_json::from_str::<Vec<serde_json::Value>>(json) {
+        Ok(pages) => pages
+            .iter()
+            .map(|page| TabEntry {
+                title: text(page, "title"),
+                url: text(page, "url"),
+            })
+            .collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// Pair up parallel title and URL lists.
+fn entries(titles: &QStringList, urls: &QStringList) -> Vec<TabEntry> {
+    strings(titles)
+        .into_iter()
+        .zip(strings(urls))
+        .map(|(title, url)| TabEntry { title, url })
+        .collect()
+}
+
 impl qobject::PaletteSearch {
     fn query(
         &self,
@@ -89,24 +119,29 @@ impl qobject::PaletteSearch {
         titles: &QStringList,
         urls: &QStringList,
         current: i32,
+        history: &QString,
+        sessions: &QStringList,
     ) -> QVariant {
-        let mut urls = strings(urls).into_iter();
-        let tabs: Vec<TabEntry> = strings(titles)
-            .into_iter()
-            .map(|title| TabEntry {
-                title,
-                url: urls.next().unwrap_or_default(),
-            })
-            .collect();
-        let current = usize::try_from(current).ok();
+        let tabs = entries(titles, urls);
+        let history = history_entries(&history.to_string());
+        let sessions = strings(sessions);
+        let sources = Sources {
+            tabs: &tabs,
+            current_tab: usize::try_from(current).ok(),
+            history: &history,
+            sessions: &sessions,
+        };
 
         let mut rows = QList::<QVariant>::default();
-        for item in self.palette().query(&input.to_string(), &tabs, current) {
+        for item in self.palette().query(&input.to_string(), &sources) {
             let (action, value) = match &item.action {
                 Action::SwitchTab(index) => {
                     ("tab", QVariant::from(&i32::try_from(*index).unwrap_or(-1)))
                 }
                 Action::Open(url) => ("open", QVariant::from(&QString::from(url.as_str()))),
+                Action::OpenSession(name) => {
+                    ("session", QVariant::from(&QString::from(name.as_str())))
+                }
                 Action::Run(id) => ("run", QVariant::from(&QString::from(*id))),
                 Action::Complete(text) => {
                     ("complete", QVariant::from(&QString::from(text.as_str())))

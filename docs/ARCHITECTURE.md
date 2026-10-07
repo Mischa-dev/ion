@@ -20,12 +20,13 @@ nix/
 crates/
   ion-core/               shared core: app constants, URL-bar input resolution
   ion-bangs/              !bangs and the command palette's ranking
+  ion-session/            tab list, saved and named sessions, browsing history
   ion-app/                the binary (`ion`)
     build.rs              auto-discovers bridges, C++ shims and QML files
     src/main.rs           startup: QtWebEngine init, app, QML engine
     src/bridge/           one cxx-qt QObject per file, exposed to QML as `import Ion`
     cpp/                  small C++ shims for QtWebEngine APIs
-    qml/Main.qml          window, tab model, shortcuts
+    qml/Main.qml          window, web view stack, shortcuts
     qml/Theme.qml         design tokens singleton (colors, radius, density, motion)
     qml/components/       UI pieces (TabStrip, NavigationBar, UrlBar, BrowserTab…)
 packaging/                desktop file, later the macOS bundle bits
@@ -55,15 +56,24 @@ Shared files with small, append-only edits: root `Cargo.toml`,
 
 ## Where things stand
 
-- Tabs live in a QML `ListModel` in `Main.qml`. The sessions work moves them
-  into a Rust model so they can be saved, restored and driven by agents.
+- Tabs live in the Rust `Tabs` singleton (`bridge/tabs.rs`, a list model over
+  `ion_session::TabList`). Anything that opens, closes, moves or switches tabs
+  calls its invokables; `Main.qml` keeps one web view per row and reports URL
+  and title changes back. The open tabs are saved to
+  `<data dir>/sessions/last.json` and restored at startup; restored background
+  tabs load when first shown. Named sessions live next to it in `named/`.
+- `History` (`bridge/history.rs`) records finished page loads in
+  `<data dir>/history.json`; `History.search(query, limit)` returns JSON for the
+  command palette. The data dir is `$ION_DATA_DIR`, else
+  `~/.local/share/ion` (XDG) or `~/Library/Application Support/Ion`.
 - `Theme.qml` holds static tokens. The theming work drives them from Rust
   (built-in themes, DMS palette file, system accent) without changing the
   components that read them.
 - `ion_core::navigation::Omnibox` decides between address and search. Extra
   stages implement `InputStep` and run first; `ion_bangs::BangTable` is one.
   Config feeds user bangs through `BangTable::apply`.
-- The Ctrl/Cmd+K palette ranks results in `ion_bangs::palette`; commands are
+- The Ctrl/Cmd+K palette ranks tabs, history, sessions, commands and bangs in
+  `ion_bangs::palette`; commands are
   listed in `ion_bangs::commands` and carried out in `CommandPalette.qml`.
 - The browser profile is persistent (`storageName: "Default"`).
 - Settings come from `ion-config` (layered TOML, live reload, `programs.ion`

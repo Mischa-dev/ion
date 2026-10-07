@@ -3,7 +3,8 @@
 //! - [`bang`]: the `!name query` table and the [`InputStep`] that plugs it into
 //!   the URL bar's resolve pipeline.
 //! - [`commands`]: the Ion commands the palette can run.
-//! - [`palette`]: ranking tabs, commands and bangs for the Ctrl/Cmd+K palette.
+//! - [`palette`]: ranking tabs, history, sessions, commands and bangs for the
+//!   Ctrl/Cmd+K palette.
 //!
 //! Qt-free; `ion-app` adapts it to QML in `bridge/palette.rs`.
 //!
@@ -16,4 +17,4 @@ pub mod palette;
 
 pub use bang::{Bang, BangTable};
 pub use commands::{COMMANDS, Command};
-pub use palette::{Action, Item, Kind, Palette, TabEntry};
+pub use palette::{Action, Item, Kind, Palette, Sources, TabEntry};

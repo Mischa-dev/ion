@@ -3,12 +3,13 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Ion
 
-// Ctrl/Cmd+K palette: one search over open tabs, Ion commands and bangs.
-// Ranking lives in Rust (`PaletteSearch`); this file shows the results and
-// carries out the chosen one on `browser`, the main window.
+// Ctrl/Cmd+K palette: one search over open tabs, history, saved sessions, Ion
+// commands and bangs. Ranking lives in Rust (`PaletteSearch`); this file
+// gathers the sources, shows the results and carries out the chosen one.
 //
-// `browser` provides: tabEntries(), currentTabIndex, activateTab(i),
-// openTab(url), closeTab(i), cycleTab(step), focusUrlBar(), currentView.
+// Tabs and history come from the `Tabs` and `History` singletons; `browser`
+// (the main window) provides openTab(url), newTab(), closeTab(i),
+// focusUrlBar() and currentView.
 Popup {
     id: root
 
@@ -25,8 +26,16 @@ Popup {
     }
 
     function refresh() {
-        const tabs = browser.tabEntries()
-        results = search.query(field.text, tabs.map(t => t.title), tabs.map(t => t.url), browser.currentTabIndex)
+        const titles = [], urls = []
+        for (let i = 0; i < Tabs.count; ++i) {
+            titles.push(Tabs.titleAt(i))
+            urls.push(Tabs.urlAt(i))
+        }
+        // `>` and `!` narrow the palette to commands or bangs; skip history then.
+        const text = field.text.trim()
+        const history = text.length > 0 && !text.startsWith(">") && !text.startsWith("!")
+            ? History.search(text, Theme.paletteMaxRows) : "[]"
+        results = search.query(field.text, titles, urls, Tabs.currentIndex, history, Tabs.sessionNames())
         list.currentIndex = results.length > 0 ? 0 : -1
     }
 
@@ -46,7 +55,10 @@ Popup {
         const view = browser.currentView
         switch (item.action) {
         case "tab":
-            browser.activateTab(item.value)
+            Tabs.activate(item.value)
+            break
+        case "session":
+            Tabs.openSession(item.value)
             break
         case "open":
             if (inNewTab || !view)
@@ -64,11 +76,12 @@ Popup {
     function run(id) {
         const view = browser.currentView
         switch (id) {
-        case "new-tab": browser.openTab(""); browser.focusUrlBar(); break
-        case "close-tab": browser.closeTab(browser.currentTabIndex); break
+        case "new-tab": browser.newTab(); break
+        case "close-tab": browser.closeTab(Tabs.currentIndex); break
         case "duplicate-tab": browser.openTab(view ? view.url : ""); break
-        case "next-tab": browser.cycleTab(1); break
-        case "previous-tab": browser.cycleTab(-1); break
+        case "reopen-tab": Tabs.reopenClosedTab(); break
+        case "next-tab": Tabs.cycle(1); break
+        case "previous-tab": Tabs.cycle(-1); break
         case "focus-url": browser.focusUrlBar(); break
         case "reload": view?.reload(); break
         case "back": view?.goBack(); break
@@ -81,6 +94,8 @@ Popup {
     function glyph(kind) {
         switch (kind) {
         case "tab": return "▭"
+        case "history": return "↺"
+        case "session": return "▤"
         case "command": return "›"
         case "bang": return "!"
         case "open": return "↗"
