@@ -308,7 +308,14 @@ ApplicationWindow {
 
     DownloadsPanel { id: downloads; profile: window.profile }
     NotificationToasts { profile: window.profile }
-    FullScreenController { id: fullScreen; window: window; view: window.currentView }
+    FullScreenController {
+        id: fullScreen
+        window: window
+        view: window.currentView
+        // Esc leaves page fullscreen; an open downloads panel would make the
+        // two Esc shortcuts ambiguous so neither fired.
+        onPageActiveChanged: if (pageActive) downloads.close()
+    }
 
     // Keyboard shortcuts. "Ctrl" maps to Cmd on macOS automatically.
     Shortcut { sequences: [StandardKey.AddTab]; onActivated: window.newTab() }
