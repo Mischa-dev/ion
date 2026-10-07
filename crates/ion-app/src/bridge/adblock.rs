@@ -440,7 +440,10 @@ impl qobject::Adblock {
             );
         }
         if !blocked {
-            let page = if first_party.is_empty() {
+            // A navigation is for the page it loads; anything else is for
+            // the page that asked for it.
+            let navigation = matches!(resource, ResourceType::MainFrame | ResourceType::SubFrame);
+            let page = if navigation || first_party.is_empty() {
                 &url
             } else {
                 &first_party

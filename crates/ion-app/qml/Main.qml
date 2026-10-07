@@ -112,17 +112,52 @@ ApplicationWindow {
             currentView.forceActiveFocus()
     }
 
-    // Delete what `[privacy] clearOnExit` lists.
+    // Delete what `[privacy] clearOnExit` lists. Returns whether a cache
+    // clear started; it finishes with profile.clearHttpCacheCompleted, and
+    // pages shouldn't load before then. Cookie deletion needs no wait: the
+    // cookie store handles it before any later request reads cookies.
     function clearOnExit() {
         const items = Privacy.clearOnExit()
         if (items.includes("cookies"))
             Privacy.clearCookies(window.profile)
-        if (items.includes("cache"))
-            window.profile.clearHttpCache()
         if (items.includes("history")) {
             History.clear()
             History.save()
         }
+        if (!items.includes("cache"))
+            return false
+        window.profile.clearHttpCache()
+        return true
+    }
+
+    // Set while startup waits for clearOnExit's cache clear to finish.
+    property bool waitingForCacheClear: false
+    Connections {
+        target: window.waitingForCacheClear ? window.profile : null
+        function onClearHttpCacheCompleted() { window.openStartupTabs() }
+    }
+    Timer {
+        // In case the engine never reports the clear as done.
+        running: window.waitingForCacheClear
+        interval: 5000
+        onTriggered: window.openStartupTabs()
+    }
+
+    // The restored session, then command-line URLs, else the home page.
+    property bool startupTabsOpened: false
+    function openStartupTabs() {
+        if (startupTabsOpened)
+            return
+        startupTabsOpened = true
+        waitingForCacheClear = false
+        if (Config.value("general.restoreSession"))
+            Tabs.restoreLastSession()
+        // URLs on the command line (`ion %U` from the desktop file) open as new
+        // tabs after the restored ones; the first one becomes current.
+        const urls = Qt.application.arguments.slice(1).filter(arg => !arg.startsWith("-"))
+        urls.forEach((arg, i) => openTab(urlBarResolver.resolve(arg), i === 0))
+        if (Tabs.count === 0)
+            openTab(homeUrl)
     }
 
     function focusUrlBar() {
@@ -134,22 +169,19 @@ ApplicationWindow {
         profile = profilePrototype.instance()
         Adblock.attach(window.profile)
         Privacy.apply(window.profile)
-        // Again at start, in case the last quit was cut short.
-        clearOnExit()
+        // Again at start, in case the last quit was cut short; pages wait
+        // for it.
+        const clearingCache = clearOnExit()
         // Chrome extensions from config and Ion's extensions folder.
         const extensionManager = window.profile.extensionManager
         if (extensionManager) {
             extensionPaths = Extensions.paths()
             extensionPaths.forEach(path => extensionManager.loadExtension(path))
         }
-        if (Config.value("general.restoreSession"))
-            Tabs.restoreLastSession()
-        // URLs on the command line (`ion %U` from the desktop file) open as new
-        // tabs after the restored ones; the first one becomes current.
-        const urls = Qt.application.arguments.slice(1).filter(arg => !arg.startsWith("-"))
-        urls.forEach((arg, i) => openTab(urlBarResolver.resolve(arg), i === 0))
-        if (Tabs.count === 0)
-            openTab(homeUrl)
+        if (clearingCache)
+            waitingForCacheClear = true
+        else
+            openStartupTabs()
     }
 
     // Extensions load switched off; turn on each one that loaded cleanly,
