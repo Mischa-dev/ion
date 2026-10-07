@@ -43,4 +43,9 @@ void redirectRequest(QWebEngineUrlRequestInfo &info, const QString &url)
     info.redirect(QUrl(url));
 }
 
+void setRequestHeader(QWebEngineUrlRequestInfo &info, const QString &name, const QString &value)
+{
+    info.setHttpHeader(name.toLatin1(), value.toLatin1());
+}
+
 } // namespace ion

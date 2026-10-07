@@ -11,6 +11,8 @@ Rectangle {
     property DownloadsPanel downloads   // may be null
     property alias urlBar: urlBar
 
+    signal bookmarkToggled()
+
     implicitHeight: Theme.urlBarHeight + Theme.spacing * 2
 
     // Switching tabs replaces any half-typed text with the new tab's address.
@@ -58,6 +60,23 @@ Rectangle {
                 else
                     urlBar.focus = false
             }
+        }
+        IconButton {
+            readonly property bool reading: bar.view?.reader.active ?? false
+            glyph: "¶"
+            tip: reading ? qsTr("Leave reader mode") : qsTr("Reader mode")
+            enabled: bar.view !== null
+            opacity: reading ? 1 : 0.7
+            onClicked: bar.view.reader.toggle()
+        }
+        IconButton {
+            readonly property string pageUrl: (bar.view?.url ?? "").toString()
+            // Reading revision makes the binding re-run when bookmarks change.
+            readonly property bool bookmarked: Bookmarks.revision >= 0 && Bookmarks.contains(pageUrl)
+            glyph: bookmarked ? "★" : "☆"
+            tip: bookmarked ? qsTr("Remove bookmark") : qsTr("Bookmark this page")
+            enabled: pageUrl.startsWith("http") || pageUrl.startsWith("file:")
+            onClicked: bar.bookmarkToggled()
         }
 
         IconButton {

@@ -27,7 +27,13 @@ ToolButton {
         color: control.down ? Theme.surfaceRaised : control.hovered ? Theme.surfaceHover : "transparent"
     }
 
-    ToolTip.visible: hovered && tip.length > 0
+    // A click hides the tip until the pointer leaves, so it doesn't sit on
+    // top of the menu or popup the button just opened.
+    property bool tipDismissed: false
+    onClicked: tipDismissed = true
+    onHoveredChanged: if (!hovered) tipDismissed = false
+
+    ToolTip.visible: hovered && !tipDismissed && tip.length > 0
     ToolTip.text: tip
     ToolTip.delay: 600
 }

@@ -60,6 +60,9 @@ QtObject {
 
     // Typography
     readonly property int fontSize: 13
+    // The smallest text shrinks to when fitting a tight space, such as a
+    // workspace icon in the collapsed sidebar.
+    readonly property int fontSizeMin: 8
 
     // Motion. `ui.animations` turns it off or changes its speed; 0 disables
     // every Behavior and Transition that reads these.
@@ -69,6 +72,8 @@ QtObject {
     readonly property int animationSlowMs: Math.round(220 * motionScale)
     // Loading spinners keep turning with animations off: they report status.
     readonly property int spinnerMs: 800
+    // How long a transient notice stays on screen.
+    readonly property int noticeMs: 2500
     // How long the pointer rests on a collapsed sidebar before it expands, so
     // passing over it on the way somewhere else doesn't.
     readonly property int hoverDelayMs: 250

@@ -31,18 +31,18 @@ Item {
         menu.popup(anchor, 0, anchor.height)
     }
 
-    Menu {
+    IonMenu {
         id: menu
         palette: root.palette
 
         onAboutToShow: root.names = Tabs.sessionNames()
 
-        MenuItem {
+        IonMenuItem {
             text: qsTr("Reopen closed tab")
             enabled: Tabs.closedCount > 0
             onTriggered: Tabs.reopenClosedTab()
         }
-        MenuItem {
+        IonMenuItem {
             text: qsTr("Vertical tabs")
             checkable: true
             // Writes `ui.tabs` to the local config, like any other setting.
@@ -50,14 +50,14 @@ Item {
             onTriggered: Config.set("ui.tabs", checked ? "vertical" : "horizontal")
         }
 
-        MenuSeparator {}
+        IonMenuSeparator {}
 
-        MenuItem {
+        IonMenuItem {
             text: qsTr("Save session as…")
             onTriggered: saveDialog.open()
         }
 
-        Menu {
+        IonMenu {
             id: openMenu
             palette: root.palette
             title: qsTr("Open session")
@@ -65,7 +65,7 @@ Item {
 
             Instantiator {
                 model: root.names
-                delegate: MenuItem {
+                delegate: IonMenuItem {
                     required property string modelData
                     text: modelData
                     onTriggered: Tabs.openSession(modelData)
@@ -75,7 +75,7 @@ Item {
             }
         }
 
-        Menu {
+        IonMenu {
             id: deleteMenu
             palette: root.palette
             title: qsTr("Delete session")
@@ -83,7 +83,7 @@ Item {
 
             Instantiator {
                 model: root.names
-                delegate: MenuItem {
+                delegate: IonMenuItem {
                     required property string modelData
                     text: modelData
                     onTriggered: Tabs.deleteSession(modelData)
@@ -94,14 +94,10 @@ Item {
         }
     }
 
-    Dialog {
+    IonDialog {
         id: saveDialog
         palette: root.palette
 
-        parent: Overlay.overlay
-        anchors.centerIn: parent
-        modal: true
-        padding: Theme.spacing * 2
         title: qsTr("Save session")
         standardButtons: Dialog.Save | Dialog.Cancel
 
@@ -115,12 +111,18 @@ Item {
         }
 
         ColumnLayout {
-            spacing: Theme.spacing
+            anchors.left: parent.left
+            anchors.right: parent.right
+            spacing: Theme.spacing * 2
 
-            Label {
+            Text {
+                Layout.fillWidth: true
                 text: qsTr("Saves the open tabs so you can reopen them later.")
+                color: Theme.textMuted
+                font.pixelSize: Theme.fontSize
+                wrapMode: Text.WordWrap
             }
-            TextField {
+            IonTextField {
                 id: nameField
                 Layout.fillWidth: true
                 placeholderText: qsTr("Session name")

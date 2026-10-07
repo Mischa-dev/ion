@@ -161,6 +161,37 @@ impl History {
         true
     }
 
+    /// Merge pages from another browser's history. A page already here keeps
+    /// the larger visit count, the later visit and its title unless it has
+    /// none. Returns how many new pages were added.
+    pub fn merge(&mut self, entries: impl IntoIterator<Item = HistoryEntry>, now: u64) -> usize {
+        let mut added = 0;
+        for entry in entries {
+            if !is_recordable(&entry.url) {
+                continue;
+            }
+            match self.by_url.get(&entry.url) {
+                Some(&i) => {
+                    let here = &mut self.entries[i];
+                    here.visits = here.visits.max(entry.visits);
+                    here.last_visit = here.last_visit.max(entry.last_visit);
+                    if here.title.is_empty() {
+                        here.title = entry.title;
+                    }
+                }
+                None => {
+                    self.by_url.insert(entry.url.clone(), self.entries.len());
+                    self.entries.push(entry);
+                    added += 1;
+                }
+            }
+        }
+        if self.entries.len() > MAX_ENTRIES {
+            self.prune(now);
+        }
+        added
+    }
+
     /// Update the title of a page already in history. True if it changed.
     pub fn set_title(&mut self, url: &str, title: &str) -> bool {
         match self.by_url.get(url) {
@@ -320,6 +351,30 @@ mod tests {
         h.record_visit("https://b.example/", "", NOW);
         h.record_visit("https://b.example/", "", NOW);
         assert_eq!(urls(&h.search("", 1, NOW)), ["https://b.example/"]);
+    }
+
+    #[test]
+    fn merge_adds_new_pages_and_keeps_the_best_of_known_ones() {
+        let mut h = History::new();
+        h.record_visit("https://a.example/", "", NOW);
+        let entry = |url: &str, title: &str, visits, last_visit| HistoryEntry {
+            url: url.into(),
+            title: title.into(),
+            visits,
+            last_visit,
+        };
+        let added = h.merge(
+            [
+                entry("https://a.example/", "A", 7, NOW - 100),
+                entry("https://b.example/", "B", 2, NOW - 50),
+                entry("about:blank", "", 1, NOW),
+            ],
+            NOW,
+        );
+        assert_eq!(added, 1);
+        let a = h.get("https://a.example/").unwrap();
+        assert_eq!((a.title.as_str(), a.visits, a.last_visit), ("A", 7, NOW));
+        assert_eq!(h.len(), 2);
     }
 
     #[test]

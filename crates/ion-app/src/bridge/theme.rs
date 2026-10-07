@@ -6,8 +6,9 @@
 //! system light/dark and accent) and when the watched palette file changes.
 //!
 //! It also decides what web pages see of the theme (`theme.pages`): it sets
-//! the `prefers-color-scheme` QtWebEngine hands to pages, and `darkenPages`
-//! tells each `BrowserTab` whether to force-darken pages.
+//! the `prefers-color-scheme` QtWebEngine hands to pages, and tells each
+//! `BrowserTab` whether to force-darken its page (`darkenPage`) and what CSS
+//! to add to it (`siteCssScript`), from `[theme.sites]` in the config.
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -51,8 +52,11 @@ pub mod qobject {
         // error: why the configured theme could not be used; empty when it was.
         // Its own signal, so a handler fires once per new error.
         #[qproperty(QString, error, READ, NOTIFY)]
-        // Whether pages without a dark style should be force-darkened.
+        // Whether pages without a dark style should be force-darkened, before
+        // per-site settings (see `darkenPage`).
         #[qproperty(bool, darken_pages, cxx_name = "darkenPages", READ, NOTIFY = page_scheme_changed)]
+        // A user script adding `[theme.sites]` CSS to pages; empty when none.
+        #[qproperty(QString, site_css_script, cxx_name = "siteCssScript", READ, NOTIFY = page_scheme_changed)]
         type ThemeEngine = super::ThemeEngineRust;
 
         #[qsignal]
@@ -71,6 +75,17 @@ pub mod qobject {
         #[cxx_name = "applyPageScheme"]
         fn apply_page_scheme(self: &ThemeEngine);
 
+        /// Whether the page at `url` should be force-darkened: `darkenPages`
+        /// unless a `[theme.sites]` entry says otherwise.
+        #[qinvokable]
+        #[cxx_name = "darkenPage"]
+        fn darken_page(self: &ThemeEngine, url: &QString) -> bool;
+
+        /// A script that takes `siteCssScript`'s CSS off an open page.
+        #[qinvokable]
+        #[cxx_name = "clearSiteCssScript"]
+        fn clear_site_css_script(self: &ThemeEngine) -> QString;
+
         /// Resolve the palette again. Runs on its own when an input changes.
         #[qinvokable]
         fn reload(self: Pin<&mut ThemeEngine>);
@@ -88,6 +103,7 @@ pub mod qobject {
     impl cxx_qt::Threading for ThemeEngine {}
 }
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -96,7 +112,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QColor, QString, QStringList};
 use ion_theme::{
-    Color, Dirs, FileWatcher, PageTheming, Palette, Scheme, SystemAppearance, ThemeSource,
+    Color, Dirs, FileWatcher, PageTheming, Palette, Scheme, SiteTheme, SystemAppearance,
+    ThemeSource,
 };
 
 pub struct ThemeEngineRust {
@@ -129,6 +146,15 @@ pub struct ThemeEngineRust {
     /// The system's light/dark when pages follow it, so they re-apply when
     /// it changes.
     page_system_dark: Option<bool>,
+    /// The palette's darkness pages were last told about: per-site
+    /// `darken = true` depends on it whatever `theme.pages` is.
+    page_dark: Option<bool>,
+    site_css_script: QString,
+    /// `[theme.sites]`, with site names normalized.
+    sites: BTreeMap<String, SiteTheme>,
+    /// The palette's page-controls CSS, whether or not it is on.
+    controls_css: String,
+    config_subscription: Option<ion_config::Subscription>,
 
     /// The palette file being watched, and its watcher.
     watched: Option<(PathBuf, FileWatcher)>,
@@ -169,6 +195,11 @@ impl Default for ThemeEngineRust {
             // Not a valid scheme, so the first reload always sets it.
             page_scheme: -1,
             page_system_dark: None,
+            page_dark: None,
+            site_css_script: QString::default(),
+            sites: BTreeMap::new(),
+            controls_css: String::new(),
+            config_subscription: None,
             watched: None,
             reload_queued: Arc::default(),
         };
@@ -195,6 +226,20 @@ impl ThemeEngineRust {
         self.danger = qcolor(p.danger);
         self.warning = qcolor(p.warning);
         self.success = qcolor(p.success);
+        self.controls_css = ion_theme::controls::css(p);
+    }
+
+    /// Rebuild the script that adds CSS to pages. Returns whether it changed.
+    fn update_page_script(&mut self, page_controls: bool) -> bool {
+        let page_css = if page_controls {
+            self.controls_css.clone()
+        } else {
+            String::new()
+        };
+        let script = QString::from(ion_theme::sites::css_script(&self.sites, &page_css).as_str());
+        let changed = script != self.site_css_script;
+        self.site_css_script = script;
+        changed
     }
 
     /// Decide what pages see of the current palette and hand QtWebEngine the
@@ -215,9 +260,19 @@ impl ThemeEngineRust {
         if page_scheme != self.page_scheme {
             qobject::set_web_color_scheme(page_scheme);
         }
-        let state = (page_scheme, darken, system_dark);
-        let old = (self.page_scheme, self.darken_pages, self.page_system_dark);
-        (self.page_scheme, self.darken_pages, self.page_system_dark) = state;
+        let state = (page_scheme, darken, system_dark, Some(self.dark));
+        let old = (
+            self.page_scheme,
+            self.darken_pages,
+            self.page_system_dark,
+            self.page_dark,
+        );
+        (
+            self.page_scheme,
+            self.darken_pages,
+            self.page_system_dark,
+            self.page_dark,
+        ) = state;
         state != old
     }
 
@@ -253,6 +308,12 @@ impl cxx_qt::Initialize for qobject::ThemeEngine {
         self.as_mut()
             .on_pages_changed(|this| this.reload())
             .release();
+        let qt_thread = self.qt_thread();
+        let subscription = ion_config::global().subscribe(move |_| {
+            let _ = qt_thread.queue(|this| this.reload_sites());
+        });
+        self.as_mut().rust_mut().config_subscription = Some(subscription);
+        self.as_mut().reload_sites();
         self.reload();
     }
 }
@@ -283,7 +344,9 @@ impl qobject::ThemeEngine {
             Err(e) => Some(e.to_string()),
         };
         let error = error.or(pages.as_ref().err().cloned());
-        let page_changed = rust.update_pages(pages.unwrap_or_default());
+        let page_controls = ion_config::global().config().theme.page_controls;
+        let page_changed =
+            rust.update_pages(pages.unwrap_or_default()) | rust.update_page_script(page_controls);
         let error = QString::from(error.unwrap_or_default().as_str());
         let error_changed = rust.error != error;
         rust.error = error;
@@ -303,6 +366,44 @@ impl qobject::ThemeEngine {
 
     fn apply_page_scheme(&self) {
         qobject::set_web_color_scheme(self.page_scheme);
+    }
+
+    fn darken_page(&self, url: &QString) -> bool {
+        ion_theme::sites::darken(&self.sites, &url.to_string(), self.dark, self.darken_pages)
+    }
+
+    fn clear_site_css_script(&self) -> QString {
+        QString::from(ion_theme::sites::clear_css_script().as_str())
+    }
+
+    /// Re-read `[theme.sites]` and `theme.pageControls`; tells pages when
+    /// either changed.
+    fn reload_sites(mut self: Pin<&mut Self>) {
+        let config = ion_config::global().config();
+        let sites: BTreeMap<String, SiteTheme> = config
+            .theme
+            .sites
+            .iter()
+            .filter_map(|(site, theme)| {
+                let Some(site) = ion_theme::sites::normalize_site(site) else {
+                    eprintln!(
+                        "ion: config: ignoring [theme.sites] entry {site:?}: not a host name"
+                    );
+                    return None;
+                };
+                let theme = SiteTheme {
+                    darken: theme.darken,
+                    css: theme.css.clone(),
+                };
+                Some((site, theme))
+            })
+            .collect();
+        let mut rust = self.as_mut().rust_mut();
+        let sites_changed = sites != rust.sites;
+        rust.sites = sites;
+        if rust.update_page_script(config.theme.page_controls) || sites_changed {
+            self.page_scheme_changed();
+        }
     }
 
     /// Watch `path` for changes (or stop watching). Returns an error message

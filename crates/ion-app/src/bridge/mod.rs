@@ -5,13 +5,18 @@
 
 pub mod adblock;
 pub mod basics;
+pub mod bookmarks;
 pub mod config;
 pub mod downloads;
+pub mod extensions;
 pub mod history;
 pub mod omnibox;
 pub mod palette;
 pub mod platform;
+pub mod privacy;
+pub mod reader;
 pub mod safety;
+pub mod sites;
 pub mod tabs;
 pub mod theme;
 pub mod webengine;

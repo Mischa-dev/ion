@@ -142,6 +142,35 @@ pub fn options<'a>(
         active: false,
     });
 
+    let vim = config.keyboard.vim;
+    options.push(SettingOption {
+        title: if vim {
+            "Turn off Vim keys in pages"
+        } else {
+            "Turn on Vim keys and link hints in pages"
+        }
+        .into(),
+        keywords: "settings keyboard mode vim hints vimium",
+        changes: vec![("keyboard.vim", SettingValue::Flag(!vim))],
+        active: false,
+    });
+
+    let third_party = config.privacy.block_third_party_cookies;
+    options.push(SettingOption {
+        title: if third_party {
+            "Allow third-party cookies"
+        } else {
+            "Block third-party cookies"
+        }
+        .into(),
+        keywords: "settings privacy tracking cookies",
+        changes: vec![(
+            "privacy.blockThirdPartyCookies",
+            SettingValue::Flag(!third_party),
+        )],
+        active: false,
+    });
+
     for &(name, template) in SEARCH_ENGINES {
         options.push(SettingOption {
             title: format!("Search with {name}"),
