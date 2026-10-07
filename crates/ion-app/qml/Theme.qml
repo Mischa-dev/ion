@@ -79,6 +79,19 @@ QtObject {
     readonly property int paletteWidth: 640
     readonly property int paletteMaxRows: 8
     readonly property real scrimOpacity: 0.4
+    // Colors offered for workspaces. A workspace without one uses `accent`.
+    readonly property var workspaceColors: [
+        { name: qsTr("Red"), value: "#e5484d" },
+        { name: qsTr("Orange"), value: "#f76b15" },
+        { name: qsTr("Yellow"), value: "#ffc53d" },
+        { name: qsTr("Green"), value: "#46a758" },
+        { name: qsTr("Teal"), value: "#12a594" },
+        { name: qsTr("Blue"), value: "#0090ff" },
+        { name: qsTr("Purple"), value: "#8e4ec6" },
+        { name: qsTr("Pink"), value: "#d6409f" }
+    ]
+    readonly property int workspaceDotSize: 10
+
     // Things that are present but asleep, like a suspended tab's icon.
     readonly property real dimmedOpacity: 0.45
 

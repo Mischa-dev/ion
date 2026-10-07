@@ -23,10 +23,11 @@ crates/
   ion-core/               shared core: app constants, URL-bar input resolution
   ion-platform/           Chromium switches, one-instance-per-profile hand-off
   ion-bangs/              !bangs and the command palette's ranking
-  ion-session/            tab list, saved and named sessions, browsing history
+  ion-session/            tabs and workspaces, saved and named sessions, history
   ion-bookmarks/          bookmarks; importing bookmarks and history from Chrome/Firefox
   ion-sites/              per-site settings ([sites] in config), user scripts and styles
   ion-reader/             reader mode: article extraction and the themed reader page
+  ion-safety/             permissions and agent trust: decisions, prompts, activity log
   ion-app/                the binary (`ion`)
     build.rs              auto-discovers bridges, C++ shims and QML files
     src/main.rs           startup: QtWebEngine init, app, QML engine
@@ -69,6 +70,10 @@ Shared files with small, append-only edits: root `Cargo.toml`,
   and title changes back. The open tabs are saved to
   `<data dir>/sessions/last.json` and restored at startup; restored background
   tabs load when first shown. Named sessions live next to it in `named/`.
+- Every tab belongs to a workspace (`Tabs.workspace` is the current tab's).
+  The strips filter the model to the current workspace with a
+  `SortFilterProxyModel`; delegates use the `row` role, not their list index,
+  when they talk to `Tabs`. Workspaces are saved with the session.
 - `History` (`bridge/history.rs`) records finished page loads in
   `<data dir>/history.json`; `History.search(query, limit)` returns JSON for the
   command palette. The data dir is `$ION_DATA_DIR`, else

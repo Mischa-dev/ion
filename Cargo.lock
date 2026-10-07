@@ -770,6 +770,7 @@ dependencies = [
  "ion-core",
  "ion-platform",
  "ion-reader",
+ "ion-safety",
  "ion-session",
  "ion-sites",
  "ion-theme",
@@ -828,6 +829,15 @@ version = "0.1.0"
 dependencies = [
  "ego-tree",
  "scraper",
+ "url",
+]
+
+[[package]]
+name = "ion-safety"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
  "url",
 ]
 

@@ -45,6 +45,19 @@ let
             "ublock-filters"
           ];
           general.restoreSession = false;
+          agents = {
+            mcp.enable = true;
+            claude-code = {
+              trust = "trustedSites";
+              trustedSites = [ "github.com" ];
+              rules = [
+                {
+                  action = "submit";
+                  effect = "ask";
+                }
+              ];
+            };
+          };
         };
       }
     ];

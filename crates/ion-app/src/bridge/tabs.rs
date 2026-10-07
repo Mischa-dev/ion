@@ -1,9 +1,11 @@
 //! `Tabs` QML singleton: the open tabs as a list model, backed by
 //! `ion_session::TabList`, saved to disk so Ion reopens where it left off.
 //!
-//! Roles: `tabId` (stable while the tab is open), `url`, `title`. The window
-//! creates one web view per row and reports navigation back with `setUrl` and
-//! `setTitle`; everything else (open, close, reorder, sessions) goes through the
+//! Roles: `tabId` (stable while the tab is open), `url`, `title`, `icon`,
+//! `suspended`, `workspace` (its workspace's id) and `row` (its row here, for
+//! views that filter the model by workspace). The window creates one web view
+//! per row and reports navigation back with `setUrl` and `setTitle`; everything
+//! else (open, close, reorder, workspaces, sessions) goes through the
 //! invokables below so the strip, the palette and later agents share one model.
 
 #[cxx_qt::bridge]
@@ -37,6 +39,8 @@ pub mod qobject {
         #[qproperty(i32, current_index, cxx_name = "currentIndex", READ, NOTIFY)]
         #[qproperty(i32, closed_count, cxx_name = "closedCount", READ, NOTIFY)]
         #[qproperty(bool, restoring, READ, NOTIFY)]
+        /// Id of the workspace the strip shows: the current tab's.
+        #[qproperty(i32, workspace, READ, NOTIFY)]
         #[namespace = "ion"]
         type Tabs = super::TabsRust;
     }
@@ -110,6 +114,11 @@ pub mod qobject {
         #[cxx_name = "sessionChanged"]
         fn session_changed(self: Pin<&mut Tabs>);
 
+        /// Workspaces were added, removed, renamed, recolored or reordered.
+        #[qsignal]
+        #[cxx_name = "workspacesChanged"]
+        fn workspaces_changed(self: Pin<&mut Tabs>);
+
         /// Open a tab at the end of the strip. Returns its index.
         #[qinvokable]
         #[cxx_name = "openTab"]
@@ -176,6 +185,74 @@ pub mod qobject {
         #[cxx_name = "urlAt"]
         fn url_at(self: &Tabs, index: i32) -> QString;
 
+        /// Make the `n`th tab of the current workspace current (0-based); a
+        /// negative `n` picks its last tab.
+        #[qinvokable]
+        #[cxx_name = "activateNth"]
+        fn activate_nth(self: Pin<&mut Tabs>, n: i32);
+
+        /// The workspaces in switcher order, as a JSON array of
+        /// `{id, name, color, tabs}`.
+        #[qinvokable]
+        fn workspaces(self: &Tabs) -> QString;
+
+        /// Add an empty workspace after the others. Returns its id; switching
+        /// to it opens its first tab.
+        #[qinvokable]
+        #[cxx_name = "addWorkspace"]
+        fn add_workspace(self: Pin<&mut Tabs>, name: &QString, color: &QString) -> i32;
+
+        #[qinvokable]
+        #[cxx_name = "renameWorkspace"]
+        fn rename_workspace(self: Pin<&mut Tabs>, id: i32, name: &QString);
+
+        #[qinvokable]
+        #[cxx_name = "setWorkspaceColor"]
+        fn set_workspace_color(self: Pin<&mut Tabs>, id: i32, color: &QString);
+
+        /// Move a workspace to position `to` in the switcher.
+        #[qinvokable]
+        #[cxx_name = "moveWorkspace"]
+        fn move_workspace(self: Pin<&mut Tabs>, id: i32, to: i32);
+
+        /// Close a workspace's tabs and remove it, switching away first if it
+        /// is current. False for the last workspace.
+        #[qinvokable]
+        #[cxx_name = "deleteWorkspace"]
+        fn delete_workspace(self: Pin<&mut Tabs>, id: i32) -> bool;
+
+        /// Show workspace `id`, back on the tab that was current there. An
+        /// empty workspace gets a blank tab.
+        #[qinvokable]
+        #[cxx_name = "switchWorkspace"]
+        fn switch_workspace(self: Pin<&mut Tabs>, id: i32);
+
+        /// Switch to the workspace `step` places away in the switcher, wrapping.
+        #[qinvokable]
+        #[cxx_name = "cycleWorkspace"]
+        fn cycle_workspace(self: Pin<&mut Tabs>, step: i32);
+
+        /// Move the tab at `index` into workspace `id`. Moving the current tab
+        /// switches to that workspace with it.
+        #[qinvokable]
+        #[cxx_name = "moveToWorkspace"]
+        fn move_to_workspace(self: Pin<&mut Tabs>, index: i32, id: i32);
+
+        /// Id of the workspace of the tab at `index`, or -1.
+        #[qinvokable]
+        #[cxx_name = "workspaceAt"]
+        fn workspace_at(self: &Tabs, index: i32) -> i32;
+
+        /// Index of the tab `step` places from `index` within its workspace,
+        /// or -1 past either end.
+        #[qinvokable]
+        fn neighbour(self: &Tabs, index: i32, step: i32) -> i32;
+
+        /// Number of tabs in workspace `id`.
+        #[qinvokable]
+        #[cxx_name = "workspaceTabCount"]
+        fn workspace_tab_count(self: &Tabs, id: i32) -> i32;
+
         #[qinvokable]
         #[cxx_name = "titleAt"]
         fn title_at(self: &Tabs, index: i32) -> QString;
@@ -219,13 +296,15 @@ use cxx_qt_lib::{
     QByteArray, QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QStringList, QVariant,
 };
 use ion_session::history::now;
-use ion_session::{Session, SessionStore, TabList};
+use ion_session::{Session, SessionStore, TabList, WorkspaceId};
 
 const ROLE_ID: i32 = 0x0100; // Qt::UserRole
 const ROLE_URL: i32 = ROLE_ID + 1;
 const ROLE_TITLE: i32 = ROLE_ID + 2;
 const ROLE_ICON: i32 = ROLE_ID + 3;
 const ROLE_SUSPENDED: i32 = ROLE_ID + 4;
+const ROLE_WORKSPACE: i32 = ROLE_ID + 5;
+const ROLE_ROW: i32 = ROLE_ID + 6;
 
 pub struct TabsRust {
     list: TabList,
@@ -234,6 +313,7 @@ pub struct TabsRust {
     current_index: i32,
     closed_count: i32,
     restoring: bool,
+    workspace: i32,
 }
 
 impl Default for TabsRust {
@@ -245,6 +325,7 @@ impl Default for TabsRust {
             current_index: -1,
             closed_count: 0,
             restoring: false,
+            workspace: 0,
         }
     }
 }
@@ -269,6 +350,8 @@ impl qobject::Tabs {
             ROLE_TITLE => QVariant::from(&QString::from(tab.title.as_str())),
             ROLE_ICON => QVariant::from(&QString::from(tab.icon.as_str())),
             ROLE_SUSPENDED => QVariant::from(&tab.suspended),
+            ROLE_WORKSPACE => QVariant::from(&(tab.workspace as i32)),
+            ROLE_ROW => QVariant::from(&index.row()),
             _ => QVariant::default(),
         }
     }
@@ -280,6 +363,8 @@ impl qobject::Tabs {
         roles.insert(ROLE_TITLE, QByteArray::from("title"));
         roles.insert(ROLE_ICON, QByteArray::from("icon"));
         roles.insert(ROLE_SUSPENDED, QByteArray::from("suspended"));
+        roles.insert(ROLE_WORKSPACE, QByteArray::from("workspace"));
+        roles.insert(ROLE_ROW, QByteArray::from("row"));
         roles
     }
 
@@ -309,21 +394,49 @@ impl qobject::Tabs {
             self.as_mut().rust_mut().closed_count = closed;
             self.as_mut().closed_count_changed();
         }
+        let workspace = self.list.current_workspace() as i32;
+        if self.workspace != workspace {
+            self.as_mut().rust_mut().workspace = workspace;
+            self.as_mut().workspace_changed();
+        }
         self.session_changed();
     }
 
-    fn insert_at(mut self: Pin<&mut Self>, index: usize, url: &QString, activate: bool) -> i32 {
+    /// Rows from `first` on changed position: tell views reading `row`.
+    fn rows_shifted(mut self: Pin<&mut Self>, first: usize) {
+        let len = self.list.len();
+        if first >= len {
+            return;
+        }
+        let root = QModelIndex::default();
+        let top = self.index(first as i32, 0, &root);
+        let bottom = self.index(len as i32 - 1, 0, &root);
+        let mut roles = QList::<i32>::default();
+        roles.append(ROLE_ROW);
+        self.as_mut().data_changed(&top, &bottom, &roles);
+    }
+
+    /// Insert a tab row through `open`, which gets the list and the clamped
+    /// index and returns the new tab's index.
+    fn insert_with(
+        mut self: Pin<&mut Self>,
+        index: usize,
+        open: impl FnOnce(&mut TabList, usize) -> usize,
+    ) -> i32 {
         let index = index.min(self.list.len());
         let row = index as i32;
         self.as_mut()
             .begin_insert_rows(&QModelIndex::default(), row, row);
-        self.as_mut()
-            .rust_mut()
-            .list
-            .open(index, &url.to_string(), "", activate);
+        open(&mut self.as_mut().rust_mut().list, index);
         self.as_mut().end_insert_rows();
+        self.as_mut().rows_shifted(index + 1);
         self.sync();
         row
+    }
+
+    fn insert_at(self: Pin<&mut Self>, index: usize, url: &QString, activate: bool) -> i32 {
+        let url = url.to_string();
+        self.insert_with(index, |list, i| list.open(i, &url, "", activate))
     }
 
     fn open_tab(self: Pin<&mut Self>, url: &QString, activate: bool) -> i32 {
@@ -346,23 +459,21 @@ impl qobject::Tabs {
         };
         self.as_mut()
             .begin_remove_rows(&QModelIndex::default(), index, index);
-        self.as_mut().rust_mut().list.close(i);
+        if let Some(tab) = self.as_mut().rust_mut().list.close(i) {
+            // Prompts and tab-scoped rules for the tab end with it.
+            ion_safety::global().tab_closed(tab.id);
+        }
         self.as_mut().end_remove_rows();
+        self.as_mut().rows_shifted(i);
         self.sync();
         true
     }
 
-    fn reopen_closed_tab(mut self: Pin<&mut Self>) -> i32 {
+    fn reopen_closed_tab(self: Pin<&mut Self>) -> i32 {
         let Some(index) = self.list.next_reopen_index() else {
             return -1;
         };
-        let row = index as i32;
-        self.as_mut()
-            .begin_insert_rows(&QModelIndex::default(), row, row);
-        self.as_mut().rust_mut().list.reopen_closed();
-        self.as_mut().end_insert_rows();
-        self.sync();
-        row
+        self.insert_with(index, |list, i| list.reopen_closed().unwrap_or(i))
     }
 
     fn activate(mut self: Pin<&mut Self>, index: i32) {
@@ -399,6 +510,7 @@ impl qobject::Tabs {
         }
         self.as_mut().rust_mut().list.move_tab(f, t);
         self.as_mut().end_move_rows();
+        self.as_mut().rows_shifted(f.min(t));
         self.sync();
         true
     }
@@ -460,6 +572,171 @@ impl qobject::Tabs {
         }
     }
 
+    fn activate_nth(mut self: Pin<&mut Self>, n: i32) {
+        if let Some(i) = self.list.nth_in_workspace(n as isize) {
+            if self.as_mut().rust_mut().list.activate(i) {
+                self.sync();
+            }
+        }
+    }
+
+    fn workspaces(&self) -> QString {
+        let list: Vec<serde_json::Value> = self
+            .list
+            .workspaces()
+            .iter()
+            .map(|w| {
+                serde_json::json!({
+                    "id": w.id,
+                    "name": w.name,
+                    "color": w.color,
+                    "tabs": self.list.rows_in(w.id).len(),
+                })
+            })
+            .collect();
+        QString::from(serde_json::Value::Array(list).to_string().as_str())
+    }
+
+    fn add_workspace(mut self: Pin<&mut Self>, name: &QString, color: &QString) -> i32 {
+        let id = self
+            .as_mut()
+            .rust_mut()
+            .list
+            .add_workspace(&name.to_string(), &color.to_string());
+        self.as_mut().workspaces_changed();
+        self.session_changed();
+        id as i32
+    }
+
+    fn rename_workspace(mut self: Pin<&mut Self>, id: i32, name: &QString) {
+        let Ok(id) = WorkspaceId::try_from(id) else {
+            return;
+        };
+        if self
+            .as_mut()
+            .rust_mut()
+            .list
+            .rename_workspace(id, &name.to_string())
+        {
+            self.as_mut().workspaces_changed();
+            self.session_changed();
+        }
+    }
+
+    fn set_workspace_color(mut self: Pin<&mut Self>, id: i32, color: &QString) {
+        let Ok(id) = WorkspaceId::try_from(id) else {
+            return;
+        };
+        if self
+            .as_mut()
+            .rust_mut()
+            .list
+            .set_workspace_color(id, &color.to_string())
+        {
+            self.as_mut().workspaces_changed();
+            self.session_changed();
+        }
+    }
+
+    fn move_workspace(mut self: Pin<&mut Self>, id: i32, to: i32) {
+        let (Ok(id), Ok(to)) = (WorkspaceId::try_from(id), usize::try_from(to)) else {
+            return;
+        };
+        if self.as_mut().rust_mut().list.move_workspace(id, to) {
+            self.as_mut().workspaces_changed();
+            self.session_changed();
+        }
+    }
+
+    fn delete_workspace(mut self: Pin<&mut Self>, id: i32) -> bool {
+        let Ok(id) = WorkspaceId::try_from(id) else {
+            return false;
+        };
+        let workspaces = self.list.workspaces();
+        let Some(at) = workspaces.iter().position(|w| w.id == id) else {
+            return false;
+        };
+        if workspaces.len() < 2 {
+            return false;
+        }
+        if self.list.current_workspace() == id {
+            // Show the next workspace (the previous one for the last) first.
+            let other = workspaces[if at + 1 < workspaces.len() {
+                at + 1
+            } else {
+                at - 1
+            }]
+            .id;
+            self.as_mut().switch_workspace(other as i32);
+        }
+        while let Some(&last) = self.list.rows_in(id).last() {
+            self.as_mut().close_tab(last as i32);
+        }
+        self.as_mut().rust_mut().list.remove_workspace(id);
+        self.as_mut().workspaces_changed();
+        self.sync();
+        true
+    }
+
+    fn switch_workspace(mut self: Pin<&mut Self>, id: i32) {
+        let Ok(id) = WorkspaceId::try_from(id) else {
+            return;
+        };
+        if self.list.workspace(id).is_none()
+            || (self.list.current_workspace() == id && !self.list.is_empty())
+        {
+            return;
+        }
+        match self.list.workspace_tab(id) {
+            Some(i) => {
+                self.as_mut().rust_mut().list.activate(i);
+                self.sync();
+            }
+            None => {
+                let end = self.list.len();
+                self.insert_with(end, |list, i| list.open_in(id, i, "", "", true));
+            }
+        }
+    }
+
+    fn cycle_workspace(self: Pin<&mut Self>, step: i32) {
+        let workspaces = self.list.workspaces();
+        let current = self.list.current_workspace();
+        let Some(at) = workspaces.iter().position(|w| w.id == current) else {
+            return;
+        };
+        let next = (at as i32 + step).rem_euclid(workspaces.len() as i32) as usize;
+        let id = workspaces[next].id;
+        self.switch_workspace(id as i32);
+    }
+
+    fn move_to_workspace(mut self: Pin<&mut Self>, index: i32, id: i32) {
+        let (Some(i), Ok(id)) = (to_index(index, self.list.len()), WorkspaceId::try_from(id))
+        else {
+            return;
+        };
+        if self.as_mut().rust_mut().list.move_to_workspace(i, id) {
+            self.as_mut().notify_row(index, ROLE_WORKSPACE);
+            self.sync();
+        }
+    }
+
+    fn workspace_at(&self, index: i32) -> i32 {
+        to_index(index, self.list.len())
+            .and_then(|i| self.list.get(i))
+            .map_or(-1, |t| t.workspace as i32)
+    }
+
+    fn neighbour(&self, index: i32, step: i32) -> i32 {
+        to_index(index, self.list.len())
+            .and_then(|i| self.list.neighbour(i, step as isize))
+            .map_or(-1, |i| i as i32)
+    }
+
+    fn workspace_tab_count(&self, id: i32) -> i32 {
+        WorkspaceId::try_from(id).map_or(0, |id| self.list.rows_in(id).len() as i32)
+    }
+
     fn url_at(&self, index: i32) -> QString {
         to_index(index, self.list.len())
             .and_then(|i| self.list.get(i))
@@ -478,8 +755,14 @@ impl qobject::Tabs {
         self.as_mut().rust_mut().restoring = true;
         self.as_mut().restoring_changed();
         self.as_mut().begin_reset_model();
+        let mut safety = ion_safety::global();
+        for tab in self.list.tabs() {
+            safety.tab_closed(tab.id);
+        }
+        drop(safety);
         self.as_mut().rust_mut().list = TabList::from_session(session);
         self.as_mut().end_reset_model();
+        self.as_mut().workspaces_changed();
         self.as_mut().rust_mut().restoring = false;
         self.as_mut().restoring_changed();
         self.sync();

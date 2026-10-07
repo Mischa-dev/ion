@@ -147,6 +147,13 @@ pub const COMMANDS: &[Command] = &[
         "userscript css greasemonkey edit",
         "",
     ),
+    command(
+        "stop-agents",
+        "Stop all agents",
+        "ai halt pause safety",
+        "Ctrl+Shift+Escape",
+    ),
+    command("resume-agents", "Resume agents", "ai start safety", ""),
     command("quit", "Quit Ion", "exit close window", "Ctrl+Q"),
 ];
 
