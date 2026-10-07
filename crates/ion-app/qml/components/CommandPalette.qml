@@ -154,7 +154,7 @@ Popup {
             placeholderText: qsTr("Search tabs, commands and !bangs")
             placeholderTextColor: Theme.textMuted
             selectionColor: Theme.accent
-            selectedTextColor: Theme.background
+            selectedTextColor: Theme.onAccent
             font.pixelSize: Theme.fontSize
             leftPadding: Theme.spacing * 2
             rightPadding: Theme.spacing * 2

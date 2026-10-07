@@ -482,6 +482,7 @@ dependencies = [
  "ion-core",
  "ion-platform",
  "ion-session",
+ "ion-theme",
  "serde_json",
 ]
 
@@ -525,6 +526,15 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "ion-theme"
+version = "0.1.0"
+dependencies = [
+ "notify",
+ "serde",
+ "toml",
 ]
 
 [[package]]
