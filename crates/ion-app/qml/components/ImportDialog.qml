@@ -104,8 +104,9 @@ Popup {
                 text: qsTr("Import from %1").arg(modelData)
                 onClicked: root.importFrom(modelData)
 
-                Keys.onReturnPressed: clicked()
-                Keys.onEnterPressed: clicked()
+                // Once per press: a held key would re-run the import.
+                Keys.onReturnPressed: event => { if (!event.isAutoRepeat) clicked() }
+                Keys.onEnterPressed: event => { if (!event.isAutoRepeat) clicked() }
                 // Straight to the neighbouring row: macOS without Full Keyboard
                 // Access leaves buttons out of the tab chain.
                 Keys.onUpPressed: rows.itemAt(index - 1)?.forceActiveFocus(Qt.BacktabFocusReason)
