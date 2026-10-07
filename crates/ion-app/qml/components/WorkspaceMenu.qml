@@ -39,7 +39,7 @@ Item {
         nameDialog.open()
     }
 
-    Menu {
+    IonMenu {
         id: menu
         palette: root.palette
 
@@ -47,7 +47,7 @@ Item {
 
         Instantiator {
             model: root.workspaces
-            delegate: MenuItem {
+            delegate: IonMenuItem {
                 required property var modelData
                 text: modelData.name
                 checkable: true
@@ -58,13 +58,13 @@ Item {
             onObjectRemoved: (index, object) => menu.removeItem(object)
         }
 
-        MenuSeparator {}
+        IonMenuSeparator {}
 
-        MenuItem {
+        IonMenuItem {
             text: qsTr("New workspace…")
             onTriggered: root.create()
         }
-        MenuItem {
+        IonMenuItem {
             text: qsTr("Rename workspace…")
             onTriggered: {
                 nameDialog.renaming = true
@@ -72,14 +72,14 @@ Item {
             }
         }
 
-        Menu {
+        IonMenu {
             id: colorMenu
             palette: root.palette
             title: qsTr("Color")
 
             Instantiator {
                 model: Theme.workspaceColors
-                delegate: MenuItem {
+                delegate: IonMenuItem {
                     required property var modelData
                     text: modelData.name
                     checkable: true
@@ -91,14 +91,14 @@ Item {
             }
         }
 
-        MenuItem {
+        IonMenuItem {
             text: qsTr("Delete workspace…")
             enabled: root.workspaces.length > 1
             onTriggered: deleteDialog.open()
         }
     }
 
-    Dialog {
+    IonDialog {
         id: nameDialog
         palette: root.palette
 
@@ -107,10 +107,6 @@ Item {
         // The tab to move into the new workspace, or -1.
         property int moveRow: -1
 
-        parent: Overlay.overlay
-        anchors.centerIn: parent
-        modal: true
-        padding: Theme.spacing * 2
         title: renaming ? qsTr("Rename workspace") : qsTr("New workspace")
         standardButtons: Dialog.Ok | Dialog.Cancel
 
@@ -135,13 +131,18 @@ Item {
         }
 
         ColumnLayout {
-            spacing: Theme.spacing
+            anchors.left: parent.left
+            anchors.right: parent.right
+            spacing: Theme.spacing * 2
 
             Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: Theme.textMuted
                 text: nameDialog.renaming ? qsTr("A new name for this workspace.")
                                           : qsTr("A workspace keeps its own set of tabs.")
             }
-            TextField {
+            IonTextField {
                 id: nameField
                 Layout.fillWidth: true
                 placeholderText: qsTr("Workspace name")
@@ -150,20 +151,19 @@ Item {
         }
     }
 
-    Dialog {
+    IonDialog {
         id: deleteDialog
         palette: root.palette
 
-        parent: Overlay.overlay
-        anchors.centerIn: parent
-        modal: true
-        padding: Theme.spacing * 2
         title: qsTr("Delete workspace")
         standardButtons: Dialog.Ok | Dialog.Cancel
 
         onAccepted: Tabs.deleteWorkspace(Tabs.workspace)
 
         Label {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            wrapMode: Text.WordWrap
             text: {
                 const tabs = root.current?.tabs ?? 0
                 return qsTr("Delete “%1” and close its %n tab(s)? Closed tabs can be reopened one by one.", "", tabs)
