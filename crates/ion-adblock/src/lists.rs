@@ -23,9 +23,42 @@ impl FilterList {
     }
 }
 
-/// How old a cached list may get before it is downloaded again. EasyList and
-/// the uBlock Origin lists all declare `Expires: 4 days` or shorter.
+/// How old a cached list may get before it is downloaded again, unless the
+/// list declares its own `! Expires:` (EasyList: 4 days; uBlock's quick
+/// fixes: 8 hours).
 pub const MAX_AGE: Duration = Duration::from_secs(4 * 24 * 60 * 60);
+
+const HOUR: u64 = 60 * 60;
+
+/// The list's own `! Expires: 4 days (update frequency)` header, kept between
+/// an hour and two weeks; [`MAX_AGE`] when it has none.
+pub fn expiry_of(text: &str) -> Duration {
+    let declared = text
+        .lines()
+        .take(50)
+        .take_while(|line| line.trim().is_empty() || line.starts_with(['!', '[', '#']))
+        .find_map(|line| {
+            let rest = line.trim_start_matches(['!', '#']).trim();
+            let value = rest.strip_prefix("Expires:")?.trim();
+            let mut words = value.split_whitespace();
+            let n: u64 = words.next()?.parse().ok()?;
+            let unit = words.next().unwrap_or("days");
+            let hours = if unit.starts_with("hour") {
+                n
+            } else if unit.starts_with("day") {
+                n * 24
+            } else {
+                return None;
+            };
+            Some(Duration::from_secs(hours * HOUR))
+        });
+    declared.map_or(MAX_AGE, |d| {
+        d.clamp(
+            Duration::from_secs(HOUR),
+            Duration::from_secs(14 * 24 * HOUR),
+        )
+    })
+}
 
 /// The lists Ion knows by name: EasyList for ads, EasyPrivacy for trackers,
 /// and uBlock Origin's own lists, including its "unbreak" list of exceptions
@@ -164,6 +197,24 @@ mod tests {
                 "{id}"
             );
         }
+    }
+
+    #[test]
+    fn reads_declared_expiry() {
+        let hours = |h: u64| Duration::from_secs(h * HOUR);
+        assert_eq!(
+            expiry_of("! Title: Quick fixes\n! Expires: 8 hours\n||a.test^\n"),
+            hours(8)
+        );
+        assert_eq!(
+            expiry_of("[Adblock Plus 2.0]\n! Expires: 1 days (update frequency)\n"),
+            hours(24)
+        );
+        assert_eq!(expiry_of("! Expires: 0 hours\n"), hours(1));
+        assert_eq!(expiry_of("! Expires: 90 days\n"), hours(14 * 24));
+        assert_eq!(expiry_of("! Title: none\n||a.test^\n"), MAX_AGE);
+        // Only the header counts, not a comment deep in the rules.
+        assert_eq!(expiry_of("||a.test^\n! Expires: 1 hours\n"), MAX_AGE);
     }
 
     #[test]

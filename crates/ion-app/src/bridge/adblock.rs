@@ -113,7 +113,7 @@ use ion_adblock::{
 };
 
 /// How often the worker checks whether lists went stale while Ion runs.
-const RECHECK_EVERY: Duration = Duration::from_secs(6 * 60 * 60);
+const RECHECK_EVERY: Duration = Duration::from_secs(60 * 60);
 
 /// Held by a worker from downloading lists until its result is queued for the
 /// UI thread. Workers never interleave writing lists with compiling them, so

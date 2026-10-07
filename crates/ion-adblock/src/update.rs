@@ -5,7 +5,7 @@
 
 use std::time::{Duration, SystemTime};
 
-use crate::lists::MAX_AGE;
+use crate::lists::{MAX_AGE, expiry_of};
 use crate::{Blocker, FilterList, Store};
 
 /// Fetches a list's text. [`HttpFetch`] in the app, a fake in tests.
@@ -65,11 +65,16 @@ impl Report {
     }
 }
 
-/// Whether `list` is missing from the cache or older than [`MAX_AGE`].
+/// Whether `list` is missing from the cache or older than its expiry (its
+/// own `! Expires:` header, else [`MAX_AGE`]).
 pub fn is_stale(store: &Store, list: &FilterList, now: SystemTime) -> bool {
-    store
-        .list_age(&list.id, now)
-        .is_none_or(|age| age > MAX_AGE)
+    let Some(age) = store.list_age(&list.id, now) else {
+        return true;
+    };
+    let expiry = store
+        .read_list(&list.id)
+        .map_or(MAX_AGE, |text| expiry_of(&text));
+    age > expiry
 }
 
 /// Download the lists that are stale (or all of them with `force`) and save
