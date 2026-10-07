@@ -13,7 +13,6 @@ pub mod palette;
 pub mod platform;
 pub mod privacy;
 pub mod reader;
-pub mod screenshots;
 pub mod sites;
 pub mod tabs;
 pub mod theme;

@@ -7,9 +7,7 @@
 //!   the running process over a local socket and exits, because two processes
 //!   cannot share one QtWebEngine profile.
 //! - [`extensions`]: which Chrome (Manifest V3) extensions to load.
-//! - [`screenshots`]: where page screenshots are saved and what they're called.
 
 pub mod chromium;
 pub mod extensions;
 pub mod instance;
-pub mod screenshots;

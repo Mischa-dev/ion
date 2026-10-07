@@ -1,6 +1,6 @@
 [package]
 name = "ion-platform"
-description = "Qt-free platform integration for the Ion browser: Chromium flags, single-instance handoff, extensions and screenshots"
+description = "Qt-free platform integration for the Ion browser: Chromium flags, single-instance handoff and extensions"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

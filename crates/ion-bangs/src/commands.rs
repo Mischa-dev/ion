@@ -130,12 +130,6 @@ pub const COMMANDS: &[Command] = &[
         "",
     ),
     command(
-        "screenshot",
-        "Take a screenshot of the page",
-        "capture image png picture copy",
-        "Ctrl+Shift+S",
-    ),
-    command(
         "reader-mode",
         "Reader mode",
         "read article clean distraction free simplify",

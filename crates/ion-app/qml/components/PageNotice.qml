@@ -1,8 +1,8 @@
 import QtQuick
 import Ion
 
-// A short message over the top of a tab's page ("Screenshot saved", "No
-// article found"), fading out by itself.
+// A short message over the top of a tab's page ("No article found"), fading
+// out by itself.
 Rectangle {
     id: root
 
