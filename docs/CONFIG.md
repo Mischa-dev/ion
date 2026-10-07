@@ -44,7 +44,8 @@ name = "auto"                # "auto" follows light/dark mode; or "dark", "light
                                       # "dms" to ~/.config/ion/dms-palette.toml
 
 [bangs]                      # your own, on top of Ion's built-in set
-# gh = "https://github.com/search?q={}"
+# gh = "https://github.com/search?q={}"   # adds or replaces !gh
+# yt = ""                                 # removes the built-in !yt
 
 [adblock]
 enable = true

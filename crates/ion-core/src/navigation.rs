@@ -1,10 +1,12 @@
 //! Turning what someone typed into the URL bar into something to load.
 //!
-//! The URL bar is a command line: later stages (bangs, Ion commands, `!ai`)
-//! plug in as extra steps in [`Omnibox::resolve`] before the final
-//! "is it a URL, or is it a search?" decision made here.
+//! The URL bar is a command line: extra stages (bangs, later Ion commands and
+//! `!ai`) plug in as [`InputStep`]s that [`Omnibox::resolve`] tries, in order,
+//! before the final "is it a URL, or is it a search?" decision made here.
 
+use std::fmt;
 use std::net::IpAddr;
+use std::sync::Arc;
 
 use url::Url;
 
@@ -56,25 +58,54 @@ pub enum Resolved {
     Url(String),
     /// Run a web search; the string is the full search URL.
     Search(String),
+    /// Expanded a shortcut such as a `!bang`; the string is the URL to load.
+    Expanded(String),
 }
 
 impl Resolved {
     pub fn url(&self) -> &str {
         match self {
-            Resolved::Url(u) | Resolved::Search(u) => u,
+            Resolved::Url(u) | Resolved::Search(u) | Resolved::Expanded(u) => u,
         }
     }
 }
 
+/// An extra resolution stage tried before address and search detection.
+///
+/// Input reaches a step trimmed and non-empty. Returning `None` passes it on
+/// to the next step.
+pub trait InputStep: Send + Sync {
+    fn resolve(&self, input: &str) -> Option<Resolved>;
+}
+
 /// Resolves URL-bar input.
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct Omnibox {
     pub search: SearchEngine,
+    steps: Vec<Arc<dyn InputStep>>,
+}
+
+impl fmt::Debug for Omnibox {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Omnibox")
+            .field("search", &self.search)
+            .field("steps", &self.steps.len())
+            .finish()
+    }
 }
 
 impl Omnibox {
     pub fn new(search: SearchEngine) -> Self {
-        Self { search }
+        Self {
+            search,
+            steps: Vec::new(),
+        }
+    }
+
+    /// Add a stage that runs before address and search detection.
+    pub fn with_step(mut self, step: Arc<dyn InputStep>) -> Self {
+        self.steps.push(step);
+        self
     }
 
     /// Resolve `input` into something loadable. Returns `None` for blank input.
@@ -82,6 +113,9 @@ impl Omnibox {
         let input = input.trim();
         if input.is_empty() {
             return None;
+        }
+        if let Some(resolved) = self.steps.iter().find_map(|step| step.resolve(input)) {
+            return Some(resolved);
         }
         if let Some(url) = as_url(input) {
             return Some(Resolved::Url(url));
@@ -224,6 +258,25 @@ mod tests {
             search("what is example.com")
         );
         assert_eq!(resolve("foo:bar"), search("foo:bar"));
+    }
+
+    #[test]
+    fn steps_run_before_url_and_search() {
+        struct Shout;
+        impl InputStep for Shout {
+            fn resolve(&self, input: &str) -> Option<Resolved> {
+                input
+                    .strip_prefix('!')
+                    .map(|rest| Resolved::Expanded(format!("https://shout.test/{rest}")))
+            }
+        }
+        let omnibox = Omnibox::default().with_step(Arc::new(Shout));
+        assert_eq!(
+            omnibox.resolve("  !hi  "),
+            Some(Resolved::Expanded("https://shout.test/hi".into()))
+        );
+        assert_eq!(omnibox.resolve("example.com"), url("https://example.com/"));
+        assert_eq!(omnibox.resolve(""), None);
     }
 
     #[test]

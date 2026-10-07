@@ -1,4 +1,5 @@
-//! `Omnibox` QML element: resolves URL-bar input using `ion_core::navigation`.
+//! `Omnibox` QML element: resolves URL-bar input using `ion_core::navigation`,
+//! with `!bangs` from `ion_bangs` as the first step.
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -52,6 +53,7 @@ impl OmniboxRust {
             self.search_engine_name.to_string(),
             self.search_template.to_string(),
         ))
+        .with_step(super::palette::current_bangs())
     }
 }
 

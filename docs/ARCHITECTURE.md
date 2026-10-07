@@ -19,6 +19,7 @@ nix/
   qt.nix                  the Qt modules Ion uses, merged for cxx-qt-build
 crates/
   ion-core/               shared core: app constants, URL-bar input resolution
+  ion-bangs/              !bangs and the command palette's ranking
   ion-session/            tab list, saved and named sessions, browsing history
   ion-app/                the binary (`ion`)
     build.rs              auto-discovers bridges, C++ shims and QML files
@@ -69,8 +70,12 @@ Shared files with small, append-only edits: root `Cargo.toml`,
   themes, DMS or manual palette files (live reloaded) and the system accent.
   `Theme.qml` binds them to the `[theme]` config section; see
   `crates/ion-theme/README.md`. Sizes and motion tokens are still static.
-- `ion_core::navigation::Omnibox` decides between address and search. Bangs and
-  commands plug in as earlier steps in `Omnibox::resolve`.
+- `ion_core::navigation::Omnibox` decides between address and search. Extra
+  stages implement `InputStep` and run first; `ion_bangs::BangTable` is one.
+  Config feeds user bangs through `BangTable::apply`.
+- The Ctrl/Cmd+K palette ranks tabs, history, sessions, commands and bangs in
+  `ion_bangs::palette`; commands are
+  listed in `ion_bangs::commands` and carried out in `CommandPalette.qml`.
 - The browser profile is persistent (`storageName: "Default"`).
 - Settings come from `ion-config` (layered TOML, live reload, `programs.ion`
   home-manager module); see [CONFIG.md](CONFIG.md).

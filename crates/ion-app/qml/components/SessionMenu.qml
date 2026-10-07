@@ -24,7 +24,7 @@ Item {
     palette.mid: Theme.border
     palette.dark: Theme.border
     palette.highlight: Theme.accent
-    palette.highlightedText: Theme.background
+    palette.highlightedText: Theme.onAccent
     palette.placeholderText: Theme.textMuted
 
     function open(anchor) {
