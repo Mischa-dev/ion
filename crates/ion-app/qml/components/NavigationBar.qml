@@ -11,6 +11,11 @@ Rectangle {
     property alias urlBar: urlBar
 
     implicitHeight: Theme.urlBarHeight + Theme.spacing * 2
+
+    // Switching tabs replaces any half-typed text with the new tab's address.
+    // Deferred so it runs after urlBar.currentUrl has re-evaluated for the new view.
+    onViewChanged: Qt.callLater(urlBar.showUrl)
+
     color: Theme.surface
 
     RowLayout {

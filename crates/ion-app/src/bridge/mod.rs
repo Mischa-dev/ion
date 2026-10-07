@@ -4,5 +4,6 @@
 //! this directory automatically; only the `mod` line below is shared.
 
 pub mod adblock;
+pub mod config;
 pub mod omnibox;
 pub mod webengine;
