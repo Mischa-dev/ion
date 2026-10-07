@@ -57,8 +57,9 @@ Popup {
     }
 
     // Opened from the palette, which hands focus back as it closes; take it
-    // afterwards so Escape reaches this popup.
-    onOpened: Qt.callLater(() => content.forceActiveFocus())
+    // afterwards so Escape reaches this popup. The first browser gets it, so
+    // Enter imports straight away.
+    onOpened: Qt.callLater(() => (rows.itemAt(0) ?? content).forceActiveFocus(Qt.TabFocusReason))
 
     contentItem: ColumnLayout {
         id: content
@@ -85,34 +86,48 @@ Popup {
         }
 
         Repeater {
+            id: rows
             model: root.sources
 
-            delegate: Rectangle {
+            // Buttons, so Tab and arrows reach them and Enter or Space imports.
+            delegate: AbstractButton {
                 id: row
 
                 required property string modelData
+                required property int index
 
                 Layout.fillWidth: true
                 implicitHeight: Theme.tabHeight + Theme.spacing * 2
-                radius: Theme.radius
-                color: mouse.containsMouse ? Theme.surfaceHover : Theme.surfaceRaised
+                leftPadding: Theme.spacing * 2
+                rightPadding: Theme.spacing * 2
+                focusPolicy: Qt.StrongFocus
+                text: qsTr("Import from %1").arg(modelData)
+                onClicked: root.importFrom(modelData)
 
-                Text {
-                    anchors.fill: parent
-                    anchors.leftMargin: Theme.spacing * 2
-                    verticalAlignment: Text.AlignVCenter
-                    text: qsTr("Import from %1").arg(row.modelData)
+                // Once per press: a held key would re-run the import.
+                Keys.onReturnPressed: event => { if (!event.isAutoRepeat) clicked() }
+                Keys.onEnterPressed: event => { if (!event.isAutoRepeat) clicked() }
+                // Straight to the neighbouring row: macOS without Full Keyboard
+                // Access leaves buttons out of the tab chain.
+                Keys.onUpPressed: rows.itemAt(index - 1)?.forceActiveFocus(Qt.BacktabFocusReason)
+                Keys.onDownPressed: rows.itemAt(index + 1)?.forceActiveFocus(Qt.TabFocusReason)
+
+                contentItem: Text {
+                    text: row.text
                     color: Theme.text
                     font.pixelSize: Theme.fontSize
+                    verticalAlignment: Text.AlignVCenter
+                    elide: Text.ElideRight
                 }
 
-                MouseArea {
-                    id: mouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.importFrom(row.modelData)
+                background: Rectangle {
+                    radius: Theme.radius
+                    color: row.down || row.hovered ? Theme.surfaceHover : Theme.surfaceRaised
+                    border.width: row.activeFocus ? Theme.hairline : 0
+                    border.color: Theme.accent
                 }
+
+                HoverHandler { cursorShape: Qt.PointingHandCursor }
             }
         }
 
