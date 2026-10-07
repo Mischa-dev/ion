@@ -52,6 +52,8 @@ QtObject {
     readonly property int tabHeight: compact ? 28 : 32
     readonly property int tabMinWidth: compact ? 64 : 80
     readonly property int tabMaxWidth: 220
+    // A collapsed vertical tab sidebar: just wide enough for the favicons.
+    readonly property int sidebarCollapsedWidth: iconSize + spacing * 6
     readonly property int urlBarHeight: compact ? 28 : 32
     readonly property int iconSize: 16
     readonly property int hairline: 1
@@ -67,6 +69,9 @@ QtObject {
     readonly property int animationSlowMs: Math.round(220 * motionScale)
     // Loading spinners keep turning with animations off: they report status.
     readonly property int spinnerMs: 800
+    // How long the pointer rests on a collapsed sidebar before it expands, so
+    // passing over it on the way somewhere else doesn't.
+    readonly property int hoverDelayMs: 250
 
     // Command palette
     readonly property int paletteWidth: 640
