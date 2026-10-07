@@ -31,7 +31,7 @@ Item {
 
     // How often Ion's sheets are put back if the page replaced the adopted
     // sheet list or emptied a sheet (both are shared with the page's world),
-    // in ms.
+    // in ms. Only runs while the page has any of Ion's sheets.
     readonly property int keepInterval: 1000
 
     // Set (or, with `append`, extend) one of Ion's style sheets on the page.
@@ -40,15 +40,6 @@ Item {
     function sheetScript(kind, css, append) {
         return "(function (kind, css, append) {"
             + " var ion = window.__ionAdblock || (window.__ionAdblock = { sheets: {}, text: {}, rules: {} });"
-            + " if (!ion.keeper) ion.keeper = setInterval(function () {"
-            + "   var list = document.adoptedStyleSheets, missing = [];"
-            + "   for (var k in ion.sheets) {"
-            + "     var s = ion.sheets[k];"
-            + "     if (s.cssRules.length !== ion.rules[k]) s.replaceSync(ion.text[k]);"
-            + "     if (list.indexOf(s) < 0) missing.push(s);"
-            + "   }"
-            + "   if (missing.length) document.adoptedStyleSheets = list.concat(missing);"
-            + " }, " + root.keepInterval + ");"
             + " if (append) css = (ion.text[kind] || '') + css;"
             + " var old = ion.sheets[kind];"
             + " var sheets = document.adoptedStyleSheets.filter(function (s) { return s !== old; });"
@@ -58,6 +49,17 @@ Item {
             + "   ion.sheets[kind] = sheet; ion.rules[kind] = sheet.cssRules.length; sheets.push(sheet);"
             + " }"
             + " document.adoptedStyleSheets = sheets;"
+            + " var any = Object.keys(ion.sheets).length > 0;"
+            + " if (any && !ion.keeper) ion.keeper = setInterval(function () {"
+            + "   var list = document.adoptedStyleSheets, missing = [];"
+            + "   for (var k in ion.sheets) {"
+            + "     var s = ion.sheets[k];"
+            + "     if (s.cssRules.length !== ion.rules[k]) s.replaceSync(ion.text[k]);"
+            + "     if (list.indexOf(s) < 0) missing.push(s);"
+            + "   }"
+            + "   if (missing.length) document.adoptedStyleSheets = list.concat(missing);"
+            + " }, " + root.keepInterval + ");"
+            + " if (!any && ion.keeper) { clearInterval(ion.keeper); ion.keeper = null; }"
             + "})(" + JSON.stringify(kind) + ", " + JSON.stringify(css) + ", " + append + ");"
     }
 
