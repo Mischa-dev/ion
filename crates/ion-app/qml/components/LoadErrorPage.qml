@@ -25,6 +25,13 @@ Rectangle {
         detail = lines[1]
         pageUrl = info.url.toString()
         visible = true
+        if (parent.activeFocus)
+            takeFocus()
+    }
+
+    // Moves keyboard focus here, off the page underneath.
+    function takeFocus() {
+        retryButton.forceActiveFocus()
     }
 
     // Above the page content, which the view adds as a child of its own.
@@ -39,6 +46,9 @@ Rectangle {
         hoverEnabled: true
         onWheel: wheel => wheel.accepted = true
     }
+    // Keys the button doesn't use stop here rather than reach the page.
+    Keys.onPressed: event => event.accepted = true
+    Keys.onReleased: event => event.accepted = true
 
     Column {
         anchors.centerIn: parent

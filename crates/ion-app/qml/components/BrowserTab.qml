@@ -93,6 +93,8 @@ WebEngineView {
             zoomFactor = Zoom.factorFor(url)
     }
     onNewWindowRequested: request => view.newTabRequested(request)
+    // Keyboard focus belongs to the error page while it covers the view.
+    onActiveFocusChanged: if (activeFocus && loadError.visible) loadError.takeFocus()
 
     // Both are off by default; Ion asks before a page uses them.
     settings.fullScreenSupportEnabled: true
