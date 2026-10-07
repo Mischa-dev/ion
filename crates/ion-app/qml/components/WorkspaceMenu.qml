@@ -48,11 +48,25 @@ Item {
         Instantiator {
             model: root.workspaces
             delegate: MenuItem {
+                id: item
                 required property var modelData
                 text: modelData.icon.length > 0 ? modelData.icon + "  " + modelData.name : modelData.name
                 checkable: true
                 checked: modelData.id === Tabs.workspace
                 onTriggered: Tabs.switchWorkspace(modelData.id)
+
+                // Plain text: names and icons are typed by the user, and the
+                // stock label would render markup such as <b> in them.
+                contentItem: Text {
+                    leftPadding: !item.mirrored ? item.indicator.width + item.spacing : 0
+                    rightPadding: item.mirrored ? item.indicator.width + item.spacing : 0
+                    text: item.text
+                    textFormat: Text.PlainText
+                    font: item.font
+                    color: item.highlighted ? item.palette.highlightedText : item.palette.windowText
+                    elide: Text.ElideRight
+                    verticalAlignment: Text.AlignVCenter
+                }
             }
             onObjectAdded: (index, object) => menu.insertItem(index, object)
             onObjectRemoved: (index, object) => menu.removeItem(object)

@@ -78,9 +78,20 @@ Menu {
         Instantiator {
             model: root.workspaces.filter(w => w.id !== Tabs.workspaceAt(root.index))
             delegate: MenuItem {
+                id: item
                 required property var modelData
                 text: modelData.name
                 onTriggered: Tabs.moveToWorkspace(root.index, modelData.id)
+
+                // Plain text: the stock label would render markup in names.
+                contentItem: Text {
+                    text: item.text
+                    textFormat: Text.PlainText
+                    font: item.font
+                    color: item.highlighted ? item.palette.highlightedText : item.palette.windowText
+                    elide: Text.ElideRight
+                    verticalAlignment: Text.AlignVCenter
+                }
             }
             onObjectAdded: (index, object) => moveMenu.insertItem(index, object)
             onObjectRemoved: (index, object) => moveMenu.removeItem(object)
