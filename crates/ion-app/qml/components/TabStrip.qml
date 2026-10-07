@@ -13,6 +13,7 @@ Rectangle {
 
     signal activated(int index)
     signal closeRequested(int index)
+    signal moveRequested(int from, int to)
     signal newTabRequested()
     signal menuRequested(Item anchor)
 
@@ -47,21 +48,19 @@ Rectangle {
                 width: Math.min(Theme.tabMaxWidth, Math.max(120, list.width / Math.max(1, list.count) - list.spacing))
                 height: list.height
                 radius: Theme.radius
-                color: current ? Theme.surface : tabMouse.containsMouse ? Theme.surfaceRaised : "transparent"
+                z: tabMouse.dragging ? 1 : 0
+                color: tabMouse.dragging ? Theme.surfaceHover
+                     : current ? Theme.surface : tabMouse.containsMouse ? Theme.surfaceRaised : "transparent"
 
                 Behavior on color { ColorAnimation { duration: Theme.animationMs } }
 
-                MouseArea {
+                TabDragArea {
                     id: tabMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    acceptedButtons: Qt.LeftButton | Qt.MiddleButton
-                    onClicked: mouse => {
-                        if (mouse.button === Qt.MiddleButton)
-                            strip.closeRequested(tab.index)
-                        else
-                            strip.activated(tab.index)
-                    }
+                    list: tab.ListView.view
+                    index: tab.index
+                    onActivated: index => strip.activated(index)
+                    onCloseRequested: index => strip.closeRequested(index)
+                    onMoveRequested: (from, to) => strip.moveRequested(from, to)
                 }
 
                 RowLayout {

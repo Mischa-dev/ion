@@ -127,6 +127,7 @@ ApplicationWindow {
             currentIndex: Tabs.currentIndex
             onActivated: index => Tabs.activate(index)
             onCloseRequested: index => window.closeTab(index)
+            onMoveRequested: (from, to) => Tabs.moveTab(from, to)
             onNewTabRequested: window.newTab()
             onMenuRequested: anchor => sessionMenu.open(anchor)
         }
@@ -151,6 +152,7 @@ ApplicationWindow {
             currentIndex: Tabs.currentIndex
             onActivated: index => Tabs.activate(index)
             onCloseRequested: index => window.closeTab(index)
+            onMoveRequested: (from, to) => Tabs.moveTab(from, to)
             onNewTabRequested: window.newTab()
             onMenuRequested: anchor => sessionMenu.open(anchor)
         }
