@@ -182,7 +182,8 @@ Item {
             TextField {
                 id: iconField
                 Layout.fillWidth: true
-                maximumLength: 8
+                // No maximumLength: it counts UTF-16 units and would cut emoji
+                // apart. Tabs.setWorkspaceIcon caps whole characters instead.
                 placeholderText: qsTr("For example 💼")
                 onAccepted: iconDialog.accept()
             }

@@ -33,6 +33,9 @@ tempfile = "3"
 toml = "1"
 toml_edit = "0.25"
 
+# ion-session
+unicode-segmentation = "1.13"
+
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "warn"
 

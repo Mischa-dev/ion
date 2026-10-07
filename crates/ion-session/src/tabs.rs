@@ -1,6 +1,7 @@
 //! The ordered list of open tabs.
 
 use crate::session::{SavedTab, SavedWorkspace, Session};
+use unicode_segmentation::UnicodeSegmentation;
 
 /// Stable identity of a tab for as long as it is open. Indices shift as tabs
 /// open, close and move; ids do not.
@@ -25,7 +26,8 @@ pub struct Workspace {
     pub icon: String,
 }
 
-/// Longest workspace icon kept, in characters: one emoji can take several.
+/// Longest workspace icon kept, in user-perceived characters (grapheme
+/// clusters), so a multi-part emoji counts once and is never cut in half.
 pub const WORKSPACE_ICON_MAX_CHARS: usize = 8;
 
 /// How many closed tabs "reopen closed tab" remembers.
@@ -509,7 +511,11 @@ impl TabList {
     /// [`WORKSPACE_ICON_MAX_CHARS`] characters; empty shows the color dot).
     /// False if there is no such workspace or the icon is unchanged.
     pub fn set_workspace_icon(&mut self, id: WorkspaceId, icon: &str) -> bool {
-        let icon: String = icon.trim().chars().take(WORKSPACE_ICON_MAX_CHARS).collect();
+        let icon: String = icon
+            .trim()
+            .graphemes(true)
+            .take(WORKSPACE_ICON_MAX_CHARS)
+            .collect();
         match self.workspaces.iter_mut().find(|w| w.id == id) {
             Some(w) if w.icon != icon => {
                 w.icon = icon;
@@ -868,6 +874,10 @@ mod tests {
         assert!(!l.set_workspace_icon(work, "🚀"));
         assert!(l.set_workspace_icon(work, "abcdefghijk"));
         assert_eq!(l.workspace(work).unwrap().icon, "abcdefgh");
+        // A family emoji is seven scalars but one character: kept whole.
+        let family = "👨\u{200d}👩\u{200d}👧\u{200d}👦";
+        assert!(l.set_workspace_icon(work, &format!("{family}{family}")));
+        assert_eq!(l.workspace(work).unwrap().icon, format!("{family}{family}"));
         assert!(l.move_workspace(work, 0));
         assert_eq!(l.workspaces()[0].id, work);
         l.open_in(work, 1, "w", "", false);
