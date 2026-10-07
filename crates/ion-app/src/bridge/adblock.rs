@@ -115,6 +115,12 @@ pub mod qobject {
             ids: &QStringList,
         ) -> QString;
 
+        /// Whether generic rules apply on the page at `url`, so its classes
+        /// and ids are worth collecting for `genericCss`.
+        #[qinvokable]
+        #[cxx_name = "genericActive"]
+        fn generic_active(self: &Adblock, url: &QUrl) -> bool;
+
         /// Download every filter list now, even if the cached copies are fresh.
         #[qinvokable]
         #[cxx_name = "updateLists"]
@@ -511,6 +517,10 @@ impl qobject::Adblock {
 
     fn page_css(&self, url: &QUrl) -> QString {
         QString::from(self.shield.page_css(&url.to_string()).as_str())
+    }
+
+    fn generic_active(&self, url: &QUrl) -> bool {
+        self.shield.generic_active(&url.to_string())
     }
 
     fn generic_css(&self, url: &QUrl, classes: &QStringList, ids: &QStringList) -> QString {

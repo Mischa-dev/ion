@@ -19,6 +19,9 @@ Item {
     // The URL and filter revision the current page's site-specific style
     // sheet was made for; it is replaced when either no longer matches.
     property string preparedFor: ""
+    // Whether a document in this tab was last left scanning for generic
+    // rules (a new document starts its own scan either way).
+    property bool watching: false
 
     visible: false
 
@@ -144,12 +147,30 @@ Item {
         })
     }
 
+    // Scan the page for generic rules and keep watching it, but only while
+    // they apply there: not with blocking off, no lists or `$generichide`.
+    function watch(reset) {
+        if (Adblock.genericActive(root.view.url)) {
+            root.scan(reset || !root.watching)
+            root.watching = true
+            rescan.start()
+        } else {
+            rescan.stop()
+            if (root.watching)
+                root.run(root.sheetScript("generic", "", false)
+                    + " (function () { var ion = window.__ionAdblock;"
+                    + " if (ion.observer) ion.observer.disconnect();"
+                    + " ion.observer = null; ion.changed = []; })();")
+            root.watching = false
+        }
+    }
+
     // Redo the loaded page with the current rules and URL.
     function redo() {
         if (root.view.loading || root.view.url.toString() === "")
             return
         if (root.refreshPageSheet())
-            root.scan(true)
+            root.watch(true)
     }
 
     Connections {
@@ -158,10 +179,11 @@ Item {
             if (info.status === WebEngineView.LoadStartedStatus) {
                 rescan.stop()
                 root.prepare(info.url)
-            } else if (info.status === WebEngineView.LoadSucceededStatus) {
+            } else {
+                // Finished, failed or stopped: a stopped load may leave the
+                // old document in place, which still needs watching.
                 root.refreshPageSheet()
-                root.scan(false)
-                rescan.start()
+                root.watch(false)
             }
         }
         // history.pushState() and fragment links change the URL without a

@@ -106,6 +106,13 @@ impl Shield {
             .unwrap_or_default()
     }
 
+    /// Whether generic rules apply on `page_url`, i.e. whether the page's
+    /// classes and ids are worth collecting for [`Shield::generic_css`].
+    pub fn generic_active(&self, page_url: &str) -> bool {
+        self.cosmetics(page_url)
+            .is_some_and(|(_, page)| page.generic)
+    }
+
     fn cosmetics(&self, page_url: &str) -> Option<(&Blocker, PageCosmetics)> {
         let blocker = self.blocker.as_ref()?;
         if !self.enabled || !is_web_url(page_url) || !self.is_enabled_on(page_url) {
@@ -294,7 +301,9 @@ mod tests {
         let list = "news.test##.sponsored\n##.ad-banner\n";
         let mut shield = Shield::new(SiteSettings::default());
         assert_eq!(shield.page_css(PAGE), "");
+        assert!(!shield.generic_active(PAGE));
         shield.set_blocker(Blocker::from_lists([list]));
+        assert!(shield.generic_active(PAGE));
         assert_eq!(
             shield.page_css(PAGE),
             ".sponsored{display:none!important}\n"
@@ -308,9 +317,11 @@ mod tests {
         assert!(shield.set_enabled_on(PAGE, false));
         assert_eq!(shield.page_css(PAGE), "");
         assert_eq!(shield.generic_css(PAGE, ["ad-banner"], []), "");
+        assert!(!shield.generic_active(PAGE));
         assert!(shield.set_enabled_on(PAGE, true));
 
         shield.set_enabled(false);
         assert_eq!(shield.page_css(PAGE), "");
+        assert!(!shield.generic_active(PAGE));
     }
 }

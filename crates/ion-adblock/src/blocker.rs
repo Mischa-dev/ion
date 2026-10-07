@@ -163,15 +163,24 @@ pub fn hiding_css(selectors: &[String]) -> String {
 }
 
 /// Selectors go into a style sheet verbatim, so one that could close its rule
-/// and start another, or open a comment, is dropped. Braces and `/*` are fine
-/// inside quoted strings and CSS escapes (`.sm\:block`) are fine anywhere;
-/// a dangling escape or an unterminated string, which would swallow the
-/// rule's own `{`, is not.
+/// and start another, open a comment or swallow the rule's own block is
+/// dropped. Braces, brackets and `/*` are fine inside quoted strings, and CSS
+/// escapes (`.sm\:block`) anywhere; a dangling escape, an unterminated string
+/// or an unclosed `(` or `[` is not.
 fn is_safe_selector(selector: &str) -> bool {
     let mut quote = None;
+    // `(` and `[` opened outside strings and not yet closed.
+    let mut open = Vec::new();
     let mut chars = selector.chars().peekable();
     while let Some(c) = chars.next() {
         match (c, quote) {
+            ('(' | '[', None) => open.push(c),
+            (')' | ']', None) => {
+                let opener = if c == ')' { '(' } else { '[' };
+                if open.pop() != Some(opener) {
+                    return false;
+                }
+            }
             ('\\', _) => {
                 if chars.next().is_none() {
                     return false;
@@ -185,7 +194,7 @@ fn is_safe_selector(selector: &str) -> bool {
             _ => {}
         }
     }
-    !selector.is_empty() && quote.is_none()
+    !selector.is_empty() && quote.is_none() && open.is_empty()
 }
 
 /// Hosts files (`0.0.0.0 ads.example`) need their own parser; the first rule
@@ -403,6 +412,11 @@ shop.example.org##a{color:red}body
         assert!(is_safe_selector(r#"[title="it's"]"#));
         assert!(!is_safe_selector(r#"[title="a{"#));
         assert!(!is_safe_selector(r#"[title="a\"]"#));
+        assert!(is_safe_selector(r#"div:not([title=")"]):has(> .ad)"#));
+        assert!(!is_safe_selector("div:not(.ad"));
+        assert!(!is_safe_selector("div[data-ad"));
+        assert!(!is_safe_selector("div:not(.ad])"));
+        assert!(!is_safe_selector(".ad)"));
     }
 
     #[test]
