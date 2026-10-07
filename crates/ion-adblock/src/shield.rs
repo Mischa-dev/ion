@@ -113,9 +113,16 @@ impl Shield {
                 }
                 Verdict::Block
             }
+            // QtWebEngine can only redirect requests without a body, so a
+            // POST keeps its tracking parameters rather than break.
+            Verdict::Rewrite(_) if !is_bodyless(request.method) => Verdict::Allow,
             verdict => verdict,
         }
     }
+}
+
+fn is_bodyless(method: &str) -> bool {
+    method.eq_ignore_ascii_case("GET") || method.eq_ignore_ascii_case("HEAD")
 }
 
 /// Only http(s) and websocket traffic goes through the filters; `data:`,
@@ -233,6 +240,12 @@ mod tests {
             Verdict::Rewrite("https://news.test/story?id=7".to_owned())
         );
         assert_eq!(shield.total_blocked(), 0);
+
+        let post = RequestInfo {
+            method: "POST",
+            ..xhr
+        };
+        assert_eq!(shield.decide(&post), Verdict::Allow);
     }
 
     #[test]
