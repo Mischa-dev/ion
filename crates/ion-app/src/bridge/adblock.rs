@@ -181,6 +181,9 @@ struct Refreshed {
     /// The lists this round used; its blocker is dropped if they changed since.
     lists: Vec<FilterList>,
     blocker: Option<Blocker>,
+    /// Whether this round compiled the lists; if so and `blocker` is `None`,
+    /// none of them is cached and the old blocker must go.
+    built: bool,
     last_updated: f64,
     error: String,
 }
@@ -201,7 +204,8 @@ fn refresh(
         SystemTime::now(),
         force,
     );
-    let blocker = if report.changed() || !have_blocker {
+    let built = report.changed() || !have_blocker;
+    let blocker = if built {
         update::build(&store, lists)
     } else {
         None
@@ -214,6 +218,7 @@ fn refresh(
     Refreshed {
         lists: lists.to_vec(),
         blocker,
+        built,
         last_updated: millis(store.last_updated(lists)),
         error,
     }
@@ -364,6 +369,11 @@ impl qobject::Adblock {
         }
         if let Some(blocker) = refreshed.blocker {
             self.as_mut().install(blocker);
+        } else if refreshed.built {
+            // The configured lists couldn't be downloaded and none is cached;
+            // don't keep blocking with the lists they replaced.
+            self.as_mut().rust_mut().shield.clear_blocker();
+            self.as_mut().set_ready(false);
         }
         if refreshed.last_updated > 0.0 {
             self.as_mut().set_last_updated(refreshed.last_updated);
