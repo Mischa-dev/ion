@@ -85,21 +85,44 @@ pub fn css_script(sites: &BTreeMap<String, SiteTheme>) -> String {
     const site = parts.slice(i).join(".");
     if (Object.hasOwn(css, site)) text += css[site] + "\n";
   }}
+  // {STATE} lives in Ion's isolated world, so it only ever holds the style
+  // element this script made, never one of the page's.
+  const state = (window.{STATE} ??= {{ style: null, waiting: false }});
+  state.text = text;
   const apply = () => {{
-    let style = document.getElementById("ion-site-css");
-    if (!text) {{ if (style) style.remove(); return; }}
-    if (!style) {{
-      style = document.createElement("style");
-      style.id = "ion-site-css";
-      (document.head || document.documentElement).appendChild(style);
+    state.waiting = false;
+    if (!state.text) {{
+      state.style?.remove();
+      state.style = null;
+      return;
     }}
-    style.textContent = text;
+    if (!state.style?.isConnected) {{
+      state.style = document.createElement("style");
+      (document.head || document.documentElement).appendChild(state.style);
+    }}
+    state.style.textContent = state.text;
   }};
   if (document.documentElement) apply();
-  else document.addEventListener("DOMContentLoaded", apply, {{ once: true }});
+  else if (!state.waiting) {{
+    // Applies whatever text is current by then, so a later run wins.
+    state.waiting = true;
+    document.addEventListener("DOMContentLoaded", apply, {{ once: true }});
+  }}
 }})();"#
     )
 }
+
+/// A script that takes away CSS added by [`css_script`], including CSS still
+/// waiting for the document to load.
+pub fn clear_css_script() -> String {
+    format!(
+        "if (window.{STATE}) {{ window.{STATE}.text = \"\"; \
+         window.{STATE}.style?.remove(); window.{STATE}.style = null; }}"
+    )
+}
+
+/// The isolated-world global [`css_script`] keeps its state in.
+const STATE: &str = "__ionSiteCss";
 
 #[cfg(test)]
 mod tests {
@@ -175,5 +198,8 @@ mod tests {
             script.contains(r#"{"a.com":"body { color: \"red\" }"}"#),
             "{script}"
         );
+        // Both scripts share the isolated-world state.
+        assert!(script.contains("window.__ionSiteCss ??="));
+        assert!(clear_css_script().contains("window.__ionSiteCss.style?.remove()"));
     }
 }

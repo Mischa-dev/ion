@@ -81,6 +81,11 @@ pub mod qobject {
         #[cxx_name = "darkenPage"]
         fn darken_page(self: &ThemeEngine, url: &QString) -> bool;
 
+        /// A script that takes `siteCssScript`'s CSS off an open page.
+        #[qinvokable]
+        #[cxx_name = "clearSiteCssScript"]
+        fn clear_site_css_script(self: &ThemeEngine) -> QString;
+
         /// Resolve the palette again. Runs on its own when an input changes.
         #[qinvokable]
         fn reload(self: Pin<&mut ThemeEngine>);
@@ -346,6 +351,10 @@ impl qobject::ThemeEngine {
 
     fn darken_page(&self, url: &QString) -> bool {
         ion_theme::sites::darken(&self.sites, &url.to_string(), self.dark, self.darken_pages)
+    }
+
+    fn clear_site_css_script(&self) -> QString {
+        QString::from(ion_theme::sites::clear_css_script().as_str())
     }
 
     /// Re-read `[theme.sites]`; tells pages when it changed.

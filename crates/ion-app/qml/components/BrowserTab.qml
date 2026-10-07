@@ -44,8 +44,7 @@ WebEngineView {
             userScripts.insert(userScript)
             runJavaScript(script, WebEngineScript.ApplicationWorld)
         } else {
-            runJavaScript("document.getElementById('ion-site-css')?.remove()",
-                          WebEngineScript.ApplicationWorld)
+            runJavaScript(Theme.engine.clearSiteCssScript(), WebEngineScript.ApplicationWorld)
         }
         siteCssScript = script
     }
