@@ -10,6 +10,10 @@ Rectangle {
 
     required property var tabs   // the Tabs model
     property int currentIndex: 0
+    // The Repeater of BrowserTabs in Main.qml, for favicons and load state, and
+    // a counter bumped whenever it gains or loses a view.
+    property var views: null
+    property int viewsRevision: 0
 
     signal activated(int index)
     signal closeRequested(int index)
@@ -36,6 +40,20 @@ Rectangle {
             interactive: contentWidth > width
             model: strip.tabs
             currentIndex: strip.currentIndex
+            highlightFollowsCurrentItem: false
+            // Keep the current tab fully in view when it changes or tabs are added.
+            onCurrentIndexChanged: Qt.callLater(() => list.positionViewAtIndex(list.currentIndex, ListView.Contain))
+            onCountChanged: Qt.callLater(() => list.positionViewAtIndex(list.currentIndex, ListView.Contain))
+
+            add: Transition {
+                NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.animationSlowMs; easing.type: Easing.OutCubic }
+            }
+            remove: Transition {
+                NumberAnimation { property: "opacity"; to: 0; duration: Theme.animationMs }
+            }
+            displaced: Transition {
+                NumberAnimation { properties: "x,y"; duration: Theme.animationSlowMs; easing.type: Easing.OutCubic }
+            }
 
             delegate: Rectangle {
                 id: tab
@@ -43,8 +61,12 @@ Rectangle {
                 required property int index
                 required property string title
                 readonly property bool current: index === strip.currentIndex
+                readonly property var view: {
+                    strip.viewsRevision
+                    return strip.views ? strip.views.itemAt(index) : null
+                }
 
-                width: Math.min(Theme.tabMaxWidth, Math.max(120, list.width / Math.max(1, list.count) - list.spacing))
+                width: Math.min(Theme.tabMaxWidth, Math.max(Theme.tabMinWidth, list.width / Math.max(1, list.count) - list.spacing))
                 height: list.height
                 radius: Theme.radius
                 color: current ? Theme.surface : tabMouse.containsMouse ? Theme.surfaceRaised : "transparent"
@@ -69,6 +91,11 @@ Rectangle {
                     anchors.leftMargin: Theme.spacing * 2
                     anchors.rightMargin: Theme.spacing
                     spacing: Theme.spacing
+
+                    TabIcon {
+                        Layout.alignment: Qt.AlignVCenter
+                        view: tab.view
+                    }
 
                     Text {
                         Layout.fillWidth: true

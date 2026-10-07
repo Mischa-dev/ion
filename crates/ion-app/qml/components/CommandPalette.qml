@@ -15,6 +15,8 @@ Popup {
 
     required property var browser
     property var results: []
+    // Global pointer position last seen over a row; see the rows' MouseArea.
+    property point lastPointer
 
     readonly property int rowHeight: Theme.tabHeight + Theme.spacing * 2
     readonly property bool mac: Qt.platform.os === "osx" || Qt.platform.os === "macos"
@@ -122,7 +124,10 @@ Popup {
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
-    onAboutToShow: refresh()
+    onAboutToShow: {
+        lastPointer = Qt.point(-1, -1)
+        refresh()
+    }
     onOpened: field.forceActiveFocus()
 
     Overlay.modal: Rectangle {
@@ -138,6 +143,7 @@ Popup {
 
     enter: Transition {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.animationMs }
+        NumberAnimation { property: "scale"; from: 0.97; to: 1; duration: Theme.animationSlowMs; easing.type: Easing.OutCubic }
     }
     exit: Transition {
         NumberAnimation { property: "opacity"; from: 1; to: 0; duration: Theme.animationMs }
@@ -202,7 +208,8 @@ Popup {
                 width: ListView.view.width
                 height: root.rowHeight
                 radius: Theme.radius
-                color: ListView.isCurrentItem ? Theme.surfaceRaised : rowMouse.containsMouse ? Theme.surfaceHover : "transparent"
+                // One highlight only: pointing at a row selects it, like the arrow keys.
+                color: ListView.isCurrentItem ? Theme.surfaceRaised : "transparent"
 
                 RowLayout {
                     anchors.fill: parent
@@ -251,6 +258,15 @@ Popup {
                     id: rowMouse
                     anchors.fill: parent
                     hoverEnabled: true
+                    // Moving the pointer selects. Rows sliding under a resting
+                    // pointer (the palette opening, results changing) do not.
+                    onPositionChanged: mouse => {
+                        const p = mapToGlobal(mouse.x, mouse.y)
+                        const last = root.lastPointer
+                        root.lastPointer = p
+                        if (last.x >= 0 && (last.x !== p.x || last.y !== p.y))
+                            list.currentIndex = row.index
+                    }
                     onClicked: mouse => root.choose(row.modelData, mouse.modifiers & Qt.ControlModifier)
                 }
             }

@@ -10,6 +10,10 @@ Rectangle {
 
     required property var tabs   // the Tabs model
     property int currentIndex: 0
+    // The Repeater of BrowserTabs in Main.qml, for favicons and load state, and
+    // a counter bumped whenever it gains or loses a view.
+    property var views: null
+    property int viewsRevision: 0
 
     signal activated(int index)
     signal closeRequested(int index)
@@ -52,6 +56,20 @@ Rectangle {
             boundsBehavior: Flickable.StopAtBounds
             model: strip.tabs
             currentIndex: strip.currentIndex
+            highlightFollowsCurrentItem: false
+            // Keep the current tab fully in view when it changes or tabs are added.
+            onCurrentIndexChanged: Qt.callLater(() => list.positionViewAtIndex(list.currentIndex, ListView.Contain))
+            onCountChanged: Qt.callLater(() => list.positionViewAtIndex(list.currentIndex, ListView.Contain))
+
+            add: Transition {
+                NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.animationSlowMs; easing.type: Easing.OutCubic }
+            }
+            remove: Transition {
+                NumberAnimation { property: "opacity"; to: 0; duration: Theme.animationMs }
+            }
+            displaced: Transition {
+                NumberAnimation { properties: "x,y"; duration: Theme.animationSlowMs; easing.type: Easing.OutCubic }
+            }
             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
             delegate: Rectangle {
@@ -61,6 +79,10 @@ Rectangle {
                 required property string title
                 required property string url
                 readonly property bool current: index === strip.currentIndex
+                readonly property var view: {
+                    strip.viewsRevision
+                    return strip.views ? strip.views.itemAt(index) : null
+                }
 
                 width: list.width
                 height: Theme.tabHeight
@@ -87,6 +109,11 @@ Rectangle {
                     anchors.leftMargin: Theme.spacing * 2
                     anchors.rightMargin: Theme.spacing
                     spacing: Theme.spacing
+
+                    TabIcon {
+                        Layout.alignment: Qt.AlignVCenter
+                        view: tab.view
+                    }
 
                     Text {
                         Layout.fillWidth: true

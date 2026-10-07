@@ -39,20 +39,32 @@ QtObject {
     readonly property color danger: engine.danger
     readonly property color warning: engine.warning
     readonly property color success: engine.success
+    // What a web page without its own background is drawn on. Not themed:
+    // pages assume the web's default white.
+    readonly property color pageCanvas: "white"
 
-    // Shape and density
-    readonly property int radius: 8
-    readonly property int spacing: 6
-    readonly property int tabHeight: 32
+    // Shape and density, from the [ui] config section (docs/CONFIG.md).
+    readonly property bool compact: Config.density === "compact"
+    readonly property int radius: Math.max(0, Config.cornerRadius)
+    readonly property int spacing: compact ? 4 : 6
+    readonly property int tabHeight: compact ? 28 : 32
+    readonly property int tabMinWidth: compact ? 64 : 80
     readonly property int tabMaxWidth: 220
-    readonly property int urlBarHeight: 32
+    readonly property int urlBarHeight: compact ? 28 : 32
     readonly property int iconSize: 16
+    readonly property int hairline: 1
 
     // Typography
     readonly property int fontSize: 13
 
-    // Motion
-    readonly property int animationMs: 120
+    // Motion. `ui.animations` turns it off or changes its speed; 0 disables
+    // every Behavior and Transition that reads these.
+    readonly property real motionScale: Config.animationsEnabled && Config.animationSpeed > 0
+        ? 1 / Config.animationSpeed : 0
+    readonly property int animationMs: Math.round(120 * motionScale)
+    readonly property int animationSlowMs: Math.round(220 * motionScale)
+    // Loading spinners keep turning with animations off: they report status.
+    readonly property int spinnerMs: 800
 
     // Command palette
     readonly property int paletteWidth: 640

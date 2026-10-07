@@ -60,6 +60,14 @@ ApplicationWindow {
         window.focusUrlBar()
     }
 
+    // Keyboard focus follows the visible page (so Space, arrows and Find work
+    // right after switching tabs), unless the person is typing in the URL bar.
+    onCurrentViewChanged: Qt.callLater(focusPage)
+    function focusPage() {
+        if (currentView && !navBar.urlBar.activeFocus && !palette.opened)
+            currentView.forceActiveFocus()
+    }
+
     function focusUrlBar() {
         navBar.urlBar.forceActiveFocus()
         navBar.urlBar.selectAll()
@@ -128,6 +136,8 @@ ApplicationWindow {
             onCloseRequested: index => window.closeTab(index)
             onNewTabRequested: window.newTab()
             onMenuRequested: anchor => sessionMenu.open(anchor)
+            views: views
+            viewsRevision: window.viewsRevision
         }
 
         NavigationBar {
@@ -152,6 +162,8 @@ ApplicationWindow {
             onCloseRequested: index => window.closeTab(index)
             onNewTabRequested: window.newTab()
             onMenuRequested: anchor => sessionMenu.open(anchor)
+            views: views
+            viewsRevision: window.viewsRevision
         }
 
         // One web view per tab, stacked; only the current one is visible.
