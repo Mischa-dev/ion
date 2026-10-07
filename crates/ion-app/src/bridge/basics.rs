@@ -16,7 +16,6 @@ pub mod qobject {
         #[qobject]
         #[qml_element]
         #[qml_singleton]
-        #[qproperty(i32, shortcut_count, cxx_name = "shortcutCount")]
         #[namespace = "ion"]
         type Basics = super::BasicsRust;
 
@@ -100,17 +99,12 @@ pub mod qobject {
         #[cxx_name = "isNewTabUrl"]
         fn is_new_tab_url(self: &Basics, url: &QUrl) -> bool;
 
+        /// The new-tab page's tiles as a JSON array of `{title, url, iconPage, letter}`:
+        /// `newTab.shortcuts` from the config, then the most-visited sites
+        /// from `history` (`History.search("", n)` output, best first).
         #[qinvokable]
-        #[cxx_name = "shortcutTitle"]
-        fn shortcut_title(self: &Basics, index: i32) -> QString;
-
-        #[qinvokable]
-        #[cxx_name = "shortcutUrl"]
-        fn shortcut_url(self: &Basics, index: i32) -> QUrl;
-
-        #[qinvokable]
-        #[cxx_name = "shortcutLetter"]
-        fn shortcut_letter(self: &Basics, index: i32) -> QString;
+        #[cxx_name = "newTabTiles"]
+        fn new_tab_tiles(self: &Basics, history: &QString) -> QString;
     }
 }
 
@@ -118,28 +112,8 @@ use cxx_qt_lib::{QString, QStringList, QUrl};
 use ion_basics::new_tab::{self, Shortcut};
 use ion_basics::{context_menu, dialogs, find, permissions};
 
-pub struct BasicsRust {
-    shortcut_count: i32,
-    shortcuts: Vec<Shortcut>,
-}
-
-impl Default for BasicsRust {
-    fn default() -> Self {
-        let shortcuts = new_tab::default_shortcuts();
-        Self {
-            shortcut_count: i32::try_from(shortcuts.len()).unwrap_or(i32::MAX),
-            shortcuts,
-        }
-    }
-}
-
-impl BasicsRust {
-    fn shortcut(&self, index: i32) -> Option<&Shortcut> {
-        usize::try_from(index)
-            .ok()
-            .and_then(|i| self.shortcuts.get(i))
-    }
-}
+#[derive(Default)]
+pub struct BasicsRust;
 
 fn flags(value: i32) -> u32 {
     u32::try_from(value).unwrap_or(0)
@@ -240,21 +214,36 @@ impl qobject::Basics {
         new_tab::is_new_tab_url(&url.to_string())
     }
 
-    fn shortcut_title(&self, index: i32) -> QString {
-        self.shortcut(index)
-            .map(|s| QString::from(s.title.as_str()))
-            .unwrap_or_default()
-    }
-
-    fn shortcut_url(&self, index: i32) -> QUrl {
-        self.shortcut(index)
-            .map(|s| QUrl::from(s.url.as_str()))
-            .unwrap_or_default()
-    }
-
-    fn shortcut_letter(&self, index: i32) -> QString {
-        self.shortcut(index)
-            .map(|s| QString::from(s.letter().as_str()))
-            .unwrap_or_default()
+    fn new_tab_tiles(&self, history: &QString) -> QString {
+        let config = ion_config::global().config();
+        let pinned: Vec<Shortcut> = config
+            .new_tab
+            .shortcuts
+            .iter()
+            .map(|s| Shortcut::new(&s.title, &s.url))
+            .collect();
+        let visited: Vec<Shortcut> =
+            serde_json::from_str::<Vec<serde_json::Value>>(&history.to_string())
+                .unwrap_or_default()
+                .iter()
+                .map(|page| {
+                    let field = |key: &str| page.get(key).and_then(|v| v.as_str()).unwrap_or("");
+                    Shortcut::new(field("title"), field("url"))
+                })
+                .collect();
+        let max = usize::try_from(config.new_tab.tiles).unwrap_or(usize::MAX);
+        let tiles: Vec<serde_json::Value> =
+            new_tab::tiles(&pinned, &visited, config.new_tab.most_visited, max)
+                .iter()
+                .map(|t| {
+                    serde_json::json!({
+                        "title": t.title,
+                        "url": t.url,
+                        "iconPage": t.icon_page,
+                        "letter": t.letter(),
+                    })
+                })
+                .collect();
+        QString::from(serde_json::Value::Array(tiles).to_string().as_str())
     }
 }

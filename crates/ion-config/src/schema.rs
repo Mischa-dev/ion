@@ -25,6 +25,7 @@ pub struct Config {
     pub bangs: BTreeMap<String, String>,
     pub adblock: Adblock,
     pub downloads: Downloads,
+    pub new_tab: NewTab,
     /// Shortcut remaps: command id (for example `"palette"`) to a Qt key
     /// sequence (for example `"Ctrl+K"`). Unlisted commands keep their default.
     pub shortcuts: BTreeMap<String, String>,
@@ -375,6 +376,36 @@ pub struct Downloads {
     pub folders: BTreeMap<String, String>,
 }
 
+/// The new-tab page's site tiles.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct NewTab {
+    /// Tiles always shown first, in this order.
+    pub shortcuts: Vec<NewTabShortcut>,
+    /// Fill the remaining tiles with the sites visited most.
+    pub most_visited: bool,
+    /// How many tiles to show at most.
+    pub tiles: u32,
+}
+
+impl Default for NewTab {
+    fn default() -> Self {
+        Self {
+            shortcuts: Vec::new(),
+            most_visited: true,
+            tiles: 8,
+        }
+    }
+}
+
+/// One pinned new-tab tile.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct NewTabShortcut {
+    pub title: String,
+    pub url: String,
+}
+
 /// The lowercase word each enum value has in the TOML file.
 macro_rules! as_str {
     ($ty:ty { $($variant:ident => $word:literal),* $(,)? }) => {
@@ -425,6 +456,11 @@ impl Config {
         }
         if self.safety.audit_retention_days == 0 {
             problems.push("safety.auditRetentionDays must be at least 1".into());
+        }
+        for (i, shortcut) in self.new_tab.shortcuts.iter().enumerate() {
+            if shortcut.url.trim().is_empty() {
+                problems.push(format!("newTab.shortcuts[{i}] has no url"));
+            }
         }
         problems
     }
@@ -487,6 +523,26 @@ mod tests {
         assert_eq!(config.sites["example.com"].javascript, Some(false));
         assert!(!config.privacy.block_third_party_cookies);
         assert!(config.privacy.global_privacy_control);
+    }
+
+    #[test]
+    fn new_tab_shortcuts_parse() {
+        let config: Config = toml::from_str(
+            r#"
+            [newTab]
+            mostVisited = false
+            tiles = 4
+            shortcuts = [
+                { title = "Mail", url = "https://mail.example" },
+                { url = "" },
+            ]
+            "#,
+        )
+        .unwrap();
+        assert!(!config.new_tab.most_visited);
+        assert_eq!(config.new_tab.tiles, 4);
+        assert_eq!(config.new_tab.shortcuts[0].title, "Mail");
+        assert_eq!(config.check(), ["newTab.shortcuts[1] has no url"]);
     }
 
     #[test]

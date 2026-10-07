@@ -22,7 +22,7 @@ nix/
 crates/
   ion-core/               shared core: app constants, URL-bar input resolution
   ion-basics/             downloads, per-site zoom, permission prompts, page dialogs, find,
-                          screenshots, context menu and new-tab page logic
+                          screenshots, context menu and new-tab tiles
   ion-platform/           Chromium switches, one-instance-per-profile hand-off
   ion-bangs/              !bangs and the command palette's ranking
   ion-session/            tabs and workspaces, saved and named sessions, history

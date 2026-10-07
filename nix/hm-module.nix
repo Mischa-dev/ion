@@ -230,6 +230,26 @@ in
           };
         };
 
+        newTab = {
+          shortcuts = setting (types.listOf (
+            types.submodule {
+              options = {
+                title = mkOption {
+                  type = types.str;
+                  default = "";
+                  description = "Tile name; empty uses the site's host.";
+                };
+                url = mkOption {
+                  type = types.str;
+                  description = "Page the tile opens.";
+                };
+              };
+            }
+          )) "Tiles always shown first on the new-tab page, in order.";
+          mostVisited = setting types.bool "Fill the remaining new-tab tiles with the sites visited most (default true).";
+          tiles = setting types.ints.positive "How many new-tab tiles to show at most (default 8).";
+        };
+
         shortcuts = mkOption {
           type = types.attrsOf types.str;
           default = { };

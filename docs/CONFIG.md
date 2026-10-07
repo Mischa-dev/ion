@@ -76,6 +76,13 @@ lists = ["easylist", "easyprivacy", "ublock-filters"]
 # image = "~/Pictures/Downloads"
 # video = "~/Videos"
 
+[newTab]
+# mostVisited = true         # fill tiles with the sites visited most
+# tiles = 8                  # how many tiles at most
+# shortcuts = [              # pinned tiles, shown first
+#   { title = "Mail", url = "https://mail.example/" },
+# ]
+
 [shortcuts]                  # command id = Qt key sequence
 # palette = "Ctrl+K"
 
