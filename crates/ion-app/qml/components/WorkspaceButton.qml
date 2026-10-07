@@ -3,7 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Ion
 
-// The current workspace's color dot, plus its name once there is more than one
+// The current workspace's icon or color dot, plus its name once there is more than one
 // workspace, in either tab strip. Clicking it asks for the workspace menu.
 ToolButton {
     id: control
@@ -11,7 +11,7 @@ ToolButton {
     // Only the dot, even with several workspaces.
     property bool compact: false
     readonly property bool showName: !compact && count > 1
-    // The current workspace as `{id, name, color, tabs}`, and how many there are.
+    // The current workspace as `{id, name, color, icon, tabs}`, and how many there are.
     property var current: ({ name: "", color: "" })
     property int count: 1
 
@@ -47,8 +47,16 @@ ToolButton {
     contentItem: RowLayout {
         spacing: Theme.spacing
 
+        Text {
+            Layout.alignment: Qt.AlignVCenter
+            visible: (control.current.icon ?? "").length > 0
+            text: control.current.icon ?? ""
+            color: Theme.text
+            font.pixelSize: Theme.fontSize
+        }
         Rectangle {
             Layout.alignment: Qt.AlignVCenter
+            visible: (control.current.icon ?? "").length === 0
             implicitWidth: Theme.workspaceDotSize
             implicitHeight: Theme.workspaceDotSize
             radius: width / 2

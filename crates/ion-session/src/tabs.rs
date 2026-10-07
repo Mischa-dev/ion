@@ -20,7 +20,13 @@ pub struct Workspace {
     pub name: String,
     /// A `#rrggbb` color, or empty for the theme's accent.
     pub color: String,
+    /// A short label shown instead of the color dot, usually an emoji, or
+    /// empty.
+    pub icon: String,
 }
+
+/// Longest workspace icon kept, in characters: one emoji can take several.
+pub const WORKSPACE_ICON_MAX_CHARS: usize = 8;
 
 /// How many closed tabs "reopen closed tab" remembers.
 pub const CLOSED_TABS_KEPT: usize = 25;
@@ -82,6 +88,7 @@ impl Default for TabList {
                 id: 0,
                 name: DEFAULT_WORKSPACE_NAME.to_owned(),
                 color: String::new(),
+                icon: String::new(),
             }],
             empty_workspace: 0,
             last_current: Vec::new(),
@@ -105,6 +112,7 @@ impl TabList {
                     id: w.id,
                     name: w.name.clone(),
                     color: w.color.clone(),
+                    icon: w.icon.clone(),
                 })
                 .collect();
             list.empty_workspace = list.workspaces[0].id;
@@ -146,6 +154,7 @@ impl TabList {
                     id: w.id,
                     name: w.name.clone(),
                     color: w.color.clone(),
+                    icon: w.icon.clone(),
                 })
                 .collect(),
             ..Session::default()
@@ -466,6 +475,7 @@ impl TabList {
             id,
             name,
             color: color.to_owned(),
+            icon: String::new(),
         });
         id
     }
@@ -489,6 +499,20 @@ impl TabList {
         match self.workspaces.iter_mut().find(|w| w.id == id) {
             Some(w) if w.color != color => {
                 w.color = color.to_owned();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Change a workspace's icon (trimmed, at most
+    /// [`WORKSPACE_ICON_MAX_CHARS`] characters; empty shows the color dot).
+    /// False if there is no such workspace or the icon is unchanged.
+    pub fn set_workspace_icon(&mut self, id: WorkspaceId, icon: &str) -> bool {
+        let icon: String = icon.trim().chars().take(WORKSPACE_ICON_MAX_CHARS).collect();
+        match self.workspaces.iter_mut().find(|w| w.id == id) {
+            Some(w) if w.icon != icon => {
+                w.icon = icon;
                 true
             }
             _ => false,
@@ -839,6 +863,11 @@ mod tests {
         assert!(!l.rename_workspace(work, "Work"));
         assert!(!l.rename_workspace(work, "  "));
         assert!(l.set_workspace_color(work, "#ff0000"));
+        assert!(l.set_workspace_icon(work, " 🚀 "));
+        assert_eq!(l.workspace(work).unwrap().icon, "🚀");
+        assert!(!l.set_workspace_icon(work, "🚀"));
+        assert!(l.set_workspace_icon(work, "abcdefghijk"));
+        assert_eq!(l.workspace(work).unwrap().icon, "abcdefgh");
         assert!(l.move_workspace(work, 0));
         assert_eq!(l.workspaces()[0].id, work);
         l.open_in(work, 1, "w", "", false);
@@ -852,6 +881,7 @@ mod tests {
     fn workspaces_survive_a_session_round_trip() {
         let mut l = list(&["a"]);
         let work = l.add_workspace("Work", "#336699");
+        l.set_workspace_icon(work, "💼");
         l.open_in(work, 1, "w", "", true);
         let session = l.to_session();
         let json = session.to_json();

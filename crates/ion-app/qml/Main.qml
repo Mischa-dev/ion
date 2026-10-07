@@ -309,6 +309,8 @@ ApplicationWindow {
     Shortcut { sequences: ["Ctrl+Shift+Tab", "Ctrl+PgUp"]; onActivated: Tabs.cycle(-1) }
     Shortcut { sequence: "Ctrl+Shift+PgDown"; onActivated: Tabs.moveTab(Tabs.currentIndex, Tabs.neighbour(Tabs.currentIndex, 1)) }
     Shortcut { sequence: "Ctrl+Shift+PgUp"; onActivated: Tabs.moveTab(Tabs.currentIndex, Tabs.neighbour(Tabs.currentIndex, -1)) }
+    Shortcut { sequence: "Ctrl+Alt+PgDown"; onActivated: Tabs.cycleWorkspace(1) }
+    Shortcut { sequence: "Ctrl+Alt+PgUp"; onActivated: Tabs.cycleWorkspace(-1) }
     // Ctrl+1…8 pick a tab of the workspace by position, Ctrl+9 its last one.
     Shortcut { sequence: "Ctrl+1"; onActivated: Tabs.activateNth(0) }
     Shortcut { sequence: "Ctrl+2"; onActivated: Tabs.activateNth(1) }

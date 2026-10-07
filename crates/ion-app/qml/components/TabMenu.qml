@@ -11,7 +11,7 @@ Menu {
     required property var browser
     // For "New workspace…" from the move submenu.
     required property var workspaceMenu
-    // Workspaces as `{id, name, color, tabs}`, refreshed when the menu opens.
+    // Workspaces as `{id, name, color, icon, tabs}`, refreshed when the menu opens.
     property var workspaces: []
     // The tab the menu was opened on, and its web view.
     property int index: -1

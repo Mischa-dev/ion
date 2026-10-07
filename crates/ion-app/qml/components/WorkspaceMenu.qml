@@ -4,11 +4,11 @@ import QtQuick.Layouts
 import Ion
 
 // Workspace actions behind the workspace button of the tab strips: switch,
-// create, rename, recolor and delete workspaces.
+// create, rename, recolor, set an icon for and delete workspaces.
 Item {
     id: root
 
-    // Workspaces as `{id, name, color, tabs}`, refreshed every time the menu
+    // Workspaces as `{id, name, color, icon, tabs}`, refreshed every time the menu
     // opens, and the current one.
     property var workspaces: []
     readonly property var current: workspaces.find(w => w.id === Tabs.workspace) ?? null
@@ -49,7 +49,7 @@ Item {
             model: root.workspaces
             delegate: MenuItem {
                 required property var modelData
-                text: modelData.name
+                text: modelData.icon.length > 0 ? modelData.icon + "  " + modelData.name : modelData.name
                 checkable: true
                 checked: modelData.id === Tabs.workspace
                 onTriggered: Tabs.switchWorkspace(modelData.id)
@@ -70,6 +70,11 @@ Item {
                 nameDialog.renaming = true
                 nameDialog.open()
             }
+        }
+
+        MenuItem {
+            text: qsTr("Icon…")
+            onTriggered: iconDialog.open()
         }
 
         Menu {
@@ -146,6 +151,40 @@ Item {
                 Layout.fillWidth: true
                 placeholderText: qsTr("Workspace name")
                 onAccepted: nameDialog.accept()
+            }
+        }
+    }
+
+    Dialog {
+        id: iconDialog
+        palette: root.palette
+
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        modal: true
+        padding: Theme.spacing * 2
+        title: qsTr("Workspace icon")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+
+        onAboutToShow: {
+            iconField.text = root.current?.icon ?? ""
+            iconField.selectAll()
+            iconField.forceActiveFocus()
+        }
+        onAccepted: Tabs.setWorkspaceIcon(Tabs.workspace, iconField.text)
+
+        ColumnLayout {
+            spacing: Theme.spacing
+
+            Label {
+                text: qsTr("An emoji or a few letters, shown instead of the color dot. Leave empty for the dot.")
+            }
+            TextField {
+                id: iconField
+                Layout.fillWidth: true
+                maximumLength: 8
+                placeholderText: qsTr("For example 💼")
+                onAccepted: iconDialog.accept()
             }
         }
     }

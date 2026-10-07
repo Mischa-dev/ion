@@ -192,7 +192,7 @@ pub mod qobject {
         fn activate_nth(self: Pin<&mut Tabs>, n: i32);
 
         /// The workspaces in switcher order, as a JSON array of
-        /// `{id, name, color, tabs}`.
+        /// `{id, name, color, icon, tabs}`.
         #[qinvokable]
         fn workspaces(self: &Tabs) -> QString;
 
@@ -209,6 +209,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "setWorkspaceColor"]
         fn set_workspace_color(self: Pin<&mut Tabs>, id: i32, color: &QString);
+
+        /// Set a workspace's icon (usually an emoji; empty shows the color dot).
+        #[qinvokable]
+        #[cxx_name = "setWorkspaceIcon"]
+        fn set_workspace_icon(self: Pin<&mut Tabs>, id: i32, icon: &QString);
 
         /// Move a workspace to position `to` in the switcher.
         #[qinvokable]
@@ -587,6 +592,7 @@ impl qobject::Tabs {
                     "id": w.id,
                     "name": w.name,
                     "color": w.color,
+                    "icon": w.icon,
                     "tabs": self.list.rows_in(w.id).len(),
                 })
             })
@@ -629,6 +635,21 @@ impl qobject::Tabs {
             .rust_mut()
             .list
             .set_workspace_color(id, &color.to_string())
+        {
+            self.as_mut().workspaces_changed();
+            self.session_changed();
+        }
+    }
+
+    fn set_workspace_icon(mut self: Pin<&mut Self>, id: i32, icon: &QString) {
+        let Ok(id) = WorkspaceId::try_from(id) else {
+            return;
+        };
+        if self
+            .as_mut()
+            .rust_mut()
+            .list
+            .set_workspace_icon(id, &icon.to_string())
         {
             self.as_mut().workspaces_changed();
             self.session_changed();
