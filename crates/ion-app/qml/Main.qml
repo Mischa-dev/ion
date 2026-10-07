@@ -192,7 +192,13 @@ ApplicationWindow {
 
         VerticalTabStrip {
             Layout.fillHeight: true
+            // Above the page, which an expanded collapsed sidebar covers.
+            z: 1
             visible: window.verticalTabs
+            collapsed: {
+                Config.revision
+                return Config.value("ui.collapseSidebar") === true
+            }
             tabs: Tabs
             currentIndex: Tabs.currentIndex
             onActivated: index => Tabs.activate(index)
