@@ -1,14 +1,15 @@
 import QtQuick
 
 // Mouse handling for one tab in TabStrip or VerticalTabStrip: left press
-// activates the tab, middle click closes it, and dragging it along the strip
-// reorders it live. The strip's model moves the row as the pointer passes over
-// a neighbour, so the dragged tab always stays under the pointer.
+// activates the tab, middle click closes it, right click opens its menu, and
+// dragging it along the strip reorders it live. The strip's model moves the
+// row as the pointer passes over a neighbour, so the dragged tab always stays
+// under the pointer.
 MouseArea {
     id: area
 
-    required property ListView list   // the strip's tab list
-    required property int index       // the tab's row
+    required property ListView list   // the strip's tab list; delegates have `row`
+    required property int index       // the tab's row in the model
 
     readonly property bool dragging: dragActive
     property bool dragActive: false
@@ -17,13 +18,18 @@ MouseArea {
     signal activated(int index)
     signal closeRequested(int index)
     signal moveRequested(int from, int to)
+    signal menuRequested(int index)
 
     anchors.fill: parent
     hoverEnabled: true
     preventStealing: true
-    acceptedButtons: Qt.LeftButton | Qt.MiddleButton
+    acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
 
     onPressed: mouse => {
+        if (mouse.button === Qt.RightButton) {
+            area.menuRequested(index)
+            return
+        }
         if (mouse.button !== Qt.LeftButton)
             return
         pressPos = Qt.point(mouse.x, mouse.y)
@@ -41,10 +47,12 @@ MouseArea {
                 return
             dragActive = true
         }
+        // The list may show a filtered view of the model: the delegate under
+        // the pointer knows its model row.
         const p = mapToItem(list.contentItem, mouse.x, mouse.y)
-        const target = list.indexAt(p.x, p.y)
-        if (target >= 0 && target !== index)
-            area.moveRequested(index, target)
+        const target = list.itemAtIndex(list.indexAt(p.x, p.y))
+        if (target && target.row !== index)
+            area.moveRequested(index, target.row)
     }
 
     onReleased: dragActive = false

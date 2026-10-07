@@ -52,6 +52,8 @@ QtObject {
     readonly property int tabHeight: compact ? 28 : 32
     readonly property int tabMinWidth: compact ? 64 : 80
     readonly property int tabMaxWidth: 220
+    // A collapsed vertical tab sidebar: just wide enough for the favicons.
+    readonly property int sidebarCollapsedWidth: iconSize + spacing * 6
     readonly property int urlBarHeight: compact ? 28 : 32
     readonly property int iconSize: 16
     readonly property int hairline: 1
@@ -67,11 +69,27 @@ QtObject {
     readonly property int animationSlowMs: Math.round(220 * motionScale)
     // Loading spinners keep turning with animations off: they report status.
     readonly property int spinnerMs: 800
+    // How long the pointer rests on a collapsed sidebar before it expands, so
+    // passing over it on the way somewhere else doesn't.
+    readonly property int hoverDelayMs: 250
 
     // Command palette
     readonly property int paletteWidth: 640
     readonly property int paletteMaxRows: 8
     readonly property real scrimOpacity: 0.4
+    // Colors offered for workspaces. A workspace without one uses `accent`.
+    readonly property var workspaceColors: [
+        { name: qsTr("Red"), value: "#e5484d" },
+        { name: qsTr("Orange"), value: "#f76b15" },
+        { name: qsTr("Yellow"), value: "#ffc53d" },
+        { name: qsTr("Green"), value: "#46a758" },
+        { name: qsTr("Teal"), value: "#12a594" },
+        { name: qsTr("Blue"), value: "#0090ff" },
+        { name: qsTr("Purple"), value: "#8e4ec6" },
+        { name: qsTr("Pink"), value: "#d6409f" }
+    ]
+    readonly property int workspaceDotSize: 10
+
     // Things that are present but asleep, like a suspended tab's icon.
     readonly property real dimmedOpacity: 0.45
 
