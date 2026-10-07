@@ -9,8 +9,9 @@ import Ion
 //
 // Tabs and history come from the `Tabs` and `History` singletons; `browser`
 // (the main window) provides openTab(url), newTab(), closeTab(i),
-// focusUrlBar(), toggleBookmark(), showImport() and currentView. Bookmarks
-// come from the `Bookmarks` singleton.
+// focusUrlBar(), toggleBookmark(), showImport(), showExtensions(),
+// screenshot(), profile and currentView. Bookmarks come from the `Bookmarks`
+// singleton.
 Popup {
     id: root
 
@@ -105,6 +106,11 @@ Popup {
         case "clear-history": History.clear(); History.save(); break
         case "reader-mode": view?.reader.toggle(); break
         case "screenshot": browser.screenshot(); break
+        case "extensions": browser.showExtensions(); break
+        case "open-extensions-folder":
+            if (Extensions.ensureFolder())
+                Qt.openUrlExternally("file://" + Extensions.folder)
+            break
         case "reload-userscripts": Sites.reload(); view?.reload(); break
         case "open-userscripts":
             if (Sites.ensureDirectory())

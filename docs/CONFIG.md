@@ -21,6 +21,9 @@ Keys are camelCase so they match the Nix option names exactly. Everything is
 optional; these are the defaults.
 
 ```toml
+# Unpacked Chrome extensions to load, besides those in Ion's extensions folder
+extensions = []              # e.g. ["/home/me/src/my-extension"]
+
 [general]
 homePage = "https://duckduckgo.com/"
 restoreSession = true
@@ -84,6 +87,18 @@ Files in `~/.config/ion/userscripts/` are injected into pages:
 Run "Reload user scripts and styles" from the palette after editing them; "Open
 user scripts folder" creates and opens the folder. Config changes apply on the
 next page load. User scripts still run on sites with `javascript = false`.
+
+## Extensions
+
+Ion loads unpacked Chrome extensions (folders with a `manifest.json`) from its
+extensions folder (`~/.local/share/ion/extensions/` on Linux,
+`~/Library/Application Support/Ion/extensions/` on macOS) and from the
+`extensions` list, at startup. QtWebEngine runs Manifest V3 only; older
+extensions are listed as skipped, with the reason, in the Extensions dialog
+(palette: "Extensions"). The dialog switches each one on or off until Ion
+restarts and opens an extension's popup in a tab. With the Nix module,
+`programs.ion.extensions` takes paths or packages that build an unpacked
+extension.
 
 ## Nix
 

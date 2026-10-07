@@ -79,6 +79,18 @@ pub const COMMANDS: &[Command] = &[
         "",
     ),
     command(
+        "extensions",
+        "Extensions",
+        "addons plugins chrome manage enable disable",
+        "",
+    ),
+    command(
+        "open-extensions-folder",
+        "Open extensions folder",
+        "addons plugins chrome install unpacked",
+        "",
+    ),
+    command(
         "screenshot",
         "Take a screenshot of the page",
         "capture image png picture copy",

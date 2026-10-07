@@ -31,6 +31,8 @@ ApplicationWindow {
     }
     // Set in Component.onCompleted: instance() is null until the prototype is complete.
     property WebEngineProfile profile: null
+    // Folders of the Chrome extensions Ion loaded at startup.
+    property var extensionPaths: []
 
     // Tabs live in the Rust `Tabs` model (bridge/tabs.rs), which also saves them
     // so the next start reopens them. These helpers return the new tab's view.
@@ -84,6 +86,10 @@ ApplicationWindow {
         })
     }
 
+    function showExtensions() {
+        extensionsDialog.show()
+    }
+
     function showImport() {
         importDialog.show()
     }
@@ -97,6 +103,12 @@ ApplicationWindow {
         profile = profilePrototype.instance()
         Adblock.attach(window.profile)
         Privacy.apply(window.profile)
+        // Chrome extensions from config and Ion's extensions folder.
+        const extensionManager = window.profile.extensionManager
+        if (extensionManager) {
+            extensionPaths = Extensions.paths()
+            extensionPaths.forEach(path => extensionManager.loadExtension(path))
+        }
         if (Config.value("general.restoreSession"))
             Tabs.restoreLastSession()
         // URLs on the command line (`ion %U` from the desktop file) open as new
@@ -105,6 +117,17 @@ ApplicationWindow {
         urls.forEach((arg, i) => openTab(urlBarResolver.resolve(arg), i === 0))
         if (Tabs.count === 0)
             openTab(homeUrl)
+    }
+
+    // Extensions load switched off; turn on each one that loaded cleanly.
+    // Switching one off in the Extensions dialog lasts until Ion restarts.
+    Connections {
+        target: window.profile?.extensionManager ?? null
+        ignoreUnknownSignals: true
+        function onLoadFinished(extension) {
+            if (extension.isLoaded && !extension.isEnabled && extension.error.length === 0)
+                window.profile.extensionManager.setExtensionEnabled(extension, true)
+        }
     }
 
     // Save tabs shortly after they change, and history less eagerly; both are
@@ -152,6 +175,7 @@ ApplicationWindow {
     CommandPalette { id: palette; browser: window }
 
     ImportDialog { id: importDialog }
+    ExtensionsDialog { id: extensionsDialog; browser: window }
 
     // Per-site CSS and userscripts, installed on the profile.
     SiteScripts { profile: window.profile }

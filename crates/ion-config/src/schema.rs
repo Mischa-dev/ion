@@ -32,6 +32,9 @@ pub struct Config {
     pub sites: BTreeMap<String, Site>,
     pub privacy: Privacy,
     pub keyboard: Keyboard,
+    /// Unpacked Chrome extension folders (Manifest V3) loaded at startup,
+    /// on top of those in Ion's own extensions folder.
+    pub extensions: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]

@@ -6,6 +6,7 @@
 pub mod adblock;
 pub mod bookmarks;
 pub mod config;
+pub mod extensions;
 pub mod history;
 pub mod omnibox;
 pub mod palette;
