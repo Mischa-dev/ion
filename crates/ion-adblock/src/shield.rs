@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 
+use crate::blocker::{PageCosmetics, hiding_css};
 use crate::sites::site_of;
 use crate::{Blocker, RequestInfo, ResourceType, SiteSettings, Verdict};
 
@@ -81,6 +82,36 @@ impl Shield {
     /// Requests blocked since Ion started.
     pub fn total_blocked(&self) -> u64 {
         self.total
+    }
+
+    /// A style sheet hiding the ad elements that the lists name for the page
+    /// at `page_url`. Empty when blocking is off there.
+    pub fn page_css(&self, page_url: &str) -> String {
+        self.cosmetics(page_url)
+            .map(|(_, page)| hiding_css(&page.hide))
+            .unwrap_or_default()
+    }
+
+    /// A style sheet hiding elements with these classes and ids that generic
+    /// rules (`##.ad-banner`, for every site) name. The page collects them
+    /// from its DOM. Empty when blocking or generic rules are off there.
+    pub fn generic_css<'a>(
+        &self,
+        page_url: &str,
+        classes: impl IntoIterator<Item = &'a str>,
+        ids: impl IntoIterator<Item = &'a str>,
+    ) -> String {
+        self.cosmetics(page_url)
+            .map(|(blocker, page)| hiding_css(&blocker.generic_selectors(&page, classes, ids)))
+            .unwrap_or_default()
+    }
+
+    fn cosmetics(&self, page_url: &str) -> Option<(&Blocker, PageCosmetics)> {
+        let blocker = self.blocker.as_ref()?;
+        if !self.enabled || !is_web_url(page_url) || !self.is_enabled_on(page_url) {
+            return None;
+        }
+        Some((blocker, blocker.page_cosmetics(page_url)))
     }
 
     /// Decide what to do with `request`, updating the counters. Pages
@@ -256,5 +287,30 @@ mod tests {
         assert!(!shield.decide(&data).is_block());
         let ws = RequestInfo::new("wss://ads.test/socket", PAGE, ResourceType::WebSocket);
         assert!(shield.decide(&ws).is_block());
+    }
+
+    #[test]
+    fn cosmetic_css_follows_the_switches() {
+        let list = "news.test##.sponsored\n##.ad-banner\n";
+        let mut shield = Shield::new(SiteSettings::default());
+        assert_eq!(shield.page_css(PAGE), "");
+        shield.set_blocker(Blocker::from_lists([list]));
+        assert_eq!(
+            shield.page_css(PAGE),
+            ".sponsored{display:none!important}\n"
+        );
+        assert_eq!(
+            shield.generic_css(PAGE, ["ad-banner", "story"], []),
+            ".ad-banner{display:none!important}\n"
+        );
+        assert_eq!(shield.page_css("file:///home/x.html"), "");
+
+        assert!(shield.set_enabled_on(PAGE, false));
+        assert_eq!(shield.page_css(PAGE), "");
+        assert_eq!(shield.generic_css(PAGE, ["ad-banner"], []), "");
+        assert!(shield.set_enabled_on(PAGE, true));
+
+        shield.set_enabled(false);
+        assert_eq!(shield.page_css(PAGE), "");
     }
 }

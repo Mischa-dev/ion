@@ -10,4 +10,6 @@ WebEngineView {
     signal newTabRequested(var request)
 
     onNewWindowRequested: request => view.newTabRequested(request)
+
+    AdblockCosmetics { view: view }
 }

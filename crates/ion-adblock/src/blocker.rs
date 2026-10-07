@@ -1,5 +1,6 @@
 //! The compiled filter engine.
 
+use std::collections::HashSet;
 use std::fmt;
 
 use adblock::Engine;
@@ -44,15 +45,13 @@ impl std::error::Error for DeserializeError {}
 
 impl Blocker {
     /// Compile the given filter list texts, each either in Adblock Plus syntax
-    /// or a hosts file. Unparseable lines are skipped. Only network rules are
-    /// kept: Ion doesn't do cosmetic filtering, so element-hiding rules would
-    /// only cost memory.
+    /// or a hosts file. Unparseable lines are skipped.
     pub fn from_lists<'a>(lists: impl IntoIterator<Item = &'a str>) -> Self {
         let mut set = FilterSet::new(false);
         for text in lists {
             let options = ParseOptions {
                 format: format_of(text),
-                rule_types: RuleTypes::NetworkOnly,
+                rule_types: RuleTypes::All,
                 ..ParseOptions::default()
             };
             set.add_filter_list(crate::directives::preprocess(text), options);
@@ -101,6 +100,75 @@ impl Blocker {
             }
         }
     }
+}
+
+/// The element-hiding (`##`) rules that apply to one page.
+#[derive(Debug, Default)]
+pub struct PageCosmetics {
+    /// Selectors to hide on this page, sorted.
+    pub hide: Vec<String>,
+    /// Whether generic rules (`##.ad`, which apply on every site) are used
+    /// here; false on pages with a `$generichide` exception.
+    pub generic: bool,
+    /// Class and id selectors this page excepts from the generic rules.
+    exceptions: HashSet<String>,
+}
+
+impl Blocker {
+    /// The element-hiding rules specific to the page at `url`.
+    pub fn page_cosmetics(&self, url: &str) -> PageCosmetics {
+        let resources = self.engine.url_cosmetic_resources(url);
+        let mut hide: Vec<String> = resources
+            .hide_selectors
+            .into_iter()
+            .filter(|s| is_safe_selector(s))
+            .collect();
+        hide.sort();
+        PageCosmetics {
+            hide,
+            generic: !resources.generichide,
+            exceptions: resources.exceptions,
+        }
+    }
+
+    /// Generic rules matching any of these classes and ids, which the page
+    /// collects from its DOM. Empty when the page doesn't use generic rules.
+    pub fn generic_selectors<'a>(
+        &self,
+        page: &PageCosmetics,
+        classes: impl IntoIterator<Item = &'a str>,
+        ids: impl IntoIterator<Item = &'a str>,
+    ) -> Vec<String> {
+        if !page.generic {
+            return Vec::new();
+        }
+        let mut selectors: Vec<String> = self
+            .engine
+            .hidden_class_id_selectors(classes, ids, &page.exceptions)
+            .into_iter()
+            .filter(|s| is_safe_selector(s))
+            .collect();
+        selectors.sort();
+        selectors
+    }
+}
+
+/// A style sheet hiding everything `selectors` match. One rule per selector,
+/// so a selector the browser doesn't understand only voids itself.
+pub fn hiding_css(selectors: &[String]) -> String {
+    selectors
+        .iter()
+        .map(|s| format!("{s}{{display:none!important}}\n"))
+        .collect()
+}
+
+/// Selectors go into a style sheet verbatim, so one that could close its rule
+/// and start another, or open a comment, is dropped.
+fn is_safe_selector(selector: &str) -> bool {
+    !selector.is_empty()
+        && !selector.contains(['{', '}', '\\'])
+        && !selector.contains("/*")
+        && !selector.contains('<')
 }
 
 /// Hosts files (`0.0.0.0 ads.example`) need their own parser; the first rule
@@ -240,5 +308,74 @@ mod tests {
     fn is_send() {
         fn assert_send<T: Send>() {}
         assert_send::<Blocker>();
+    }
+
+    const COSMETIC: &str = "\
+news.example.org##.sponsored
+example.org##div[data-ad]
+##.ad-banner
+###top-ad
+quiet.example.org#@#.ad-banner
+shop.example.org##a{color:red}body
+@@||nogeneric.example.org^$generichide
+";
+
+    #[test]
+    fn page_cosmetics_lists_site_specific_selectors() {
+        let blocker = Blocker::from_lists([COSMETIC]);
+        let page = blocker.page_cosmetics("https://news.example.org/story");
+        assert_eq!(page.hide, [".sponsored", "div[data-ad]"]);
+        assert!(page.generic);
+        assert!(
+            blocker
+                .page_cosmetics("https://other.test/")
+                .hide
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn generic_selectors_match_classes_and_ids_on_the_page() {
+        let blocker = Blocker::from_lists([COSMETIC]);
+        let page = blocker.page_cosmetics("https://news.example.org/");
+        let found = blocker.generic_selectors(&page, ["ad-banner", "content"], ["top-ad"]);
+        assert_eq!(found, ["#top-ad", ".ad-banner"]);
+    }
+
+    #[test]
+    fn generic_exceptions_and_generichide_are_honoured() {
+        let blocker = Blocker::from_lists([COSMETIC]);
+        let quiet = blocker.page_cosmetics("https://quiet.example.org/");
+        assert!(
+            blocker
+                .generic_selectors(&quiet, ["ad-banner"], [])
+                .is_empty()
+        );
+        let nogeneric = blocker.page_cosmetics("https://nogeneric.example.org/");
+        assert!(!nogeneric.generic);
+        assert!(
+            blocker
+                .generic_selectors(&nogeneric, ["ad-banner"], ["top-ad"])
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn unsafe_selectors_never_reach_the_style_sheet() {
+        let blocker = Blocker::from_lists([COSMETIC]);
+        let page = blocker.page_cosmetics("https://shop.example.org/");
+        assert!(page.hide.iter().all(|s| !s.contains('{')));
+        assert!(!is_safe_selector("a{color:red}body"));
+        assert!(!is_safe_selector("a/*"));
+        assert!(is_safe_selector("div[data-ad=\"1\"] > .x"));
+    }
+
+    #[test]
+    fn hiding_css_has_one_rule_per_selector() {
+        let css = hiding_css(&[".a".into(), "#b".into()]);
+        assert_eq!(
+            css,
+            ".a{display:none!important}\n#b{display:none!important}\n"
+        );
     }
 }
