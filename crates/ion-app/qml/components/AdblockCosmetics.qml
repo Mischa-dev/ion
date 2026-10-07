@@ -5,16 +5,17 @@ import Ion
 // Hides ad elements in one tab with the filter lists' element-hiding (##)
 // rules. Site-specific rules go in before the page's own scripts run; generic
 // rules (`##.ad-banner`) need the page's classes and ids, so the page is
-// scanned after it loads and a few more times for late-loading ads.
+// scanned after it loads, and the elements it adds later are scanned as
+// they arrive.
 // Everything runs in Ion's isolated JavaScript world, out of the page's reach.
 Item {
     id: root
 
     required property WebEngineView view
 
-    // Rescans after a load, in ms; ads often arrive after the page.
-    readonly property var rescanDelays: [1000, 3000, 8000]
-    property int rescans: 0
+    // How often elements the page added since the last scan are checked
+    // against the generic rules, in ms.
+    readonly property int scanInterval: 1000
     // The URL and filter revision the current page's site-specific style
     // sheet was made for; it is replaced when either no longer matches.
     property string preparedFor: ""
@@ -58,19 +59,39 @@ Item {
     }
 
     // Classes and ids not reported before on this page; `reset` reports all.
+    // The first scan covers the whole document and starts watching it; later
+    // ones look only at elements added or re-classed since.
     function scanScript(reset) {
         return "(function (reset) {"
             + " var ion = window.__ionAdblock || (window.__ionAdblock = { sheets: {}, text: {}, rules: {} });"
-            + " if (reset || !ion.seen) ion.seen = { c: new Set(), i: new Set() };"
+            + " var roots = ion.changed;"
+            + " if (reset || !ion.seen || !ion.observer) {"
+            + "   ion.seen = { c: new Set(), i: new Set() }; roots = [document];"
+            + " }"
+            + " if (!ion.observer) {"
+            + "   ion.observer = new MutationObserver(function (records) {"
+            + "     for (var r = 0; r < records.length; r++) {"
+            + "       var rec = records[r];"
+            + "       if (rec.type === 'attributes') ion.changed.push(rec.target);"
+            + "       else for (var n = 0; n < rec.addedNodes.length; n++)"
+            + "         if (rec.addedNodes[n].nodeType === 1) ion.changed.push(rec.addedNodes[n]);"
+            + "     }"
+            + "   });"
+            + "   ion.observer.observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'id'] });"
+            + " }"
+            + " ion.changed = [];"
+            + " if (!roots || roots.length === 0) return null;"
             + " var seen = ion.seen, classes = [], ids = [];"
-            + " var els = document.querySelectorAll('[class],[id]');"
-            + " for (var k = 0; k < els.length; k++) {"
-            + "   var e = els[k];"
+            + " function add(e) {"
             + "   if (e.id && !seen.i.has(e.id)) { seen.i.add(e.id); ids.push(e.id); }"
             + "   var cl = e.classList;"
-            + "   for (var j = 0; j < cl.length; j++) {"
+            + "   if (cl) for (var j = 0; j < cl.length; j++)"
             + "     if (!seen.c.has(cl[j])) { seen.c.add(cl[j]); classes.push(cl[j]); }"
-            + "   }"
+            + " }"
+            + " for (var k = 0; k < roots.length; k++) {"
+            + "   if (roots[k].nodeType === 1) add(roots[k]);"
+            + "   var els = roots[k].querySelectorAll('[class],[id]');"
+            + "   for (var m = 0; m < els.length; m++) add(els[m]);"
             + " }"
             + " return { classes: classes, ids: ids };"
             + "})(" + reset + ");"
@@ -126,10 +147,8 @@ Item {
                 rescan.stop()
                 root.prepare(info.url)
             } else if (info.status === WebEngineView.LoadSucceededStatus) {
-                root.rescans = 0
                 root.refreshPageSheet()
                 root.scan(false)
-                rescan.interval = root.rescanDelays[0]
                 rescan.start()
             }
         }
@@ -151,13 +170,8 @@ Item {
 
     Timer {
         id: rescan
-        onTriggered: {
-            root.scan(false)
-            root.rescans += 1
-            if (root.rescans < root.rescanDelays.length) {
-                interval = root.rescanDelays[root.rescans] - root.rescanDelays[root.rescans - 1]
-                start()
-            }
-        }
+        interval: root.scanInterval
+        repeat: true
+        onTriggered: root.scan(false)
     }
 }
