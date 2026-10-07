@@ -225,6 +225,39 @@ in
           auditRetentionDays = setting types.ints.positive "Days of agent activity log kept.";
         };
 
+        downloads = {
+          directory = setting types.str "Download folder; empty uses the system's. `~` means home.";
+          folders = mkOption {
+            type = types.attrsOf types.str;
+            default = { };
+            example = {
+              image = "~/Pictures/Downloads";
+              video = "~/Videos";
+            };
+            description = "Per-type download folders: document, image, audio, video, archive or other.";
+          };
+        };
+
+        newTab = {
+          shortcuts = setting (types.listOf (
+            types.submodule {
+              options = {
+                title = mkOption {
+                  type = types.str;
+                  default = "";
+                  description = "Tile name; empty uses the site's host.";
+                };
+                url = mkOption {
+                  type = types.str;
+                  description = "Page the tile opens.";
+                };
+              };
+            }
+          )) "Tiles always shown first on the new-tab page, in order.";
+          mostVisited = setting types.bool "Fill the remaining new-tab tiles with the sites visited most (default true).";
+          tiles = setting types.ints.positive "How many new-tab tiles to show at most (default 8).";
+        };
+
         shortcuts = mkOption {
           type = types.attrsOf types.str;
           default = { };

@@ -151,9 +151,21 @@ pub const COMMANDS: &[Command] = &[
         "stop-agents",
         "Stop all agents",
         "ai halt pause safety",
-        "Ctrl+Shift+Escape",
+        "Ctrl+Shift+.",
     ),
     command("resume-agents", "Resume agents", "ai start safety", ""),
+    command(
+        "screenshot",
+        "Take screenshot",
+        "capture image copy visible",
+        "Ctrl+Shift+S",
+    ),
+    command(
+        "screenshot-page",
+        "Screenshot whole page",
+        "capture image copy entire long scrolling",
+        "Ctrl+Alt+Shift+S",
+    ),
     command("quit", "Quit Ion", "exit close window", "Ctrl+Q"),
 ];
 

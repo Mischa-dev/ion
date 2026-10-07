@@ -144,7 +144,7 @@ Popup {
                 Qt.openUrlExternally("file://" + Sites.directory)
             break
         case "fullscreen":
-            browser.visibility = browser.visibility === Window.FullScreen ? Window.Windowed : Window.FullScreen
+            browser.toggleFullScreen()
             break
         case "toggle-adblock":
             if (view && Adblock.setEnabledOn(view.url, !Adblock.isEnabledOn(view.url)))
@@ -153,6 +153,8 @@ Popup {
         case "update-filter-lists": Adblock.updateLists(); break
         case "stop-agents": Safety.stopAgents(); break
         case "resume-agents": Safety.resumeAgents(); break
+        case "screenshot": view?.takeScreenshot(false); break
+        case "screenshot-page": view?.takeScreenshot(true); break
         case "quit": Qt.quit(); break
         default: console.warn("CommandPalette: unknown command", id)
         }
