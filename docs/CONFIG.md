@@ -24,6 +24,7 @@ optional; these are the defaults.
 [general]
 homePage = "https://duckduckgo.com/"
 restoreSession = true
+suspendTabsAfter = 30        # minutes before an unseen background tab is unloaded; 0 = never
 
 [search]
 engine = "DuckDuckGo"

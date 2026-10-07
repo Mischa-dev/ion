@@ -20,6 +20,10 @@ pub struct Tab {
     /// The page's favicon as the web view reports it (an `image://favicon/…`
     /// URL), or empty. Saved, so restored tabs show it before they load.
     pub icon: String,
+    /// The page was unloaded to save memory; it reloads when shown again.
+    pub suspended: bool,
+    /// Unix time (seconds) the tab was last current, 0 until first seen.
+    pub last_active: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -37,6 +41,8 @@ struct ClosedTab {
 pub struct TabList {
     tabs: Vec<Tab>,
     current: usize,
+    /// The tab [`note_current`](Self::note_current) last saw as current.
+    seen_current: Option<TabId>,
     next_id: TabId,
     closed: Vec<ClosedTab>,
 }
@@ -113,6 +119,8 @@ impl TabList {
             url: url.to_owned(),
             title: title.to_owned(),
             icon: String::new(),
+            suspended: false,
+            last_active: 0,
         };
         self.next_id += 1;
         self.insert(index, tab, activate)
@@ -159,7 +167,8 @@ impl TabList {
     /// Reopen the most recently closed tab where it was and make it current.
     /// Returns its new index.
     pub fn reopen_closed(&mut self) -> Option<usize> {
-        let ClosedTab { tab, index } = self.closed.pop()?;
+        let ClosedTab { mut tab, index } = self.closed.pop()?;
+        tab.suspended = false;
         let index = index.min(self.tabs.len());
         Some(self.insert(index, tab, true))
     }
@@ -223,6 +232,62 @@ impl TabList {
         match self.tabs.get_mut(index) {
             Some(tab) if tab.icon != icon => {
                 tab.icon = icon.to_owned();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Record that time `now` has been reached with the current tab showing:
+    /// the tab that was current before (if it changed) and the current one are
+    /// stamped as active now, tabs never stamped get `now`, and the current tab
+    /// is no longer suspended. Returns the current index if that cleared its
+    /// suspended flag.
+    pub fn note_current(&mut self, now: u64) -> Option<usize> {
+        let current = self.current()?;
+        let current_id = self.tabs[current].id;
+        if let Some(previous) = self.seen_current.filter(|&id| id != current_id) {
+            if let Some(i) = self.index_of(previous) {
+                self.tabs[i].last_active = now;
+            }
+        }
+        self.seen_current = Some(current_id);
+        for tab in &mut self.tabs {
+            if tab.last_active == 0 {
+                tab.last_active = now;
+            }
+        }
+        let tab = &mut self.tabs[current];
+        tab.last_active = now;
+        std::mem::take(&mut tab.suspended).then_some(current)
+    }
+
+    /// Background tabs that have not been current for `idle_secs` and are not
+    /// suspended yet, in strip order. Blank tabs are left alone.
+    pub fn idle_tabs(&self, now: u64, idle_secs: u64) -> Vec<usize> {
+        self.tabs
+            .iter()
+            .enumerate()
+            .filter(|&(i, tab)| {
+                Some(i) != self.current()
+                    && !tab.suspended
+                    && !tab.url.is_empty()
+                    && tab.last_active != 0
+                    && now.saturating_sub(tab.last_active) >= idle_secs
+            })
+            .map(|(i, _)| i)
+            .collect()
+    }
+
+    /// Suspend or wake the tab at `index`. The current tab cannot be
+    /// suspended. True if the flag changed.
+    pub fn set_suspended(&mut self, index: usize, suspended: bool) -> bool {
+        if suspended && Some(index) == self.current() {
+            return false;
+        }
+        match self.tabs.get_mut(index) {
+            Some(tab) if tab.suspended != suspended => {
+                tab.suspended = suspended;
                 true
             }
             _ => false,
@@ -392,6 +457,33 @@ mod tests {
         assert!(!l.set_title(5, "x"));
         assert!(l.set_icon(0, "image://favicon/b"));
         assert!(!l.set_icon(0, "image://favicon/b"));
+    }
+
+    #[test]
+    fn idle_background_tabs_are_found_and_waking_clears_suspension() {
+        let mut l = list(&["a", "b", "c", ""]);
+        l.note_current(100);
+        assert!(l.idle_tabs(150, 60).is_empty());
+        assert_eq!(l.idle_tabs(160, 60), [1, 2]);
+        assert!(l.set_suspended(1, true));
+        assert!(!l.set_suspended(1, true));
+        assert!(!l.set_suspended(0, true), "the current tab stays awake");
+        assert_eq!(l.idle_tabs(160, 60), [2]);
+        l.activate(1);
+        assert_eq!(l.note_current(170), Some(1));
+        assert!(!l.get(1).unwrap().suspended);
+        // "a" stopped being current at 170, so it is idle only from 230.
+        assert_eq!(l.idle_tabs(229, 60), [2]);
+        assert_eq!(l.idle_tabs(230, 60), [0, 2]);
+        assert_eq!(l.note_current(231), None);
+    }
+
+    #[test]
+    fn unstamped_tabs_are_never_idle() {
+        let mut l = list(&["a"]);
+        l.open(1, "b", "", false);
+        assert!(l.idle_tabs(1_000_000, 60).is_empty());
+        assert_eq!(TabList::new().note_current(5), None);
     }
 
     #[test]

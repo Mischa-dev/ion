@@ -36,6 +36,9 @@ pub struct General {
     pub home_page: String,
     /// Reopen the previous session's tabs on start.
     pub restore_session: bool,
+    /// Unload background tabs not looked at for this many minutes, to save
+    /// memory; they reload when shown. 0 never unloads tabs.
+    pub suspend_tabs_after: u32,
 }
 
 impl Default for General {
@@ -43,6 +46,7 @@ impl Default for General {
         Self {
             home_page: "https://duckduckgo.com/".into(),
             restore_session: true,
+            suspend_tabs_after: 30,
         }
     }
 }
