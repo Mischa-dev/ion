@@ -13,6 +13,22 @@ pub struct Blocker {
     engine: Engine,
 }
 
+/// What to do with a request.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Verdict {
+    Allow,
+    Block,
+    /// Load this URL instead: the original with tracking parameters removed
+    /// by a `$removeparam` rule.
+    Rewrite(String),
+}
+
+impl Verdict {
+    pub fn is_block(&self) -> bool {
+        *self == Self::Block
+    }
+}
+
 /// The cached engine could not be loaded, usually because it was written by a
 /// different adblock-rust version. The caller rebuilds it from the lists.
 #[derive(Debug)]
@@ -62,15 +78,28 @@ impl Blocker {
 
     /// Whether the filters say this request should be blocked.
     pub fn should_block(&self, request: &RequestInfo<'_>) -> bool {
+        self.check(request).is_block()
+    }
+
+    /// What the filters say to do with this request.
+    pub fn check(&self, request: &RequestInfo<'_>) -> Verdict {
         let Ok(req) = Request::new(
             request.url,
             request.first_party,
             request.resource.filter_type(),
             request.method,
         ) else {
-            return false;
+            return Verdict::Allow;
         };
-        self.engine.check_network_request(&req).should_block()
+        let result = self.engine.check_network_request(&req);
+        if result.should_block() {
+            Verdict::Block
+        } else {
+            match result.rewritten_url {
+                Some(url) if url != request.url => Verdict::Rewrite(url),
+                _ => Verdict::Allow,
+            }
+        }
     }
 }
 
@@ -159,6 +188,26 @@ mod tests {
         let blocker = Blocker::from_lists([hosts]);
         assert!(blocker.should_block(&script("https://ads.example/x.js")));
         assert!(!blocker.should_block(&script("https://news.example.org/app.js")));
+    }
+
+    #[test]
+    fn removeparam_rewrites_instead_of_blocking() {
+        let blocker = Blocker::from_lists(["||shop.example^$removeparam=utm_source\n"]);
+        let request = RequestInfo::new(
+            "https://shop.example/api?id=1&utm_source=mail",
+            "https://shop.example/",
+            ResourceType::Xhr,
+        );
+        assert_eq!(
+            blocker.check(&request),
+            Verdict::Rewrite("https://shop.example/api?id=1".to_owned())
+        );
+        let clean = RequestInfo::new(
+            "https://shop.example/api?id=1",
+            "https://shop.example/",
+            ResourceType::Xhr,
+        );
+        assert_eq!(blocker.check(&clean), Verdict::Allow);
     }
 
     #[test]

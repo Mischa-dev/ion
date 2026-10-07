@@ -17,5 +17,6 @@ QString requestFirstPartyUrl(const QWebEngineUrlRequestInfo &info);
 QString requestMethod(const QWebEngineUrlRequestInfo &info);
 int requestResourceType(const QWebEngineUrlRequestInfo &info);
 void blockRequest(QWebEngineUrlRequestInfo &info);
+void redirectRequest(QWebEngineUrlRequestInfo &info, const QString &url);
 
 } // namespace ion

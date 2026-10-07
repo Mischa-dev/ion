@@ -37,6 +37,8 @@ pub mod qobject {
         fn request_resource_type(info: &QWebEngineUrlRequestInfo) -> i32;
         #[cxx_name = "blockRequest"]
         fn block_request(info: Pin<&mut QWebEngineUrlRequestInfo>);
+        #[cxx_name = "redirectRequest"]
+        fn redirect_request(info: Pin<&mut QWebEngineUrlRequestInfo>, url: &QString);
     }
 
     extern "RustQt" {
@@ -106,7 +108,9 @@ use cxx_qt::casting::Upcast;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QUrl};
 use ion_adblock::update::{self, HttpFetch};
-use ion_adblock::{Blocker, FilterList, RequestInfo, ResourceType, Shield, SiteSettings, Store};
+use ion_adblock::{
+    Blocker, FilterList, RequestInfo, ResourceType, Shield, SiteSettings, Store, Verdict,
+};
 
 /// How often the worker checks whether lists went stale while Ion runs.
 const RECHECK_EVERY: Duration = Duration::from_secs(6 * 60 * 60);
@@ -383,11 +387,16 @@ impl qobject::Adblock {
             method: &method,
         };
 
-        let blocked = self.as_mut().rust_mut().shield.decide(&request);
-        if blocked {
-            qobject::block_request(info);
-            let total = i32::try_from(self.shield.total_blocked()).unwrap_or(i32::MAX);
-            self.as_mut().set_total_blocked(total);
+        let verdict = self.as_mut().rust_mut().shield.decide(&request);
+        let blocked = verdict.is_block();
+        match verdict {
+            Verdict::Allow => {}
+            Verdict::Block => {
+                qobject::block_request(info);
+                let total = i32::try_from(self.shield.total_blocked()).unwrap_or(i32::MAX);
+                self.as_mut().set_total_blocked(total);
+            }
+            Verdict::Rewrite(url) => qobject::redirect_request(info, &QString::from(url.as_str())),
         }
         // A page load resets its counter, so the UI re-reads it then too.
         if blocked || resource == ResourceType::MainFrame {

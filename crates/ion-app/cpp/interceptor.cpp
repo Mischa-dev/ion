@@ -38,4 +38,9 @@ void blockRequest(QWebEngineUrlRequestInfo &info)
     info.block(true);
 }
 
+void redirectRequest(QWebEngineUrlRequestInfo &info, const QString &url)
+{
+    info.redirect(QUrl(url));
+}
+
 } // namespace ion

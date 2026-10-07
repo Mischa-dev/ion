@@ -17,7 +17,7 @@ pub mod sites;
 pub mod store;
 pub mod update;
 
-pub use blocker::Blocker;
+pub use blocker::{Blocker, Verdict};
 pub use lists::FilterList;
 pub use request::{RequestInfo, ResourceType};
 pub use shield::Shield;

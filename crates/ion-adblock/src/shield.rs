@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use crate::sites::site_of;
-use crate::{Blocker, RequestInfo, ResourceType, SiteSettings};
+use crate::{Blocker, RequestInfo, ResourceType, SiteSettings, Verdict};
 
 /// Owns the compiled [`Blocker`] and decides about each request.
 ///
@@ -83,34 +83,38 @@ impl Shield {
         self.total
     }
 
-    /// Decide whether to block `request`, updating the counters. Pages
-    /// themselves (main-frame navigations) are never blocked; loading one
-    /// resets its site's counter instead.
-    pub fn decide(&mut self, request: &RequestInfo<'_>) -> bool {
-        if request.resource == ResourceType::MainFrame {
+    /// Decide what to do with `request`, updating the counters. Pages
+    /// themselves (main-frame navigations) are never blocked, only stripped
+    /// of tracking parameters; loading one resets its site's counter.
+    pub fn decide(&mut self, request: &RequestInfo<'_>) -> Verdict {
+        let is_page = request.resource == ResourceType::MainFrame;
+        if is_page {
             if let Some(site) = site_of(request.url) {
                 self.blocked.remove(&site);
             }
-            return false;
         }
         if !self.enabled || !is_web_url(request.url) {
-            return false;
+            return Verdict::Allow;
         }
         let Some(blocker) = &self.blocker else {
-            return false;
+            return Verdict::Allow;
         };
         let site = site_of(request.first_party);
         if site.as_ref().is_some_and(|s| !self.sites.is_enabled(s)) {
-            return false;
+            return Verdict::Allow;
         }
-        if !blocker.should_block(request) {
-            return false;
+        match blocker.check(request) {
+            // People typed or clicked the page; load it even if it is an ad.
+            Verdict::Block if is_page => Verdict::Allow,
+            Verdict::Block => {
+                self.total += 1;
+                if let Some(site) = site {
+                    *self.blocked.entry(site).or_default() += 1;
+                }
+                Verdict::Block
+            }
+            verdict => verdict,
         }
-        self.total += 1;
-        if let Some(site) = site {
-            *self.blocked.entry(site).or_default() += 1;
-        }
-        true
     }
 }
 
@@ -141,21 +145,25 @@ mod tests {
     fn nothing_is_blocked_before_lists_load() {
         let mut shield = Shield::new(SiteSettings::default());
         assert!(!shield.is_ready());
-        assert!(!shield.decide(&ad(PAGE)));
+        assert!(!shield.decide(&ad(PAGE)).is_block());
         assert_eq!(shield.total_blocked(), 0);
     }
 
     #[test]
     fn blocks_and_counts_per_site() {
         let mut shield = shield();
-        assert!(shield.decide(&ad(PAGE)));
-        assert!(shield.decide(&ad("https://news.test/other")));
-        assert!(shield.decide(&ad("https://blog.test/")));
-        assert!(!shield.decide(&RequestInfo::new(
-            "https://news.test/app.js",
-            PAGE,
-            ResourceType::Script
-        )));
+        assert!(shield.decide(&ad(PAGE)).is_block());
+        assert!(shield.decide(&ad("https://news.test/other")).is_block());
+        assert!(shield.decide(&ad("https://blog.test/")).is_block());
+        assert!(
+            !shield
+                .decide(&RequestInfo::new(
+                    "https://news.test/app.js",
+                    PAGE,
+                    ResourceType::Script
+                ))
+                .is_block()
+        );
         assert_eq!(shield.blocked_on(PAGE), 2);
         assert_eq!(shield.blocked_on("https://blog.test/x"), 1);
         assert_eq!(shield.blocked_on("about:blank"), 0);
@@ -171,7 +179,7 @@ mod tests {
             "https://news.test/next",
             ResourceType::MainFrame,
         );
-        assert!(!shield.decide(&nav));
+        assert!(!shield.decide(&nav).is_block());
         assert_eq!(shield.blocked_on(PAGE), 0);
         assert_eq!(shield.total_blocked(), 1);
 
@@ -181,7 +189,7 @@ mod tests {
             "https://ads.test/",
             ResourceType::MainFrame,
         );
-        assert!(!shield.decide(&blocked_page));
+        assert!(!shield.decide(&blocked_page).is_block());
     }
 
     #[test]
@@ -189,11 +197,11 @@ mod tests {
         let mut shield = shield();
         assert!(shield.set_enabled_on(PAGE, false));
         assert!(!shield.is_enabled_on("https://news.test/"));
-        assert!(!shield.decide(&ad(PAGE)));
-        assert!(shield.decide(&ad("https://blog.test/")));
+        assert!(!shield.decide(&ad(PAGE)).is_block());
+        assert!(shield.decide(&ad("https://blog.test/")).is_block());
 
         assert!(shield.set_enabled_on("https://news.test/", true));
-        assert!(shield.decide(&ad(PAGE)));
+        assert!(shield.decide(&ad(PAGE)).is_block());
 
         assert!(!shield.set_enabled_on("about:blank", false));
         assert!(shield.is_enabled_on("about:blank"));
@@ -203,9 +211,28 @@ mod tests {
     fn global_switch() {
         let mut shield = shield();
         shield.set_enabled(false);
-        assert!(!shield.decide(&ad(PAGE)));
+        assert!(!shield.decide(&ad(PAGE)).is_block());
         shield.set_enabled(true);
-        assert!(shield.decide(&ad(PAGE)));
+        assert!(shield.decide(&ad(PAGE)).is_block());
+    }
+
+    #[test]
+    fn rewrites_are_not_counted_as_blocked() {
+        let mut shield = Shield::new(SiteSettings::default());
+        shield.set_blocker(Blocker::from_lists(["$removeparam=fbclid\n"]));
+        let xhr = RequestInfo::new("https://cdn.test/api?fbclid=x", PAGE, ResourceType::Xhr);
+        assert_eq!(
+            shield.decide(&xhr),
+            Verdict::Rewrite("https://cdn.test/api".to_owned())
+        );
+        // Pages lose tracking parameters too.
+        let page = "https://news.test/story?id=7&fbclid=x";
+        let nav = RequestInfo::new(page, page, ResourceType::MainFrame);
+        assert_eq!(
+            shield.decide(&nav),
+            Verdict::Rewrite("https://news.test/story?id=7".to_owned())
+        );
+        assert_eq!(shield.total_blocked(), 0);
     }
 
     #[test]
@@ -213,8 +240,8 @@ mod tests {
         let mut shield = Shield::new(SiteSettings::default());
         shield.set_blocker(Blocker::from_lists(["ads\n"]));
         let data = RequestInfo::new("data:text/plain,ads", PAGE, ResourceType::Image);
-        assert!(!shield.decide(&data));
+        assert!(!shield.decide(&data).is_block());
         let ws = RequestInfo::new("wss://ads.test/socket", PAGE, ResourceType::WebSocket);
-        assert!(shield.decide(&ws));
+        assert!(shield.decide(&ws).is_block());
     }
 }

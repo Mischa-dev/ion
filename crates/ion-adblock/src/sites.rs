@@ -16,12 +16,14 @@ pub fn site_of(url: &str) -> Option<String> {
     (!site.is_empty()).then_some(site)
 }
 
-/// Lower-case, no trailing dot, no leading `www.`.
+/// Lower-case, no trailing dot, no leading `www.`, unless that would leave a
+/// bare top-level domain: `www.com` stays as is, so switching it off doesn't
+/// switch off every `.com` site.
 fn normalize(host: &str) -> String {
     let host = host.trim_end_matches('.').to_ascii_lowercase();
     match host.strip_prefix("www.") {
-        Some(rest) => rest.to_owned(),
-        None => host,
+        Some(rest) if rest.contains('.') => rest.to_owned(),
+        _ => host,
     }
 }
 
@@ -127,6 +129,8 @@ mod tests {
             site_of("https://example.com./").as_deref(),
             Some("example.com")
         );
+        // Never collapse to a bare TLD.
+        assert_eq!(site_of("https://www.com/").as_deref(), Some("www.com"));
         assert_eq!(site_of("about:blank"), None);
         assert_eq!(site_of("file:///etc/hosts"), None);
         assert_eq!(site_of("garbage"), None);
