@@ -99,27 +99,28 @@ pub fn css_script(sites: &BTreeMap<String, SiteTheme>, base: &str) -> String {
   }}
   host = host.toLowerCase().replace(/\.$/, "");
   const parts = host.split(".");
-  let text = {base};
+  // One style element per source, so each can start with @import.
+  const texts = [{base}];
   for (let i = parts.length - 1; i >= 0; i--) {{
     const site = parts.slice(i).join(".");
-    if (Object.hasOwn(css, site)) text += css[site] + "\n";
+    if (Object.hasOwn(css, site)) texts.push(css[site]);
   }}
   // {STATE} lives in Ion's isolated world, so it only ever holds the style
-  // element this script made, never one of the page's.
-  const state = (window.{STATE} ??= {{ style: null, waiting: false }});
-  state.text = text;
+  // elements this script made, never the page's.
+  const state = (window.{STATE} ??= {{ styles: [], waiting: false }});
+  state.texts = texts.filter((t) => t.trim());
   const apply = () => {{
     state.waiting = false;
-    if (!state.text) {{
-      state.style?.remove();
-      state.style = null;
-      return;
-    }}
-    if (!state.style?.isConnected) {{
-      state.style = document.createElement("style");
-      (document.head || document.documentElement).appendChild(state.style);
-    }}
-    state.style.textContent = state.text;
+    const parent = document.head || document.documentElement;
+    while (state.styles.length > state.texts.length) state.styles.pop().remove();
+    state.texts.forEach((text, i) => {{
+      let style = state.styles[i];
+      if (!style?.isConnected) {{
+        style = state.styles[i] = document.createElement("style");
+        parent.appendChild(style);
+      }}
+      style.textContent = text;
+    }});
   }};
   if (document.documentElement) apply();
   else if (!state.waiting) {{
@@ -135,8 +136,8 @@ pub fn css_script(sites: &BTreeMap<String, SiteTheme>, base: &str) -> String {
 /// waiting for the document to load.
 pub fn clear_css_script() -> String {
     format!(
-        "if (window.{STATE}) {{ window.{STATE}.text = \"\"; \
-         window.{STATE}.style?.remove(); window.{STATE}.style = null; }}"
+        "if (window.{STATE}) {{ window.{STATE}.texts = []; \
+         window.{STATE}.styles.forEach((s) => s.remove()); window.{STATE}.styles = []; }}"
     )
 }
 
@@ -244,14 +245,14 @@ mod tests {
         assert!(script.contains("window.__ionSiteCss ??="));
         // Hostless frames match the origin they inherit.
         assert!(script.contains("new URL(self.origin).hostname"));
-        assert!(clear_css_script().contains("window.__ionSiteCss.style?.remove()"));
+        assert!(clear_css_script().contains("window.__ionSiteCss.styles.forEach"));
     }
 
     #[test]
     fn script_carries_base_css_for_every_page() {
         let script = css_script(&BTreeMap::new(), "a { color: red }\n");
         assert!(
-            script.contains(r#"let text = "a { color: red }\n";"#),
+            script.contains(r#"const texts = ["a { color: red }\n"];"#),
             "{script}"
         );
     }
