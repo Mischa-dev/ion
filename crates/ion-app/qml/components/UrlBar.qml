@@ -11,6 +11,8 @@ TextField {
     property url currentUrl
     // Emitted with the resolved URL when the person presses Enter.
     signal navigate(url target)
+    // Emitted after Enter or Escape, so the page can take keyboard focus back.
+    signal finished()
 
     Omnibox { id: omnibox }
 
@@ -45,11 +47,11 @@ TextField {
         if (target.toString().length === 0)
             return
         navigate(target)
-        focus = false
+        finished()
     }
 
     Keys.onEscapePressed: {
         showUrl()
-        focus = false
+        finished()
     }
 }
