@@ -34,6 +34,10 @@ Popup {
                 request.cancel()
                 return
             }
+            // A newer request replaces one still waiting. Cancel the old one:
+            // a request dropped unanswered shares the primary screen.
+            if (picker.request && !picker.answered)
+                picker.request.cancel()
             picker.request = request
             picker.answered = false
             picker.open()
