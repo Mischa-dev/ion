@@ -103,11 +103,20 @@ impl Prompt {
         };
         Prompt {
             text: format!("{who} wants to {}", request.capability.request_phrase()),
-            choices: vec![
-                (Choice::Deny, "Block".to_owned()),
-                (Choice::AllowOnce, "Allow this time".to_owned()),
-                (Choice::Allow, "Allow".to_owned()),
-            ],
+            choices: if request.origin.is_distinct() {
+                vec![
+                    (Choice::Deny, "Block".to_owned()),
+                    (Choice::AllowOnce, "Allow this time".to_owned()),
+                    (Choice::Allow, "Allow".to_owned()),
+                ]
+            } else {
+                // A `data:` or `about:` page: its origin stands for all of
+                // them, so neither answer is remembered.
+                vec![
+                    (Choice::Deny, "Block".to_owned()),
+                    (Choice::AllowOnce, "Allow this time".to_owned()),
+                ]
+            },
             subject: Subject::Site(request),
             tab_generation: 0,
         }
@@ -171,6 +180,9 @@ impl Prompt {
             Effect::Allow
         };
         let rule = match &self.subject {
+            Subject::Site(request) if !request.origin.is_distinct() => {
+                return Some((verdict, None));
+            }
             Subject::Site(request) => Rule {
                 who: Who::Site,
                 what: What::Site(request.capability),
@@ -357,6 +369,17 @@ mod tests {
             rule.site,
             SitePattern::Origin(Origin::parse("https://meet.example").unwrap())
         );
+    }
+
+    #[test]
+    fn opaque_site_answers_are_not_remembered() {
+        let p = Prompt::for_site(SiteRequest {
+            origin: Origin::parse("data:text/html,hi").unwrap(),
+            capability: SiteCapability::Camera,
+            tab: None,
+        });
+        assert_eq!(choices(&p), [Choice::Deny, Choice::AllowOnce]);
+        assert_eq!(p.resolve(Choice::Deny, 0), Some((Verdict::Deny, None)));
     }
 
     #[test]
