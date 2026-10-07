@@ -22,8 +22,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::color::Color;
 
-/// Light or dark. Decides derived colors and what pages are told via
-/// `prefers-color-scheme`.
+/// Light or dark. Decides derived colors and `Theme.dark` (Ion's own UI;
+/// pages still see the system's `prefers-color-scheme`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Scheme {
