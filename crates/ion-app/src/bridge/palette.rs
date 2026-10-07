@@ -52,6 +52,17 @@ pub mod qobject {
             current: i32,
             history: &QString,
         ) -> QVariant;
+
+        /// `input` with an address filled in from `urls` (open tabs) or
+        /// `history` (`History.search()`'s JSON), e.g. "git" → "github.com/";
+        /// `input` unchanged when nothing fits.
+        #[qinvokable]
+        fn autocomplete(
+            self: &PaletteSearch,
+            input: &QString,
+            urls: &QStringList,
+            history: &QString,
+        ) -> QString;
     }
 }
 
@@ -172,6 +183,23 @@ impl qobject::PaletteSearch {
             ..Sources::default()
         };
         rows(self.palette().suggest(&input.to_string(), &sources))
+    }
+}
+
+impl qobject::PaletteSearch {
+    fn autocomplete(&self, input: &QString, urls: &QStringList, history: &QString) -> QString {
+        let input = input.to_string();
+        let urls = strings(urls);
+        let history = history_entries(&history.to_string());
+        let candidates = urls
+            .iter()
+            .map(String::as_str)
+            .chain(history.iter().map(|page| page.url.as_str()));
+        QString::from(
+            ion_bangs::autofill::complete(&input, candidates)
+                .unwrap_or(input)
+                .as_str(),
+        )
     }
 }
 

@@ -196,6 +196,18 @@ impl Palette {
         };
 
         let mut rest = Vec::new();
+        // Typing a trigger without the "!" offers that site's search; Tab
+        // (or choosing it) switches the input to "!trigger ".
+        if let Some(bang) = self.bangs.get(query).filter(|_| !query.starts_with('!')) {
+            rest.push(Item {
+                kind: Kind::Bang,
+                title: format!("Search {}", bang.name),
+                subtitle: bang.home(),
+                hint: "Tab".to_owned(),
+                action: Action::Complete(format!("!{} ", bang.trigger)),
+                score: i32::MAX,
+            });
+        }
         if let Some(trigger) = query.strip_prefix('!') {
             if !trigger.contains(char::is_whitespace) {
                 let exact = trigger.to_lowercase();
@@ -206,7 +218,7 @@ impl Palette {
                 );
             }
         }
-        if rest.is_empty() {
+        if !query.starts_with('!') {
             // Switching to the tab you're already in isn't a suggestion.
             rest.extend(
                 tab_items(sources.tabs, sources.current_tab, query)
@@ -679,11 +691,13 @@ mod tests {
     fn suggestions_start_with_what_enter_does() {
         assert!(suggest("  ").is_empty());
 
+        // "rust" is also a bang trigger, so its search comes right after.
         let items = suggest("rust");
         assert_eq!(items[0].kind, Kind::Search);
-        assert_eq!(items[1].action, Action::SwitchTab(1));
-        assert_eq!(items[1].hint, "Switch to tab");
-        assert_eq!(items[2].kind, Kind::History);
+        assert_eq!(items[1].action, Action::Complete("!rust ".into()));
+        assert_eq!(items[2].action, Action::SwitchTab(1));
+        assert_eq!(items[2].hint, "Switch to tab");
+        assert_eq!(items[3].kind, Kind::History);
 
         let items = suggest("example.com");
         assert_eq!(items[0].kind, Kind::Open);
@@ -744,5 +758,13 @@ mod tests {
         assert_eq!(query(">copy")[0].action, Action::Run("copy-url"));
         assert_eq!(query("ads")[0].action, Action::Run("toggle-adblock"));
         assert_eq!(query("full screen")[0].action, Action::Run("fullscreen"));
+    }
+
+    #[test]
+    fn typing_a_trigger_offers_tab_to_search() {
+        let items = suggest("gh");
+        assert_eq!(items[1].action, Action::Complete("!gh ".into()));
+        assert_eq!(items[1].hint, "Tab");
+        assert!(suggest("ghx").iter().all(|i| i.hint != "Tab"));
     }
 }

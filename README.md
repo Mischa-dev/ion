@@ -49,7 +49,10 @@ the open tabs as the session "work".
 
 While you type in the URL bar, a list below it shows what Enter will do,
 then other open tabs, history pages and bang completions. Up/Down picks one,
-Tab completes a bang, and Alt+Enter opens the choice in a new tab.
+Tab completes a bang, and Alt+Enter opens the choice in a new tab. Addresses
+you have open or visited fill in as you type ("git" → "github.com/"; keep
+typing or press Backspace to drop it), and typing a bang's name without the
+`!` ("gh") offers that site's search: press Tab to switch to it.
 
 ## Layout
 
