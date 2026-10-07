@@ -111,6 +111,9 @@ Item {
         property bool renaming: false
         // The tab to move into the new workspace, or -1.
         property int moveRow: -1
+        // The workspace being renamed, fixed when the dialog opens so switching
+        // workspaces behind it does not change which one is edited.
+        property var target: null
 
         parent: Overlay.overlay
         anchors.centerIn: parent
@@ -120,14 +123,16 @@ Item {
         standardButtons: Dialog.Ok | Dialog.Cancel
 
         onAboutToShow: {
-            nameField.text = renaming ? (root.current?.name ?? "") : ""
+            target = root.current
+            nameField.text = renaming ? (target?.name ?? "") : ""
             nameField.selectAll()
             nameField.forceActiveFocus()
         }
         onAccepted: {
             const name = nameField.text.trim()
             if (renaming) {
-                Tabs.renameWorkspace(Tabs.workspace, name)
+                if (target)
+                    Tabs.renameWorkspace(target.id, name)
             } else {
                 // New workspaces take the next color in the list.
                 const colors = Theme.workspaceColors
@@ -166,12 +171,16 @@ Item {
         title: qsTr("Workspace icon")
         standardButtons: Dialog.Ok | Dialog.Cancel
 
+        // The workspace being edited, fixed when the dialog opens.
+        property var target: null
+
         onAboutToShow: {
-            iconField.text = root.current?.icon ?? ""
+            target = root.current
+            iconField.text = target?.icon ?? ""
             iconField.selectAll()
             iconField.forceActiveFocus()
         }
-        onAccepted: Tabs.setWorkspaceIcon(Tabs.workspace, iconField.text)
+        onAccepted: if (target) Tabs.setWorkspaceIcon(target.id, iconField.text)
 
         ColumnLayout {
             spacing: Theme.spacing
@@ -201,13 +210,17 @@ Item {
         title: qsTr("Delete workspace")
         standardButtons: Dialog.Ok | Dialog.Cancel
 
-        onAccepted: Tabs.deleteWorkspace(Tabs.workspace)
+        // The workspace to delete, fixed when the dialog opens.
+        property var target: null
+
+        onAboutToShow: target = root.current
+        onAccepted: if (target) Tabs.deleteWorkspace(target.id)
 
         Label {
             text: {
-                const tabs = root.current?.tabs ?? 0
+                const tabs = deleteDialog.target?.tabs ?? 0
                 return qsTr("Delete “%1” and close its %n tab(s)? Closed tabs can be reopened one by one.", "", tabs)
-                    .arg(root.current?.name ?? "")
+                    .arg(deleteDialog.target?.name ?? "")
             }
         }
     }
