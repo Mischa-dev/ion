@@ -81,11 +81,11 @@ Rectangle {
             p.deny()
         // An answer that was remembered may settle requests still waiting.
         queue = queue.slice(1).map(item => settle(item.permission)).filter(item => item !== null)
+        Basics.notifyPermissionsChanged()
     }
 
     // A new page cancels whatever the old one asked for. The engine drops those
-    // requests itself; denying them here would store a "Block" the user never
-    // chose for persistent kinds like notifications or location.
+    // requests itself.
     function dropAll() {
         queue = []
     }
@@ -144,7 +144,7 @@ Rectangle {
             // Safety's choices, primary last: Block, Allow this time, Allow.
             Repeater {
                 model: prompt.current ? prompt.current.choices : []
-                delegate: PromptButton {
+                delegate: DialogButton {
                     required property var modelData
                     required property int index
                     text: modelData.label
@@ -153,30 +153,6 @@ Rectangle {
                     onClicked: prompt.answer(modelData.id)
                 }
             }
-        }
-    }
-
-    component PromptButton: Button {
-        id: button
-        property bool primary: false
-
-        implicitHeight: Theme.urlBarHeight
-        leftPadding: Theme.spacing * 3
-        rightPadding: Theme.spacing * 3
-        focusPolicy: Qt.NoFocus
-
-        contentItem: Text {
-            text: button.text
-            color: button.primary ? Theme.background : Theme.text
-            font.pixelSize: Theme.fontSize
-            font.bold: button.primary
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-        }
-        background: Rectangle {
-            radius: Theme.radius
-            color: button.primary ? Theme.accent : button.hovered ? Theme.surfaceHover : Theme.surfaceRaised
-            opacity: !button.enabled ? 0.5 : button.primary && button.down ? 0.8 : 1
         }
     }
 }

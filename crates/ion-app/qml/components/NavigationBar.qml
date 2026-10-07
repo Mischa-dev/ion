@@ -88,6 +88,7 @@ Rectangle {
             onClicked: bar.view.resetZoom()
         }
 
+        SitePermissions { view: bar.view }
         AdblockButton { view: bar.view }
         DownloadsButton { panel: bar.downloads }
     }

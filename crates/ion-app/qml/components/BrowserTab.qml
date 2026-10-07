@@ -105,10 +105,19 @@ WebEngineView {
     function zoomOut() { setZoom(Zoom.stepOut(zoomFactor)) }
     function resetZoom() { setZoom(1.0) }
 
+    // Saves the visible area (or the whole page) as a PNG in the downloads
+    // folder and copies it to the clipboard.
+    function takeScreenshot(fullPage) { screenshotTool.capture(fullPage) }
+
     NewTabPage { view: view }
     FindBar { view: view }
     PermissionPrompt { view: view; tabId: view.tabId }
     ScreenSharePicker { view: view }
+    PageDialog { view: view }
+    ScreenshotTool {
+        id: screenshotTool
+        view: view
+    }
     ContextMenuHandler {
         view: view
         omnibox: tabOmnibox
