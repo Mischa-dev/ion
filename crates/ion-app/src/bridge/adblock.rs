@@ -375,9 +375,8 @@ impl qobject::Adblock {
             self.as_mut().rust_mut().shield.clear_blocker();
             self.as_mut().set_ready(false);
         }
-        if refreshed.last_updated > 0.0 {
-            self.as_mut().set_last_updated(refreshed.last_updated);
-        }
+        // Read from the cache for exactly these lists; zero means none is cached.
+        self.as_mut().set_last_updated(refreshed.last_updated);
         self.as_mut().rust_mut().refresh_error = refreshed.error;
         self.as_mut().show_error();
     }
