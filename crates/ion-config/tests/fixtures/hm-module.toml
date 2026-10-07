@@ -1,6 +1,18 @@
 [adblock]
 lists = ["easylist", "easyprivacy", "ublock-filters"]
 
+[agents.claude-code]
+trust = "trustedSites"
+trustedSites = ["github.com"]
+
+[[agents.claude-code.rules]]
+action = "submit"
+effect = "ask"
+site = "*"
+
+[agents.mcp]
+enable = true
+
 [bangs]
 gh = "https://github.com/search?q={}"
 nix = "https://search.nixos.org/packages?query={}"

@@ -24,6 +24,7 @@ crates/
   ion-platform/           Chromium switches, one-instance-per-profile hand-off
   ion-bangs/              !bangs and the command palette's ranking
   ion-session/            tabs and workspaces, saved and named sessions, history
+  ion-safety/             permissions and agent trust: decisions, prompts, activity log
   ion-app/                the binary (`ion`)
     build.rs              auto-discovers bridges, C++ shims and QML files
     src/main.rs           startup: QtWebEngine init, app, QML engine

@@ -654,6 +654,7 @@ dependencies = [
  "ion-config",
  "ion-core",
  "ion-platform",
+ "ion-safety",
  "ion-session",
  "ion-theme",
  "serde_json",
@@ -692,6 +693,15 @@ name = "ion-platform"
 version = "0.1.0"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "ion-safety"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "url",
 ]
 
 [[package]]

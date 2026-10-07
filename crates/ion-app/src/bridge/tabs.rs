@@ -459,7 +459,10 @@ impl qobject::Tabs {
         };
         self.as_mut()
             .begin_remove_rows(&QModelIndex::default(), index, index);
-        self.as_mut().rust_mut().list.close(i);
+        if let Some(tab) = self.as_mut().rust_mut().list.close(i) {
+            // Prompts and tab-scoped rules for the tab end with it.
+            ion_safety::global().tab_closed(tab.id);
+        }
         self.as_mut().end_remove_rows();
         self.as_mut().rows_shifted(i);
         self.sync();
@@ -752,6 +755,11 @@ impl qobject::Tabs {
         self.as_mut().rust_mut().restoring = true;
         self.as_mut().restoring_changed();
         self.as_mut().begin_reset_model();
+        let mut safety = ion_safety::global();
+        for tab in self.list.tabs() {
+            safety.tab_closed(tab.id);
+        }
+        drop(safety);
         self.as_mut().rust_mut().list = TabList::from_session(session);
         self.as_mut().end_reset_model();
         self.as_mut().workspaces_changed();
