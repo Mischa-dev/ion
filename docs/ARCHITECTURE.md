@@ -21,6 +21,8 @@ nix/
   packaging-check.nix     validates desktop file, AppStream data, Ion.app
 crates/
   ion-core/               shared core: app constants, URL-bar input resolution
+  ion-basics/             downloads, per-site zoom, permission prompts, find,
+                          context menu and new-tab page logic
   ion-platform/           Chromium switches, one-instance-per-profile hand-off
   ion-bangs/              !bangs and the command palette's ranking
   ion-session/            tabs and workspaces, saved and named sessions, history
@@ -101,5 +103,9 @@ Shared files with small, append-only edits: root `Cargo.toml`,
   in addresses inline; both lists draw their rows with
   `CommandPaletteRow.qml`.
 - The browser profile is persistent (`storageName: "Default"`).
+- Per-tab UI (find bar, permission prompt, context menu, new-tab page) is
+  declared inside `BrowserTab.qml`; window-wide pieces (downloads panel,
+  fullscreen) sit next to the view stack in `Main.qml`. Zoom levels are saved
+  per site to `zoom.txt` in Ion's data directory.
 - Settings come from `ion-config` (layered TOML, live reload, `programs.ion`
   home-manager module); see [CONFIG.md](CONFIG.md).

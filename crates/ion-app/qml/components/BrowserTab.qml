@@ -12,6 +12,12 @@ WebEngineView {
 
     // Emitted when the page asks for a new tab or window (target=_blank, window.open).
     signal newTabRequested(var request)
+    // Emitted when Ion's own UI (context menu) wants `target` opened in a new tab.
+    signal openInNewTab(url target)
+
+    // False for tabs a page opened (window.open), whose blank document the
+    // page fills in itself; those must not be covered by the new-tab page.
+    property bool showNewTabPage: true
 
     // A tab with no page yet matches the browser chrome instead of glaring
     // white. Pages get the web's usual white canvas, which many rely on.
@@ -81,9 +87,40 @@ WebEngineView {
             Theme.engine.applyPageScheme()
             applyPageTheme()
         }
+        // Failed loads too, so an error page doesn't keep the last site's zoom.
+        if (info.status === WebEngineView.LoadSucceededStatus
+                || info.status === WebEngineView.LoadFailedStatus)
+            zoomFactor = Zoom.factorFor(url)
     }
     onNewWindowRequested: request => view.newTabRequested(request)
 
+    // Both are off by default; Ion asks before a page uses them.
+    settings.fullScreenSupportEnabled: true
+    settings.screenCaptureEnabled: true
+
+    // Zoom, remembered per site by the `Zoom` singleton.
+    function setZoom(factor) {
+        zoomFactor = factor
+        Zoom.remember(url, factor)
+    }
+    function zoomIn() { setZoom(Zoom.stepIn(zoomFactor)) }
+    function zoomOut() { setZoom(Zoom.stepOut(zoomFactor)) }
+    function resetZoom() { setZoom(1.0) }
+
+    NewTabPage { view: view }
+    FindBar { view: view }
+    PermissionPrompt { view: view }
+    ScreenSharePicker { view: view }
+    ContextMenuHandler {
+        view: view
+        omnibox: tabOmnibox
+        onOpenInNewTab: target => view.openInNewTab(target)
+    }
+    Omnibox {
+        id: tabOmnibox
+        searchEngineName: Config.searchEngineName
+        searchTemplate: Config.searchTemplate
+    }
     // Show a short message over the page.
     function notify(message) {
         notice.show(message)
