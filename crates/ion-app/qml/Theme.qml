@@ -72,6 +72,10 @@ QtObject {
     // How long the pointer rests on a collapsed sidebar before it expands, so
     // passing over it on the way somewhere else doesn't.
     readonly property int hoverDelayMs: 250
+    // How long a permission prompt's Allow stays disabled after it appears,
+    // so a click already on its way can't land on it (docs/SAFETY.md). Not
+    // scaled by motion settings: it is a safety delay, not an animation.
+    readonly property int promptArmMs: 400
 
     // Command palette
     readonly property int paletteWidth: 640

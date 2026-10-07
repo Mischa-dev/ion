@@ -17,6 +17,21 @@ Rectangle {
     property var queue: []
     readonly property var current: queue.length > 0 ? queue[0] : null
     readonly property string message: current ? Basics.permissionText(current.permissionType, current.origin) : ""
+    // Allow stays disabled for a moment after each new request shows, so a
+    // click aimed at the page can't grant it by accident.
+    property bool armed: false
+
+    onCurrentChanged: {
+        armed = false
+        if (current)
+            armTimer.restart()
+    }
+
+    Timer {
+        id: armTimer
+        interval: Theme.promptArmMs
+        onTriggered: prompt.armed = true
+    }
 
     function enqueue(permission) {
         if (Basics.permissionText(permission.permissionType, permission.origin).length === 0) {
@@ -27,7 +42,7 @@ Rectangle {
     }
 
     function answer(allow) {
-        if (!current)
+        if (!current || (allow && !armed))
             return
         if (allow)
             current.grant()
@@ -101,6 +116,7 @@ Rectangle {
             PromptButton {
                 text: qsTr("Allow")
                 primary: true
+                enabled: prompt.armed
                 onClicked: prompt.answer(true)
             }
         }
@@ -126,7 +142,7 @@ Rectangle {
         background: Rectangle {
             radius: Theme.radius
             color: button.primary ? Theme.accent : button.hovered ? Theme.surfaceHover : Theme.surfaceRaised
-            opacity: button.primary && button.down ? 0.8 : 1
+            opacity: !button.enabled ? 0.5 : button.primary && button.down ? 0.8 : 1
         }
     }
 }
