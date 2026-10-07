@@ -381,7 +381,7 @@ ApplicationWindow {
     // Stops every agent at once (docs/SAFETY.md). Resuming is deliberate:
     // the notice's button or the palette, never the same key again.
     Shortcut {
-        sequence: { Config.revision; return Config.value("shortcuts.stopAgents") || "Ctrl+Shift+Escape" }
+        sequence: { Config.revision; return Config.value("shortcuts.stopAgents") || "Ctrl+Shift+." }
         context: Qt.ApplicationShortcut
         onActivated: Safety.stopAgents()
     }

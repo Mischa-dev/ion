@@ -237,8 +237,8 @@ Ion's layered config.
 
 ## 8. Stop everything
 
-- One shortcut stops every agent at once: `Ctrl+Shift+Escape`
-  **(default; Cmd+Shift+Escape on macOS)**, remappable as
+- One shortcut stops every agent at once: `Ctrl+Shift+.` **(default;
+  Cmd+Shift+. on macOS)**, remappable as
   `shortcuts.stopAgents`. Also a command in the palette.
 - Stopping denies every agent request immediately and stays on until the person
   resumes agents. It does not touch site permissions.
@@ -274,11 +274,14 @@ Ion's layered config.
    recorded and logged), switch the profile to ask-every-time so Ion's store
    is the single source of truth, and add "Allow this time".
 
-## 10. Open questions for Mischa
+## 10. Defaults Ion picked
 
-- Is `Ctrl+Shift+Escape` right for "stop all agents"? (Some Linux desktops use
-  it for the system monitor.)
-- Should purchases ever be rememberable below full trust? Current answer: no.
-- Should "Don't allow" for agents be remembered forever, like site blocks?
-  Current answer: session only.
-- 30-day log retention, or longer?
+Mischa left these to Ion (2026-10-07); each can be changed later.
+
+- Stop all agents is `Ctrl+Shift+.` (Cmd+Shift+. on macOS), not
+  `Ctrl+Shift+Escape`, which desktops often take for their task manager.
+- Purchases and personal data are never remembered below full trust; each one
+  asks.
+- "Don't allow" for an agent lasts the session; site blocks last forever.
+- The activity log keeps 30 days (`safety.auditRetentionDays`).
+
