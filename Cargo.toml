@@ -16,6 +16,9 @@ ion-bangs = { path = "crates/ion-bangs" }
 ion-config = { path = "crates/ion-config" }
 ion-session = { path = "crates/ion-session" }
 ion-theme = { path = "crates/ion-theme" }
+ion-bookmarks = { path = "crates/ion-bookmarks" }
+ion-sites = { path = "crates/ion-sites" }
+ion-reader = { path = "crates/ion-reader" }
 ion-safety = { path = "crates/ion-safety" }
 
 cxx = "1.0"
@@ -35,6 +38,13 @@ toml_edit = "0.25"
 
 # ion-session
 unicode-segmentation = "1.13"
+
+# ion-bookmarks
+rusqlite = { version = "0.40", features = ["bundled"] }
+
+# ion-reader
+scraper = { version = "0.27", default-features = false }
+ego-tree = "0.11"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "warn"

@@ -31,6 +31,8 @@ ApplicationWindow {
     }
     // Set in Component.onCompleted: instance() is null until the prototype is complete.
     property WebEngineProfile profile: null
+    // Folders of the Chrome extensions Ion loaded at startup.
+    property var extensionPaths: []
 
     // Tabs live in the Rust `Tabs` model (bridge/tabs.rs), which also saves them
     // so the next start reopens them. These helpers return the new tab's view.
@@ -87,6 +89,21 @@ ApplicationWindow {
         window.focusUrlBar()
     }
 
+    // Bookmark the current page, or remove its bookmark (Ctrl+D, the URL bar star).
+    function toggleBookmark() {
+        const view = window.currentView
+        if (view)
+            Bookmarks.toggle(view.url.toString(), view.title)
+    }
+
+    function showExtensions() {
+        extensionsDialog.show()
+    }
+
+    function showImport() {
+        importDialog.show()
+    }
+
     // Keyboard focus follows the visible page (so Space, arrows and Find work
     // right after switching tabs), unless the person is typing in the URL bar.
     onCurrentViewChanged: Qt.callLater(focusPage)
@@ -103,6 +120,13 @@ ApplicationWindow {
     Component.onCompleted: {
         profile = profilePrototype.instance()
         Adblock.attach(window.profile)
+        Privacy.apply(window.profile)
+        // Chrome extensions from config and Ion's extensions folder.
+        const extensionManager = window.profile.extensionManager
+        if (extensionManager) {
+            extensionPaths = Extensions.paths()
+            extensionPaths.forEach(path => extensionManager.loadExtension(path))
+        }
         if (Config.value("general.restoreSession"))
             Tabs.restoreLastSession()
         // URLs on the command line (`ion %U` from the desktop file) open as new
@@ -111,6 +135,17 @@ ApplicationWindow {
         urls.forEach((arg, i) => openTab(urlBarResolver.resolve(arg), i === 0))
         if (Tabs.count === 0)
             openTab(homeUrl)
+    }
+
+    // Extensions load switched off; turn on each one that loaded cleanly.
+    // Switching one off in the Extensions dialog lasts until Ion restarts.
+    Connections {
+        target: window.profile?.extensionManager ?? null
+        ignoreUnknownSignals: true
+        function onLoadFinished(extension) {
+            if (extension.isLoaded && !extension.isEnabled && extension.error.length === 0)
+                window.profile.extensionManager.setExtensionEnabled(extension, true)
+        }
     }
 
     // Save tabs shortly after they change, and history less eagerly; both are
@@ -150,6 +185,11 @@ ApplicationWindow {
         target: History
         function onChanged() { historySaveTimer.restart() }
     }
+    // `[privacy]` cookie settings follow config changes live.
+    Connections {
+        target: Config
+        function onRevisionChanged() { Privacy.apply(window.profile) }
+    }
     Connections {
         target: Qt.application
         function onAboutToQuit() {
@@ -168,6 +208,12 @@ ApplicationWindow {
 
     // Command palette (Ctrl/Cmd+K).
     CommandPalette { id: palette; browser: window }
+
+    ImportDialog { id: importDialog }
+    ExtensionsDialog { id: extensionsDialog; browser: window }
+
+    // Per-site CSS and userscripts, installed on the profile.
+    SiteScripts { profile: window.profile }
 
     header: ColumnLayout {
         spacing: 0
@@ -193,6 +239,7 @@ ApplicationWindow {
             id: navBar
             Layout.fillWidth: true
             view: window.currentView
+            onBookmarkToggled: window.toggleBookmark()
         }
     }
 
@@ -325,6 +372,8 @@ ApplicationWindow {
     Shortcut { sequences: [StandardKey.Back]; onActivated: window.currentView?.goBack() }
     Shortcut { sequences: [StandardKey.Forward]; onActivated: window.currentView?.goForward() }
     Shortcut { sequences: [StandardKey.Quit]; onActivated: Qt.quit() }
+    Shortcut { sequence: "Ctrl+D"; onActivated: window.toggleBookmark() }
+    Shortcut { sequence: "Ctrl+Alt+R"; onActivated: window.currentView?.reader.toggle() }
     Shortcut {
         sequence: { Config.revision; return Config.value("shortcuts.palette") || "Ctrl+K" }
         onActivated: palette.show()

@@ -72,6 +72,8 @@ QtObject {
     readonly property int animationSlowMs: Math.round(220 * motionScale)
     // Loading spinners keep turning with animations off: they report status.
     readonly property int spinnerMs: 800
+    // How long a transient notice stays on screen.
+    readonly property int noticeMs: 2500
     // How long the pointer rests on a collapsed sidebar before it expands, so
     // passing over it on the way somewhere else doesn't.
     readonly property int hoverDelayMs: 250

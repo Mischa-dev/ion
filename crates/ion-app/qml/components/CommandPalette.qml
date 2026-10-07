@@ -9,7 +9,9 @@ import Ion
 //
 // Tabs and history come from the `Tabs` and `History` singletons; `browser`
 // (the main window) provides openTab(url), newTab(), closeTab(i),
-// focusUrlBar() and currentView.
+// focusUrlBar(), toggleBookmark(), showImport(), showExtensions(), profile
+// and currentView. Bookmarks come from the `Bookmarks`
+// singleton.
 Popup {
     id: root
 
@@ -24,6 +26,9 @@ Popup {
     function show(text) {
         field.text = text ?? ""
         open()
+        // Now rather than in onOpened, after the enter transition: the first
+        // keys typed right after Ctrl/Cmd+K must not be lost.
+        field.forceActiveFocus()
     }
 
     function copyText(text) {
@@ -46,11 +51,14 @@ Popup {
             titles.push(Tabs.titleAt(i))
             urls.push(Tabs.urlAt(i))
         }
-        // `>` and `!` narrow the palette to commands or bangs; skip history then.
+        // `>` and `!` narrow the palette to commands or bangs; skip history and
+        // bookmarks then. `*` lists bookmarks only.
         const text = field.text.trim()
-        const history = text.length > 0 && !text.startsWith(">") && !text.startsWith("!")
-            ? History.search(text, Theme.paletteMaxRows) : "[]"
-        results = search.query(field.text, titles, urls, Tabs.currentIndex, history, Tabs.sessionNames())
+        const pages = text.length > 0 && !text.startsWith(">") && !text.startsWith("!")
+        const history = pages && !text.startsWith("*") ? History.search(text, Theme.paletteMaxRows) : "[]"
+        const bookmarks = text.startsWith("*") ? Bookmarks.search(text.slice(1), 200)
+            : pages ? Bookmarks.search(text, Theme.paletteMaxRows) : "[]"
+        results = search.query(field.text, titles, urls, Tabs.currentIndex, history, bookmarks, Tabs.sessionNames())
         list.currentIndex = results.length > 0 ? 0 : -1
     }
 
@@ -118,6 +126,23 @@ Popup {
         case "stop": view?.stop(); break
         case "back": view?.goBack(); break
         case "forward": view?.goForward(); break
+        case "bookmark-page": browser.toggleBookmark(); break
+        case "bookmarks": Qt.callLater(() => root.show("*")); break
+        case "import-browser-data": browser.showImport(); break
+        case "clear-cookies": Privacy.clearCookies(browser.profile); break
+        case "clear-cache": browser.profile.clearHttpCache(); break
+        case "clear-history": History.clear(); History.save(); break
+        case "reader-mode": view?.reader.toggle(); break
+        case "extensions": browser.showExtensions(); break
+        case "open-extensions-folder":
+            if (Extensions.ensureFolder())
+                Qt.openUrlExternally("file://" + Extensions.folder)
+            break
+        case "reload-userscripts": Sites.reload(); view?.reload(); break
+        case "open-userscripts":
+            if (Sites.ensureDirectory())
+                Qt.openUrlExternally("file://" + Sites.directory)
+            break
         case "fullscreen":
             browser.visibility = browser.visibility === Window.FullScreen ? Window.Windowed : Window.FullScreen
             break
@@ -179,7 +204,7 @@ Popup {
             Layout.fillWidth: true
             implicitHeight: Theme.urlBarHeight
             color: Theme.text
-            placeholderText: qsTr("Search tabs, history, commands, settings and !bangs")
+            placeholderText: qsTr("Search tabs, bookmarks, history, commands, settings and !bangs")
             placeholderTextColor: Theme.textMuted
             selectionColor: Theme.accent
             selectedTextColor: Theme.onAccent

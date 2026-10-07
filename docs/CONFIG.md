@@ -21,6 +21,9 @@ Keys are camelCase so they match the Nix option names exactly. Everything is
 optional; these are the defaults.
 
 ```toml
+# Unpacked Chrome extensions to load, besides those in Ion's extensions folder
+extensions = []              # e.g. ["/home/me/src/my-extension"]
+
 [general]
 homePage = "https://duckduckgo.com/"
 restoreSession = true
@@ -48,6 +51,14 @@ pages = "match"              # what web pages see: "match" gives them the theme'
                              # light/dark (prefers-color-scheme), "system" the
                              # system's; "darken" is "match" plus darkening pages
                              # that have no dark style when the theme is dark
+pageControls = true          # scrollbars, checkboxes and text selection on web
+                             # pages use the theme's colors, unless the page
+                             # styles them itself
+
+[theme.sites."example.com"]  # per site; also covers subdomains, most specific wins
+# darken = false             # never darken this site (true: darken under a dark
+                             # theme even when pages isn't "darken")
+# css = "body { max-width: 50em; margin: auto }"   # added to the site's pages
 
 [bangs]                      # your own, on top of Ion's built-in set
 # gh = "https://github.com/search?q={}"   # adds or replaces !gh
@@ -61,7 +72,47 @@ lists = ["easylist", "easyprivacy", "ublock-filters"]
 
 [shortcuts]                  # command id = Qt key sequence
 # palette = "Ctrl+K"
+
+[keyboard]
+vim = false                  # j/k scroll, gg/G, d/u, H/L back/forward,
+                             # f/F link hints (F opens in a new tab)
+
+[privacy]
+globalPrivacyControl = true  # Sec-GPC header and navigator.globalPrivacyControl
+blockThirdPartyCookies = true
+
+[sites."example.com"]        # per-site settings; a host covers its subdomains,
+javascript = true            # "*" covers every site, the most specific wins
+                             # (CSS for a site goes in [theme.sites] above)
 ```
+
+## User scripts and styles
+
+Files in `~/.config/ion/userscripts/` are injected into pages:
+
+- `*.user.js`: Greasemonkey-style userscripts. The `// ==UserScript==` header's
+  `@match`, `@include`, `@exclude` and `@run-at` (`document-start`,
+  `document-end`, `document-idle`) are honored. Scripts run in an isolated
+  world that shares only the DOM with the page; `// @inject-into page` runs one
+  in the page's own world instead. GM_* APIs are not provided.
+- `*.user.css`: style sheets for every page, or only for the `@match` patterns
+  listed in a leading `/* ==UserStyle== … ==/UserStyle== */` comment.
+
+Run "Reload user scripts and styles" from the palette after editing them; "Open
+user scripts folder" creates and opens the folder. Config changes apply on the
+next page load. User scripts still run on sites with `javascript = false`.
+
+## Extensions
+
+Ion loads unpacked Chrome extensions (folders with a `manifest.json`) from its
+extensions folder (`~/.local/share/ion/extensions/` on Linux,
+`~/Library/Application Support/Ion/extensions/` on macOS) and from the
+`extensions` list, at startup. QtWebEngine runs Manifest V3 only; older
+extensions are listed as skipped, with the reason, in the Extensions dialog
+(palette: "Extensions"). The dialog switches each one on or off until Ion
+restarts and opens an extension's popup in a tab. With the Nix module,
+`programs.ion.extensions` takes paths or packages that build an unpacked
+extension.
 
 ## Nix
 

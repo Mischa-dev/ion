@@ -8,7 +8,7 @@ import Ion
 Item {
     id: root
 
-    // Workspaces as `{id, name, color, icon, tabs}`, refreshed every time the menu
+    // Workspaces as `{id, name, color, tabs}`, refreshed every time the menu
     // opens, and the current one.
     property var workspaces: []
     readonly property var current: workspaces.find(w => w.id === Tabs.workspace) ?? null
@@ -39,7 +39,7 @@ Item {
         nameDialog.open()
     }
 
-    Menu {
+    IonMenu {
         id: menu
         palette: root.palette
 
@@ -47,58 +47,43 @@ Item {
 
         Instantiator {
             model: root.workspaces
-            delegate: MenuItem {
-                id: item
+            delegate: IonMenuItem {
                 required property var modelData
                 text: modelData.icon.length > 0 ? modelData.icon + "  " + modelData.name : modelData.name
                 checkable: true
                 checked: modelData.id === Tabs.workspace
                 onTriggered: Tabs.switchWorkspace(modelData.id)
-
-                // Plain text: names and icons are typed by the user, and the
-                // stock label would render markup such as <b> in them.
-                contentItem: Text {
-                    leftPadding: !item.mirrored ? item.indicator.width + item.spacing : 0
-                    rightPadding: item.mirrored ? item.indicator.width + item.spacing : 0
-                    text: item.text
-                    textFormat: Text.PlainText
-                    font: item.font
-                    color: item.highlighted ? item.palette.highlightedText : item.palette.windowText
-                    elide: Text.ElideRight
-                    verticalAlignment: Text.AlignVCenter
-                }
             }
             onObjectAdded: (index, object) => menu.insertItem(index, object)
             onObjectRemoved: (index, object) => menu.removeItem(object)
         }
 
-        MenuSeparator {}
+        IonMenuSeparator {}
 
-        MenuItem {
+        IonMenuItem {
             text: qsTr("New workspace…")
             onTriggered: root.create()
         }
-        MenuItem {
+        IonMenuItem {
             text: qsTr("Rename workspace…")
             onTriggered: {
                 nameDialog.renaming = true
                 nameDialog.open()
             }
         }
-
-        MenuItem {
+        IonMenuItem {
             text: qsTr("Icon…")
             onTriggered: iconDialog.open()
         }
 
-        Menu {
+        IonMenu {
             id: colorMenu
             palette: root.palette
             title: qsTr("Color")
 
             Instantiator {
                 model: Theme.workspaceColors
-                delegate: MenuItem {
+                delegate: IonMenuItem {
                     required property var modelData
                     text: modelData.name
                     checkable: true
@@ -110,14 +95,14 @@ Item {
             }
         }
 
-        MenuItem {
+        IonMenuItem {
             text: qsTr("Delete workspace…")
             enabled: root.workspaces.length > 1
             onTriggered: deleteDialog.open()
         }
     }
 
-    Dialog {
+    IonDialog {
         id: nameDialog
         palette: root.palette
 
@@ -129,10 +114,6 @@ Item {
         // workspaces behind it does not change which one is edited.
         property var target: null
 
-        parent: Overlay.overlay
-        anchors.centerIn: parent
-        modal: true
-        padding: Theme.spacing * 2
         title: renaming ? qsTr("Rename workspace") : qsTr("New workspace")
         standardButtons: Dialog.Ok | Dialog.Cancel
 
@@ -159,13 +140,18 @@ Item {
         }
 
         ColumnLayout {
-            spacing: Theme.spacing
+            anchors.left: parent.left
+            anchors.right: parent.right
+            spacing: Theme.spacing * 2
 
             Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: Theme.textMuted
                 text: nameDialog.renaming ? qsTr("A new name for this workspace.")
                                           : qsTr("A workspace keeps its own set of tabs.")
             }
-            TextField {
+            IonTextField {
                 id: nameField
                 Layout.fillWidth: true
                 placeholderText: qsTr("Workspace name")
@@ -174,14 +160,10 @@ Item {
         }
     }
 
-    Dialog {
+    IonDialog {
         id: iconDialog
         palette: root.palette
 
-        parent: Overlay.overlay
-        anchors.centerIn: parent
-        modal: true
-        padding: Theme.spacing * 2
         title: qsTr("Workspace icon")
         standardButtons: Dialog.Ok | Dialog.Cancel
 
@@ -197,12 +179,17 @@ Item {
         onAccepted: if (target) Tabs.setWorkspaceIcon(target.id, iconField.text)
 
         ColumnLayout {
-            spacing: Theme.spacing
+            anchors.left: parent.left
+            anchors.right: parent.right
+            spacing: Theme.spacing * 2
 
             Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: Theme.textMuted
                 text: qsTr("An emoji or a few letters, shown instead of the color dot. Leave empty for the dot.")
             }
-            TextField {
+            IonTextField {
                 id: iconField
                 Layout.fillWidth: true
                 // No maximumLength: it counts UTF-16 units and would cut emoji
@@ -213,14 +200,10 @@ Item {
         }
     }
 
-    Dialog {
+    IonDialog {
         id: deleteDialog
         palette: root.palette
 
-        parent: Overlay.overlay
-        anchors.centerIn: parent
-        modal: true
-        padding: Theme.spacing * 2
         title: qsTr("Delete workspace")
         standardButtons: Dialog.Ok | Dialog.Cancel
 
@@ -231,6 +214,9 @@ Item {
         onAccepted: if (target) Tabs.deleteWorkspace(target.id)
 
         Label {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            wrapMode: Text.WordWrap
             textFormat: Text.PlainText
             text: {
                 const tabs = deleteDialog.target?.tabs ?? 0

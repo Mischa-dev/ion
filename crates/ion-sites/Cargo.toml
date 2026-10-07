@@ -1,0 +1,15 @@
+[package]
+name = "ion-sites"
+description = "Per-site settings, user styles and userscripts for the Ion browser"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ion-config.workspace = true
+serde_json.workspace = true
+url.workspace = true
+
+[lints]
+workspace = true
