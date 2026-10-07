@@ -114,6 +114,7 @@ WebEngineView {
     function takeScreenshot(fullPage) { screenshotTool.capture(fullPage) }
 
     NewTabPage { view: view }
+    AdblockCosmetics { view: view }
     FindBar { view: view }
     PermissionPrompt { view: view }
     ScreenSharePicker { view: view }
