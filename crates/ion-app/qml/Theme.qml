@@ -60,6 +60,9 @@ QtObject {
 
     // Typography
     readonly property int fontSize: 13
+    // The smallest text shrinks to when fitting a tight space, such as a
+    // workspace icon in the collapsed sidebar.
+    readonly property int fontSizeMin: 8
 
     // Motion. `ui.animations` turns it off or changes its speed; 0 disables
     // every Behavior and Transition that reads these.

@@ -49,10 +49,16 @@ ToolButton {
 
         Text {
             Layout.alignment: Qt.AlignVCenter
+            // Long icons shrink, then elide, in narrow strips such as the
+            // collapsed sidebar.
+            Layout.maximumWidth: control.availableWidth
             visible: (control.current.icon ?? "").length > 0
             text: control.current.icon ?? ""
             color: Theme.text
             font.pixelSize: Theme.fontSize
+            fontSizeMode: Text.HorizontalFit
+            minimumPixelSize: Theme.fontSizeMin
+            elide: Text.ElideRight
         }
         Rectangle {
             Layout.alignment: Qt.AlignVCenter
