@@ -264,6 +264,29 @@ impl Safety {
         Ok(verdict)
     }
 
+    /// The person answered the site prompt shown for `request`. The prompt
+    /// is rebuilt from the request; if another answer decided the request
+    /// while it was up (the same prompt in a second tab), a "Block" is still
+    /// honored and remembered, and any other choice gets the current verdict.
+    pub fn answer_site(
+        &mut self,
+        request: SiteRequest,
+        choice: Choice,
+    ) -> Result<Verdict, AnswerError> {
+        let outcome = self.request_site(request.clone());
+        match outcome.prompt {
+            Some(prompt) => self.answer(&prompt, choice),
+            None if choice == Choice::Deny => {
+                let prompt = Prompt {
+                    tab_generation: self.tab_generation(request.tab),
+                    ..Prompt::for_site(request)
+                };
+                self.answer(&prompt, choice)
+            }
+            None => Ok(outcome.decision.verdict),
+        }
+    }
+
     /// Record what an agent did.
     pub fn log_action(&self, record: ActionRecord) {
         let mut entry = Entry::new(self.now(), Kind::Action);
@@ -426,6 +449,28 @@ mod tests {
             capability: SiteCapability::Camera,
             tab: Some(1),
         }
+    }
+
+    #[test]
+    fn a_later_block_wins_over_an_earlier_allow() {
+        let mut safety = Safety::in_memory().with_clock(|| NOW);
+        let meet = "https://meet.example";
+        // The same prompt is up in two tabs; the first allows.
+        assert_eq!(
+            safety.answer_site(camera(meet), Choice::Allow),
+            Ok(Verdict::Allow)
+        );
+        let mut other_tab = camera(meet);
+        other_tab.tab = Some(2);
+        assert_eq!(
+            safety.answer_site(other_tab.clone(), Choice::AllowOnce),
+            Ok(Verdict::Allow)
+        );
+        assert_eq!(
+            safety.answer_site(other_tab, Choice::Deny),
+            Ok(Verdict::Deny)
+        );
+        assert_eq!(safety.request_site(camera(meet)).verdict(), Verdict::Deny);
     }
 
     #[test]

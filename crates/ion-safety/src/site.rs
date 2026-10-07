@@ -45,14 +45,14 @@ impl Origin {
         self.host.as_deref()
     }
 
-    /// The host as people read it: `www.` dropped. `None` without a host.
     /// Whether pages with this origin can be told apart from each other:
-    /// false for `data:`, `about:` and other hostless origins except local
-    /// files, so an answer for one of them is never remembered for all.
+    /// false for hostless origins (`file:`, `data:`, `about:`), which stand
+    /// for every such page, so an answer for one is never remembered for all.
     pub fn is_distinct(&self) -> bool {
-        self.host.is_some() || self.scheme == "file"
+        self.host.is_some()
     }
 
+    /// The host as people read it: `www.` dropped. `None` without a host.
     pub fn display_host(&self) -> Option<&str> {
         self.host
             .as_deref()

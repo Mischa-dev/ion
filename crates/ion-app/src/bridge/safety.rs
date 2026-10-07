@@ -215,12 +215,10 @@ impl qobject::Safety {
         let Some(choice) = Choice::from_id(&choice.to_string()) else {
             return false;
         };
-        let Some(prompt) = Self::outcome(permission_type, origin, tab).and_then(|o| o.prompt)
-        else {
-            // Nothing to ask (any more): the current decision stands.
-            return self.site_decision(permission_type, origin, tab).to_string() == "allow";
+        let Some(request) = site_request(permission_type, origin, tab) else {
+            return false;
         };
-        ion_safety::global().answer(&prompt, choice) == Ok(Verdict::Allow)
+        ion_safety::global().answer_site(request, choice) == Ok(Verdict::Allow)
     }
 
     fn site_permissions_json(&self) -> QString {

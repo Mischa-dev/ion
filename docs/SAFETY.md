@@ -101,8 +101,8 @@ the "why was this blocked?" text in the UI.
    config "deny" and vice versa, which matches what people expect from a
    firewall.
 4. **Pages without a host** (`file:`, `data:`, `about:`) ask agents at every
-   trust level; only a rule (an earlier "allow", kept for the session) lets an
-   agent use them without asking.
+   trust level; only a rule written in config lets an agent use them without
+   asking, since only a "Don't allow" for them is remembered (for the session).
 5. **Trust level** of the agent (below), or for sites the site default.
 6. Otherwise **ask**.
 
@@ -150,9 +150,9 @@ and the choices allowed for it:
 
 Answers become rules with the matching lifetime and source `user`. "Allow on
 this site" for an agent covers read and act on that host and its subdomains;
-"Always allow" for commit covers that one action there. Approvals for local files
-last the session only; `data:` and `about:` pages share one origin, so for
-them only "Allow once" is offered. `blob:` and `filesystem:` URLs take the
+"Always allow" for commit covers that one action there. Local files, `data:`
+and `about:` pages have no host, so every such page shares one origin; for
+them only "Allow once" is offered, to sites and agents alike. `blob:` and `filesystem:` URLs take the
 origin of the page that made them. "Don't
 allow" on an agent prompt is remembered for the session only **(default)**,
 so a misclick does not silently cripple an agent forever; site blocks are

@@ -110,8 +110,8 @@ impl Prompt {
                     (Choice::Allow, "Allow".to_owned()),
                 ]
             } else {
-                // A `data:` or `about:` page: its origin stands for all of
-                // them, so neither answer is remembered.
+                // A local file, `data:` or `about:` page: its origin stands
+                // for all of them, so neither answer is remembered.
                 vec![
                     (Choice::Deny, "Block".to_owned()),
                     (Choice::AllowOnce, "Allow this time".to_owned()),
@@ -132,8 +132,8 @@ impl Prompt {
         let deny = (Choice::Deny, "Don't allow".to_owned());
         let once = (Choice::AllowOnce, "Allow once".to_owned());
         let tier = request.action.tier();
-        // `data:` and `about:` pages share one origin: answers for them
-        // can't be remembered without covering every such page.
+        // Local files, `data:` and `about:` pages share one origin: answers
+        // for them can't be remembered without covering every such page.
         let opaque = request.site.as_ref().is_some_and(|o| !o.is_distinct());
         let choices = match tier {
             _ if opaque => vec![deny, once],
@@ -205,8 +205,7 @@ impl Prompt {
                     (Some(origin), true) => SitePattern::for_origin_host(origin),
                     _ => SitePattern::Any,
                 };
-                let local = request.site.as_ref().is_some_and(|o| o.host().is_none());
-                let lifetime = if effect == Effect::Deny || local {
+                let lifetime = if effect == Effect::Deny {
                     Lifetime::Session
                 } else {
                     Lifetime::Forever
@@ -266,6 +265,9 @@ mod tests {
             tab: None,
         });
         assert_eq!(local.text, "This page wants to show notifications");
+        // Every local file shares the `file://` origin: nothing is remembered.
+        assert_eq!(choices(&local), [Choice::Deny, Choice::AllowOnce]);
+        assert_eq!(local.resolve(Choice::Deny, 0).unwrap().1, None);
     }
 
     #[test]
@@ -330,15 +332,11 @@ mod tests {
     }
 
     #[test]
-    fn local_page_approvals_last_the_session() {
+    fn local_files_can_only_be_allowed_once() {
         let p = agent(Action::ReadPage, Some("file:///notes.html"));
-        let (_, rule) = p.resolve(Choice::Allow, 0).unwrap();
-        let rule = rule.unwrap();
-        assert_eq!(rule.lifetime, Lifetime::Session);
-        assert_eq!(
-            rule.site,
-            SitePattern::Origin(Origin::parse("file:///").unwrap())
-        );
+        assert_eq!(choices(&p), [Choice::Deny, Choice::AllowOnce]);
+        assert_eq!(p.resolve(Choice::Allow, 0), None);
+        assert_eq!(p.resolve(Choice::AllowOnce, 0).unwrap().1, None);
     }
 
     #[test]
