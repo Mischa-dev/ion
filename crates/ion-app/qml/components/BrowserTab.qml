@@ -24,8 +24,9 @@ WebEngineView {
         applySiteCss()
     }
 
-    // Per-site CSS comes from one user script that matches hosts itself. It
-    // runs on every new document; running it now updates the open page.
+    // Page and per-site CSS come from one user script that matches hosts
+    // itself. It runs on every new document, frames included; running it in
+    // each frame now updates the open page.
     property string siteCssScript: ""
     function applySiteCss() {
         const script = Theme.engine.siteCssScript
@@ -40,13 +41,18 @@ WebEngineView {
             userScript.sourceCode = script
             userScript.injectionPoint = WebEngineScript.DocumentCreation
             userScript.worldId = WebEngineScript.ApplicationWorld
-            userScript.runsOnSubFrames = false
+            userScript.runsOnSubFrames = true
             userScripts.insert(userScript)
-            runJavaScript(script, WebEngineScript.ApplicationWorld)
+            runInFrames(mainFrame, script)
         } else {
-            runJavaScript(Theme.engine.clearSiteCssScript(), WebEngineScript.ApplicationWorld)
+            runInFrames(mainFrame, Theme.engine.clearSiteCssScript())
         }
         siteCssScript = script
+    }
+    function runInFrames(frame, script) {
+        frame.runJavaScript(script, WebEngineScript.ApplicationWorld)
+        for (const child of frame.children)
+            runInFrames(child, script)
     }
 
     Component.onCompleted: applyPageTheme()
