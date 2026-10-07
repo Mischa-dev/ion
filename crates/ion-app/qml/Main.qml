@@ -135,16 +135,23 @@ ApplicationWindow {
     property bool waitingForCacheClear: false
     Connections {
         target: window.waitingForCacheClear ? window.profile : null
-        function onClearHttpCacheCompleted() { window.openStartupTabs() }
+        function onClearHttpCacheCompleted() { window.finishStartup() }
     }
 
-    // The restored session, then command-line URLs, else the home page.
-    property bool startupTabsOpened: false
-    function openStartupTabs() {
-        if (startupTabsOpened)
+    // Extensions, then the restored session, then command-line URLs, else the
+    // home page. Runs once the startup cache clear (if any) is done.
+    property bool startupFinished: false
+    function finishStartup() {
+        if (startupFinished)
             return
-        startupTabsOpened = true
+        startupFinished = true
         waitingForCacheClear = false
+        // Chrome extensions from config and Ion's extensions folder.
+        const extensionManager = window.profile.extensionManager
+        if (extensionManager) {
+            extensionPaths = Extensions.paths()
+            extensionPaths.forEach(path => extensionManager.loadExtension(path))
+        }
         if (Config.value("general.restoreSession"))
             Tabs.restoreLastSession()
         // URLs on the command line (`ion %U` from the desktop file) open as new
@@ -164,19 +171,12 @@ ApplicationWindow {
         profile = profilePrototype.instance()
         Adblock.attach(window.profile)
         Privacy.apply(window.profile)
-        // Again at start, in case the last quit was cut short; pages wait
-        // for it.
-        const clearingCache = clearOnExit()
-        // Chrome extensions from config and Ion's extensions folder.
-        const extensionManager = window.profile.extensionManager
-        if (extensionManager) {
-            extensionPaths = Extensions.paths()
-            extensionPaths.forEach(path => extensionManager.loadExtension(path))
-        }
-        if (clearingCache)
+        // Again at start, in case the last quit was cut short; the rest of
+        // startup waits for it.
+        if (clearOnExit())
             waitingForCacheClear = true
         else
-            openStartupTabs()
+            finishStartup()
     }
 
     // Extensions load switched off; turn on each one that loaded cleanly,
