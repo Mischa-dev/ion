@@ -7,5 +7,6 @@ pub mod config;
 pub mod history;
 pub mod omnibox;
 pub mod palette;
+pub mod platform;
 pub mod tabs;
 pub mod webengine;

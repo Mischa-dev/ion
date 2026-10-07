@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleDisplayName</key>
+  <string>Ion</string>
+  <key>CFBundleExecutable</key>
+  <string>ion</string>
+  <key>CFBundleIconFile</key>
+  <string>Ion.icns</string>
+  <key>CFBundleIdentifier</key>
+  <string>dev.ion.Ion</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>Ion</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>@version@</string>
+  <key>CFBundleVersion</key>
+  <string>@version@</string>
+  <key>LSApplicationCategoryType</key>
+  <string>public.app-category.productivity</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>12.0</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+  <key>NSSupportsAutomaticGraphicsSwitching</key>
+  <true/>
+  <key>NSPrincipalClass</key>
+  <string>NSApplication</string>
+
+  <!-- Without these, macOS kills the app when a site asks for the device. -->
+  <key>NSCameraUsageDescription</key>
+  <string>Websites you allow can use your camera.</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Websites you allow can use your microphone.</string>
+  <key>NSLocationUsageDescription</key>
+  <string>Websites you allow can see your location.</string>
+  <key>NSLocationWhenInUseUsageDescription</key>
+  <string>Websites you allow can see your location.</string>
+
+  <!-- Lets Ion be chosen as the default browser. -->
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>Web site URL</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>http</string>
+        <string>https</string>
+      </array>
+    </dict>
+  </array>
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>Web page</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>public.html</string>
+        <string>public.xhtml</string>
+      </array>
+    </dict>
+  </array>
+</dict>
+</plist>

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>dev.ion.Ion</id>
+  <name>Ion</name>
+  <summary>Fast, themeable web browser</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <developer id="dev.ion">
+    <name>Ion contributors</name>
+  </developer>
+  <description>
+    <p>
+      Ion is a keyboard-friendly desktop browser built on QtWebEngine, with a
+      Qt Quick interface and a Rust core.
+    </p>
+  </description>
+  <launchable type="desktop-id">dev.ion.Ion.desktop</launchable>
+  <url type="homepage">https://github.com/Mischa-dev/ion</url>
+  <categories>
+    <category>Network</category>
+    <category>WebBrowser</category>
+  </categories>
+  <provides>
+    <binary>ion</binary>
+  </provides>
+  <content_rating type="oars-1.1"/>
+</component>
