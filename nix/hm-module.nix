@@ -139,6 +139,23 @@ in
                 "darken"
               ])
               "What web pages see: the theme's light/dark (`match`), the system's, or `match` plus darkening pages without a dark style.";
+          pageControls = setting types.bool "Give web page scrollbars, checkboxes and text selection the theme's colors, unless the page styles them itself.";
+          sites = mkOption {
+            type = types.attrsOf (
+              types.submodule {
+                options = {
+                  darken = setting types.bool "Darken this site under a dark theme (true) or never (false); unset follows `theme.pages`.";
+                  css = setting types.lines "CSS added to this site's pages.";
+                };
+              }
+            );
+            default = { };
+            example = {
+              "example.com".css = "body { max-width: 50em; margin: auto }";
+              "github.com".darken = false;
+            };
+            description = "Per-site theming, keyed by site. A site also covers its subdomains; the most specific entry wins.";
+          };
         };
 
         bangs = mkOption {

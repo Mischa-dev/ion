@@ -37,6 +37,15 @@ logs the reason and exposes it as `Theme.error`.
 - `darken`: like `match`, and under a dark theme pages without a dark style
   are darkened by Chromium's auto dark mode (not tinted with the palette).
 
+Per site, `[theme.sites."<site>"]` can switch darkening on or off
+(`darken = true | false`) and add CSS (`css = "…"`). A site covers its
+subdomains, and the most specific entry wins. `prefers-color-scheme` stays
+browser-wide: QtWebEngine has one setting for every page.
+
+`theme.pageControls` (on by default) gives page scrollbars, form controls
+(`accent-color`) and text selection the palette's colors. The CSS sits in a
+cascade layer, so a page's own styles always win over it.
+
 Changes apply to open pages live. QtWebEngine has no API for a page color
 scheme, so `cpp/theme.cpp` in `ion-app` feeds it through the
 `QStyleHints::colorSchemeChanged` signal it listens to; see the comment there.
