@@ -33,6 +33,11 @@ impl Shield {
         self.blocker = Some(blocker);
     }
 
+    /// Drop the blocker, e.g. when every filter list was removed.
+    pub fn clear_blocker(&mut self) {
+        self.blocker = None;
+    }
+
     /// True once filter lists are loaded; until then nothing is blocked.
     pub fn is_ready(&self) -> bool {
         self.blocker.is_some()

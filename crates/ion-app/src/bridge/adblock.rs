@@ -223,10 +223,10 @@ impl qobject::Adblock {
         }
         self.as_mut().rust_mut().attached = true;
 
-        self.as_mut().apply_config();
+        self.as_mut().apply_config(true);
         let thread = self.qt_thread();
         let subscription = ion_config::global().subscribe(move |_| {
-            let _ = thread.queue(|obj| obj.apply_config());
+            let _ = thread.queue(|obj| obj.apply_config(false));
         });
         self.as_mut().rust_mut().config_subscription = Some(subscription);
 
@@ -276,7 +276,8 @@ impl qobject::Adblock {
 
     /// Take `adblock.enable` and `adblock.lists` from the config. New lists
     /// are downloaded and compiled in the background.
-    fn apply_config(mut self: Pin<&mut Self>) {
+    /// `initial` is the call from `attach`, which loads the lists itself.
+    fn apply_config(mut self: Pin<&mut Self>, initial: bool) {
         let config = ion_config::global().config();
         let enabled = config.adblock.enable;
         if self.enabled != enabled {
@@ -297,9 +298,14 @@ impl qobject::Adblock {
             *current = lists;
             changed
         };
-        // The first call, from `attach`, runs before anything is loaded.
-        if changed && self.ready {
-            self.as_mut().spawn_refresh(false, false);
+        if changed && !initial {
+            if self.current_lists().is_empty() {
+                // Nothing to compile; stop blocking with the removed lists.
+                self.as_mut().rust_mut().shield.clear_blocker();
+                self.as_mut().set_ready(false);
+            } else {
+                self.as_mut().spawn_refresh(false, false);
+            }
         }
         self.as_mut().show_error();
     }

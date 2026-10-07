@@ -124,12 +124,17 @@ pub fn load(store: &Store, lists: &[FilterList]) -> Option<Blocker> {
 }
 
 /// Guards against saving a captive portal page or an error page as a list.
+/// Any text is a valid filter pattern, so this looks at the shape instead:
+/// filter lists open with a header or comment (`[Adblock Plus …]`, `! Title:`,
+/// or `#` in hosts files) and contain at least one rule.
 fn looks_like_filter_list(text: &str) -> bool {
     let start = text.trim_start();
-    !start.starts_with('<')
-        && start
-            .lines()
-            .any(|line| !line.trim().is_empty() && !line.starts_with('!') && !line.starts_with('['))
+    let has_header = start.starts_with('[') || start.starts_with('!') || start.starts_with('#');
+    let is_comment = |line: &str| {
+        let line = line.trim();
+        line.is_empty() || line.starts_with('!') || line.starts_with('[') || line.starts_with('#')
+    };
+    has_header && start.lines().any(|line| !is_comment(line))
 }
 
 #[cfg(test)]
@@ -180,7 +185,10 @@ mod tests {
                 "https://lists.test/ads.txt",
                 Ok("! Title: ads\n||ads.test^\n"),
             )
-            .with("https://lists.test/trackers.txt", Ok("||tracker.test^\n"))
+            .with(
+                "https://lists.test/trackers.txt",
+                Ok("! Title: trackers\n||tracker.test^\n"),
+            )
     }
 
     fn blocks(blocker: &Blocker, url: &str) -> bool {
@@ -236,7 +244,7 @@ mod tests {
         assert_eq!(report.failed.len(), 2);
         assert_eq!(
             store.read_list("trackers").as_deref(),
-            Some("||tracker.test^\n")
+            Some("! Title: trackers\n||tracker.test^\n")
         );
     }
 
@@ -264,7 +272,10 @@ mod tests {
             "[Adblock Plus 2.0]\n! c\n||a.test^\n"
         ));
         assert!(!looks_like_filter_list("  <!DOCTYPE html><html>"));
+        assert!(looks_like_filter_list("# hosts\n0.0.0.0 ads.test\n"));
         assert!(!looks_like_filter_list("! only comments\n\n"));
+        assert!(!looks_like_filter_list("Bad Gateway\n"));
+        assert!(!looks_like_filter_list("{\"error\": \"rate limited\"}"));
         assert!(!looks_like_filter_list(""));
     }
 }
