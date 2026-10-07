@@ -153,6 +153,8 @@ Popup {
         case "update-filter-lists": Adblock.updateLists(); break
         case "stop-agents": Safety.stopAgents(); break
         case "resume-agents": Safety.resumeAgents(); break
+        case "screenshot": view?.takeScreenshot(false); break
+        case "screenshot-page": view?.takeScreenshot(true); break
         case "quit": Qt.quit(); break
         default: console.warn("CommandPalette: unknown command", id)
         }
