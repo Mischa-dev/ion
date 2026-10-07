@@ -66,6 +66,19 @@ pub const COMMANDS: &[Command] = &[
         "",
     ),
     command(
+        "clear-cookies",
+        "Clear all cookies (signs you out of sites)",
+        "privacy delete sign out logout site data",
+        "",
+    ),
+    command("clear-cache", "Clear cache", "privacy delete http disk", ""),
+    command(
+        "clear-history",
+        "Clear all history",
+        "privacy delete forget visited pages",
+        "",
+    ),
+    command(
         "reader-mode",
         "Reader mode",
         "read article clean distraction free simplify",

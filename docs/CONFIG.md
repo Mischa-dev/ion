@@ -56,6 +56,14 @@ lists = ["easylist", "easyprivacy", "ublock-filters"]
 [shortcuts]                  # command id = Qt key sequence
 # palette = "Ctrl+K"
 
+[keyboard]
+vim = false                  # j/k scroll, gg/G, d/u, H/L back/forward,
+                             # f/F link hints (F opens in a new tab)
+
+[privacy]
+globalPrivacyControl = true  # Sec-GPC header and navigator.globalPrivacyControl
+blockThirdPartyCookies = true
+
 [sites."example.com"]        # per-site settings; a host covers its subdomains,
 javascript = true            # "*" covers every site, the most specific wins
 # css = "body { max-width: 60em; margin: auto }"   # added to the site's pages

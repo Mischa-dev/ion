@@ -83,7 +83,7 @@ impl qobject::Sites {
 
     fn scripts(&self) -> QVariant {
         let config = ion_config::global().config();
-        let (scripts, warnings) = ion_sites::all_scripts(&config.sites, self.dir.as_deref());
+        let (scripts, warnings) = ion_sites::all_scripts(&config, self.dir.as_deref());
         for warning in warnings {
             eprintln!("ion: userscripts: {warning}");
         }

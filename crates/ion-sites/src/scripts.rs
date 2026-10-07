@@ -16,7 +16,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use ion_config::Site;
+use ion_config::{Config, Site};
 
 /// When a script runs in the page's lifetime.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -197,12 +197,40 @@ pub fn load_dir(dir: &Path) -> (Vec<Script>, Vec<String>) {
     (scripts, warnings)
 }
 
-/// Per-site CSS followed by the files in `dir`.
-pub fn all_scripts(
-    sites: &BTreeMap<String, Site>,
-    dir: Option<&Path>,
-) -> (Vec<Script>, Vec<String>) {
-    let mut scripts = site_styles(sites);
+/// Makes `navigator.globalPrivacyControl` true, matching the `Sec-GPC`
+/// header. Runs in the page's world so page scripts see it.
+pub fn global_privacy_control() -> Script {
+    Script {
+        name: "ion-global-privacy-control".to_owned(),
+        source: "Object.defineProperty(Navigator.prototype, 'globalPrivacyControl', \
+                 { get: () => true, configurable: true, enumerable: true });\n"
+            .to_owned(),
+        run_at: RunAt::DocumentStart,
+        world: World::Main,
+    }
+}
+
+/// Vim-style keys and link hints (`[keyboard] vim = true`).
+pub fn keyboard_mode() -> Script {
+    Script {
+        name: "ion-keyboard-mode".to_owned(),
+        source: include_str!("keyboard.js").to_owned(),
+        run_at: RunAt::DocumentReady,
+        world: World::Isolated,
+    }
+}
+
+/// Ion's own scripts for `config` (privacy signals, per-site CSS) followed by
+/// the files in `dir`.
+pub fn all_scripts(config: &Config, dir: Option<&Path>) -> (Vec<Script>, Vec<String>) {
+    let mut scripts = Vec::new();
+    if config.privacy.global_privacy_control {
+        scripts.push(global_privacy_control());
+    }
+    if config.keyboard.vim {
+        scripts.push(keyboard_mode());
+    }
+    scripts.extend(site_styles(&config.sites));
     let mut warnings = Vec::new();
     if let Some(dir) = dir {
         let (files, problems) = load_dir(dir);
@@ -248,6 +276,19 @@ mod tests {
             },
         );
         assert!(!site_styles(&sites)[0].source.contains("@match"));
+    }
+
+    #[test]
+    fn global_privacy_control_follows_config() {
+        let mut config = Config::default();
+        let names = |c: &Config| -> Vec<String> {
+            all_scripts(c, None).0.into_iter().map(|s| s.name).collect()
+        };
+        assert_eq!(names(&config), ["ion-global-privacy-control"]);
+        config.privacy.global_privacy_control = false;
+        assert!(names(&config).is_empty());
+        config.keyboard.vim = true;
+        assert_eq!(names(&config), ["ion-keyboard-mode"]);
     }
 
     #[test]

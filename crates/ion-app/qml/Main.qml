@@ -79,6 +79,7 @@ ApplicationWindow {
     Component.onCompleted: {
         profile = profilePrototype.instance()
         Adblock.attach(window.profile)
+        Privacy.apply(window.profile)
         if (Config.value("general.restoreSession"))
             Tabs.restoreLastSession()
         // URLs on the command line (`ion %U` from the desktop file) open as new
@@ -108,6 +109,11 @@ ApplicationWindow {
     Connections {
         target: History
         function onChanged() { historySaveTimer.restart() }
+    }
+    // `[privacy]` cookie settings follow config changes live.
+    Connections {
+        target: Config
+        function onRevisionChanged() { Privacy.apply(window.profile) }
     }
     Connections {
         target: Qt.application

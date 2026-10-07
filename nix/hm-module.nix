@@ -107,6 +107,15 @@ in
           lists = setting (types.listOf types.str) "Filter lists, by well-known name or URL.";
         };
 
+        keyboard = {
+          vim = setting types.bool "Vim-style keys and link hints in pages.";
+        };
+
+        privacy = {
+          globalPrivacyControl = setting types.bool "Send the Global Privacy Control signal to sites.";
+          blockThirdPartyCookies = setting types.bool "Refuse cookies from sites other than the one in the address bar.";
+        };
+
         sites = mkOption {
           type = types.attrsOf (
             types.submodule {

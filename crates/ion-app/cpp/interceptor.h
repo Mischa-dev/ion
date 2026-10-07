@@ -18,5 +18,6 @@ QString requestMethod(const QWebEngineUrlRequestInfo &info);
 int requestResourceType(const QWebEngineUrlRequestInfo &info);
 void blockRequest(QWebEngineUrlRequestInfo &info);
 void redirectRequest(QWebEngineUrlRequestInfo &info, const QString &url);
+void setRequestHeader(QWebEngineUrlRequestInfo &info, const QString &name, const QString &value);
 
 } // namespace ion
