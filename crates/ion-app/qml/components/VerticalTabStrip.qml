@@ -20,6 +20,7 @@ Rectangle {
     signal moveRequested(int from, int to)
     signal newTabRequested()
     signal menuRequested(Item anchor)
+    signal tabMenuRequested(int index)
 
     implicitWidth: Theme.tabMaxWidth
     color: Theme.background
@@ -100,6 +101,7 @@ Rectangle {
                     onActivated: index => strip.activated(index)
                     onCloseRequested: index => strip.closeRequested(index)
                     onMoveRequested: (from, to) => strip.moveRequested(from, to)
+                    onMenuRequested: index => strip.tabMenuRequested(index)
                 }
 
                 RowLayout {
