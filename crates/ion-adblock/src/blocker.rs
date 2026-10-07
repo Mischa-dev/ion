@@ -163,12 +163,14 @@ pub fn hiding_css(selectors: &[String]) -> String {
 }
 
 /// Selectors go into a style sheet verbatim, so one that could close its rule
-/// and start another, or open a comment, is dropped.
+/// and start another, or open a comment, is dropped. CSS escapes (`.sm\:block`)
+/// are fine, but not a trailing backslash, which would escape the rule's `{`.
 fn is_safe_selector(selector: &str) -> bool {
     !selector.is_empty()
-        && !selector.contains(['{', '}', '\\'])
+        && !selector.contains(['{', '}'])
         && !selector.contains("/*")
         && !selector.contains('<')
+        && selector.chars().rev().take_while(|&c| c == '\\').count() % 2 == 0
 }
 
 /// Hosts files (`0.0.0.0 ads.example`) need their own parser; the first rule
@@ -361,6 +363,15 @@ shop.example.org##a{color:red}body
     }
 
     #[test]
+    fn escaped_selectors_are_kept() {
+        let blocker = Blocker::from_lists(["##.sm\\:block\nnews.example.org##.lg\\:ad\n"]);
+        let page = blocker.page_cosmetics("https://news.example.org/");
+        assert_eq!(page.hide, [r".lg\:ad"]);
+        let found = blocker.generic_selectors(&page, ["sm:block"], []);
+        assert_eq!(found, [r".sm\:block"]);
+    }
+
+    #[test]
     fn unsafe_selectors_never_reach_the_style_sheet() {
         let blocker = Blocker::from_lists([COSMETIC]);
         let page = blocker.page_cosmetics("https://shop.example.org/");
@@ -368,6 +379,10 @@ shop.example.org##a{color:red}body
         assert!(!is_safe_selector("a{color:red}body"));
         assert!(!is_safe_selector("a/*"));
         assert!(is_safe_selector("div[data-ad=\"1\"] > .x"));
+        assert!(is_safe_selector(r".sm\:block"));
+        assert!(is_safe_selector(r".a\\"));
+        assert!(!is_safe_selector(r".a\"));
+        assert!(!is_safe_selector(r".a\\\"));
     }
 
     #[test]
