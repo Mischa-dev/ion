@@ -84,8 +84,11 @@ the "why was this blocked?" text in the UI.
    - Agents may not act on Ion's own pages (`ion:` and `chrome:` schemes, the
      settings and permission pages), so an agent can never change its own
      trust. Reading them is denied too.
-   - An action about a site must name the site; one that doesn't is a bug in
-     the caller and is refused.
+   - An action about a site must name the site, and an action on a tab must
+     name the tab (so taking a tab back can't be sidestepped); requests that
+     don't are refused.
+   - Agent and connector ids must be plain identifiers (`[A-Za-z0-9._-]`, at
+     most 64 characters), because prompts show them.
 2. **Stop and take-over** (deny): when the global stop is engaged, every agent
    request is denied until the person resumes agents. A tab the person took
    back denies agent actions in that tab until handed back. A paused agent is
@@ -146,8 +149,10 @@ and the choices allowed for it:
 
 Answers become rules with the matching lifetime and source `user`. "Allow on
 this site" for an agent covers read and act on that host and its subdomains;
-"Always allow" for commit covers that one action there. Approvals for pages
-without a host last the session only. "Don't
+"Always allow" for commit covers that one action there. Approvals for local files
+last the session only; `data:` and `about:` pages share one origin, so for
+them only "Allow once" is offered. `blob:` and `filesystem:` URLs take the
+origin of the page that made them. "Don't
 allow" on an agent prompt is remembered for the session only **(default)**,
 so a misclick does not silently cripple an agent forever; site blocks are
 remembered forever, like other browsers.

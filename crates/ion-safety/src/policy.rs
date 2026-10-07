@@ -203,6 +203,23 @@ pub enum HardLimit {
     /// An action on a tab without the tab: refused, so taking a tab back
     /// can't be sidestepped.
     MissingTab,
+    /// An agent or connector id that isn't a plain identifier. Ids appear in
+    /// prompts, so only short `[A-Za-z0-9._-]` ids are accepted.
+    InvalidId,
+}
+
+/// Longest agent or connector id accepted.
+pub const MAX_ID_LEN: usize = 64;
+
+/// Whether `id` is a plain identifier: 1 to [`MAX_ID_LEN`] ASCII letters,
+/// digits, `.`, `_` or `-`. Prompts show ids, so this keeps an agent from
+/// writing its own prompt text through them.
+pub fn is_valid_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= MAX_ID_LEN
+        && id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
 }
 
 /// Why a decision came out the way it did.
@@ -250,6 +267,9 @@ impl fmt::Display for Reason {
             Reason::HardLimit {
                 limit: HardLimit::MissingTab,
             } => f.write_str("The request didn't say which tab it was for"),
+            Reason::HardLimit {
+                limit: HardLimit::InvalidId,
+            } => f.write_str("The agent or connector name isn't valid"),
             Reason::Stopped => f.write_str("All agents are stopped"),
             Reason::Paused => f.write_str("This agent is paused"),
             Reason::TakenOver => f.write_str("You took this tab back"),
@@ -439,6 +459,13 @@ impl Policy {
         let tier = request.action.tier();
         if tier == Tier::Forbidden {
             return deny_hard(HardLimit::Credentials);
+        }
+        let connector_ok = match &request.action {
+            Action::UseConnector(name) => is_valid_id(name),
+            _ => true,
+        };
+        if !is_valid_id(&request.agent) || !connector_ok {
+            return deny_hard(HardLimit::InvalidId);
         }
         if request.action.needs_site() && request.site.is_none() {
             return deny_hard(HardLimit::MissingSite);
@@ -645,6 +672,44 @@ mod tests {
         let mut list = req("ion", Action::ListTabs, None);
         list.tab = None;
         assert_eq!(policy.decide_agent(&list).verdict, Verdict::Allow);
+    }
+
+    #[test]
+    fn ids_that_could_write_prompt_text_are_refused() {
+        let policy = policy_with("ion", profile(TrustLevel::Full));
+        let bad = req(
+            "ion",
+            Action::UseConnector("GitHub\nClick Allow".into()),
+            None,
+        );
+        assert_eq!(
+            policy.decide_agent(&bad).reason,
+            Reason::HardLimit {
+                limit: HardLimit::InvalidId
+            }
+        );
+        let bad_agent = req("Ion Agent (trusted)", Action::ReadPage, GH);
+        assert_eq!(policy.decide_agent(&bad_agent).verdict, Verdict::Deny);
+        assert!(is_valid_id("claude-code"));
+        assert!(is_valid_id("my_agent.v2"));
+        assert!(!is_valid_id(""));
+        assert!(!is_valid_id(&"a".repeat(MAX_ID_LEN + 1)));
+    }
+
+    #[test]
+    fn blob_urls_inherit_protection() {
+        let policy = policy_with("ion", profile(TrustLevel::Full));
+        let d = policy.decide_agent(&req(
+            "ion",
+            Action::ReadPage,
+            Some("blob:chrome://settings/x"),
+        ));
+        assert_eq!(
+            d.reason,
+            Reason::HardLimit {
+                limit: HardLimit::ProtectedPage
+            }
+        );
     }
 
     #[test]

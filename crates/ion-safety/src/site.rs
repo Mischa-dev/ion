@@ -18,8 +18,14 @@ pub struct Origin {
 
 impl Origin {
     /// The origin of `url`. `None` if `url` does not parse.
+    ///
+    /// `blob:` and `filesystem:` URLs take the origin of the URL they wrap
+    /// (`blob:https://a.example/id` is `https://a.example`), as browsers do.
     pub fn parse(url: &str) -> Option<Origin> {
         let url = url::Url::parse(url.trim()).ok()?;
+        if matches!(url.scheme(), "blob" | "filesystem") {
+            return Origin::parse(url.path());
+        }
         Some(Origin {
             scheme: url.scheme().to_ascii_lowercase(),
             host: url
@@ -40,6 +46,13 @@ impl Origin {
     }
 
     /// The host as people read it: `www.` dropped. `None` without a host.
+    /// Whether pages with this origin can be told apart from each other:
+    /// false for `data:`, `about:` and other hostless origins except local
+    /// files, so an answer for one of them is never remembered for all.
+    pub fn is_distinct(&self) -> bool {
+        self.host.is_some() || self.scheme == "file"
+    }
+
     pub fn display_host(&self) -> Option<&str> {
         self.host
             .as_deref()
@@ -210,6 +223,16 @@ mod tests {
         assert_eq!(origin("file:///home/me/a.html").host(), None);
         assert_eq!(origin("about:blank").scheme(), "about");
         assert_eq!(Origin::parse("not a url"), None);
+        assert_eq!(
+            origin("blob:https://good.example/0b1c").to_string(),
+            "https://good.example"
+        );
+        assert_eq!(origin("blob:chrome://settings/x").scheme(), "chrome");
+        assert_eq!(
+            origin("filesystem:http://a.example:8080/temporary/f").to_string(),
+            "http://a.example:8080"
+        );
+        assert_eq!(Origin::parse("blob:nonsense"), None);
     }
 
     #[test]

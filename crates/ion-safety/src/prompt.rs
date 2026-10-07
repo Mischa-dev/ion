@@ -123,7 +123,11 @@ impl Prompt {
         let deny = (Choice::Deny, "Don't allow".to_owned());
         let once = (Choice::AllowOnce, "Allow once".to_owned());
         let tier = request.action.tier();
+        // `data:` and `about:` pages share one origin: answers for them
+        // can't be remembered without covering every such page.
+        let opaque = request.site.as_ref().is_some_and(|o| !o.is_distinct());
         let choices = match tier {
+            _ if opaque => vec![deny, once],
             Tier::Read | Tier::Act if request.site.is_some() => {
                 vec![deny, once, (Choice::Allow, format!("Allow on {site}"))]
             }
@@ -353,6 +357,14 @@ mod tests {
             rule.site,
             SitePattern::Origin(Origin::parse("https://meet.example").unwrap())
         );
+    }
+
+    #[test]
+    fn opaque_pages_can_only_be_allowed_once() {
+        for site in ["data:text/html,hi", "about:blank"] {
+            let p = agent(Action::ReadPage, Some(site));
+            assert_eq!(choices(&p), [Choice::Deny, Choice::AllowOnce], "{site}");
+        }
     }
 
     #[test]
