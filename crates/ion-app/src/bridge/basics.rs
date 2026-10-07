@@ -25,6 +25,33 @@ pub mod qobject {
         #[cxx_name = "permissionText"]
         fn permission_text(self: &Basics, permission_type: i32, origin: &QUrl) -> QString;
 
+        /// "Camera", "Location"… for the site permissions panel.
+        #[qinvokable]
+        #[cxx_name = "permissionName"]
+        fn permission_name(self: &Basics, permission_type: i32) -> QString;
+
+        /// The origin permissions are stored under, or an empty URL for
+        /// pages without one.
+        #[qinvokable]
+        #[cxx_name = "permissionOrigin"]
+        fn permission_origin(self: &Basics, url: &QUrl) -> QUrl;
+
+        /// "Permissions for example.com".
+        #[qinvokable]
+        #[cxx_name = "permissionPanelHeading"]
+        fn permission_panel_heading(self: &Basics, origin: &QUrl) -> QString;
+
+        /// A site permission was granted, blocked or reset somewhere in Ion.
+        #[qsignal]
+        #[cxx_name = "permissionsChanged"]
+        fn permissions_changed(self: Pin<&mut Basics>);
+
+        /// Emit `permissionsChanged` so every panel and button re-reads the
+        /// profile's stored permissions.
+        #[qinvokable]
+        #[cxx_name = "notifyPermissionsChanged"]
+        fn notify_permissions_changed(self: Pin<&mut Basics>);
+
         /// Glyph for a permission type's prompt.
         #[qinvokable]
         #[cxx_name = "permissionGlyph"]
@@ -108,6 +135,8 @@ pub mod qobject {
     }
 }
 
+use core::pin::Pin;
+
 use cxx_qt_lib::{QString, QStringList, QUrl};
 use ion_basics::new_tab::{self, Shortcut};
 use ion_basics::{context_menu, dialogs, find, permissions};
@@ -162,6 +191,26 @@ impl qobject::Basics {
     fn auth_detail(&self, realm: &QString, url: &QUrl, proxy: bool) -> QString {
         let detail = dialogs::auth_detail(&realm.to_string(), &url.to_string(), proxy);
         QString::from(detail.as_str())
+    }
+
+    fn permission_name(&self, permission_type: i32) -> QString {
+        permissions::Kind::from_qt(permission_type)
+            .map(|kind| QString::from(kind.setting_name()))
+            .unwrap_or_default()
+    }
+
+    fn permission_origin(&self, url: &QUrl) -> QUrl {
+        permissions::origin_of(&url.to_string())
+            .map(|origin| QUrl::from(origin.as_str()))
+            .unwrap_or_default()
+    }
+
+    fn permission_panel_heading(&self, origin: &QUrl) -> QString {
+        QString::from(permissions::panel_heading(&origin.to_string()).as_str())
+    }
+
+    fn notify_permissions_changed(self: Pin<&mut Self>) {
+        self.permissions_changed();
     }
 
     fn permission_glyph(&self, permission_type: i32) -> QString {

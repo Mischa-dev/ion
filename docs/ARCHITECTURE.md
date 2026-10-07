@@ -21,7 +21,7 @@ nix/
   packaging-check.nix     validates desktop file, AppStream data, Ion.app
 crates/
   ion-core/               shared core: app constants, URL-bar input resolution
-  ion-basics/             downloads, per-site zoom, permission prompts, page dialogs, find,
+  ion-basics/             downloads, per-site zoom, permission prompts and panel, page dialogs, find,
                           screenshots, context menu and new-tab tiles
   ion-platform/           Chromium switches, one-instance-per-profile hand-off
   ion-bangs/              !bangs and the command palette's ranking

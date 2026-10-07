@@ -51,6 +51,22 @@ impl Kind {
         }
     }
 
+    /// The permission's name in the site permissions panel.
+    pub fn setting_name(self) -> &'static str {
+        match self {
+            Kind::Microphone => "Microphone",
+            Kind::Camera => "Camera",
+            Kind::CameraAndMicrophone => "Camera and microphone",
+            Kind::ScreenShare => "Screen sharing",
+            Kind::ScreenShareWithAudio => "Screen and audio sharing",
+            Kind::PointerLock => "Mouse pointer lock",
+            Kind::Notifications => "Notifications",
+            Kind::Location => "Location",
+            Kind::Clipboard => "Clipboard",
+            Kind::LocalFonts => "Installed fonts",
+        }
+    }
+
     /// A single glyph for the prompt until the icon set lands.
     pub fn glyph(self) -> &'static str {
         match self {
@@ -71,6 +87,21 @@ impl Kind {
 pub fn prompt_text(kind: Kind, origin: &str) -> String {
     let who = crate::display_host(origin).unwrap_or_else(|| "This page".to_owned());
     format!("{who} wants to {}", kind.request_phrase())
+}
+
+/// The origin permissions are stored under ("https://example.com:8443"), or
+/// `None` for pages without one (local files, `about:` pages).
+pub fn origin_of(url: &str) -> Option<String> {
+    let origin = url::Url::parse(url).ok()?.origin();
+    origin.is_tuple().then(|| origin.ascii_serialization())
+}
+
+/// Heading of the site permissions panel.
+pub fn panel_heading(origin: &str) -> String {
+    match crate::display_host(origin) {
+        Some(host) => format!("Permissions for {host}"),
+        None => "Permissions for this page".to_owned(),
+    }
 }
 
 #[cfg(test)]
@@ -99,6 +130,38 @@ mod tests {
             prompt_text(Kind::Location, "https://www.maps.example/"),
             "maps.example wants to know your location"
         );
+    }
+
+    #[test]
+    fn origins_for_the_permission_store() {
+        assert_eq!(
+            origin_of("https://meet.example.com/room/42?x#y").as_deref(),
+            Some("https://meet.example.com")
+        );
+        assert_eq!(
+            origin_of("http://localhost:8765/a").as_deref(),
+            Some("http://localhost:8765")
+        );
+        assert_eq!(origin_of("file:///tmp/a.html"), None);
+        assert_eq!(origin_of("about:blank"), None);
+        assert_eq!(origin_of("not a url"), None);
+    }
+
+    #[test]
+    fn panel_heading_names_the_site() {
+        assert_eq!(
+            panel_heading("https://www.meet.example"),
+            "Permissions for meet.example"
+        );
+        assert_eq!(panel_heading(""), "Permissions for this page");
+    }
+
+    #[test]
+    fn every_kind_has_a_setting_name() {
+        for value in 1..=10 {
+            let kind = Kind::from_qt(value).unwrap();
+            assert!(!kind.setting_name().is_empty());
+        }
     }
 
     #[test]

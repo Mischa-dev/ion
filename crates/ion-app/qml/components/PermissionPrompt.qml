@@ -55,6 +55,7 @@ Rectangle {
         else
             current.deny()
         queue = queue.slice(1)
+        Basics.notifyPermissionsChanged()
     }
 
     // A new page cancels whatever the old one asked for. The engine drops those
