@@ -10,12 +10,17 @@ Rectangle {
 
     required property var tabs   // the Tabs model
     property int currentIndex: 0
+    // The Repeater of BrowserTabs in Main.qml, for favicons and load state, and
+    // a counter bumped whenever it gains or loses a view.
+    property var views: null
+    property int viewsRevision: 0
 
     signal activated(int index)
     signal closeRequested(int index)
     signal moveRequested(int from, int to)
     signal newTabRequested()
     signal menuRequested(Item anchor)
+    signal tabMenuRequested(int index)
 
     implicitHeight: Theme.tabHeight + Theme.spacing
     color: Theme.background
@@ -37,15 +42,32 @@ Rectangle {
             interactive: contentWidth > width
             model: strip.tabs
             currentIndex: strip.currentIndex
+            highlightFollowsCurrentItem: false
+            // Keep the current tab fully in view when it changes or tabs are added.
+            onCurrentIndexChanged: Qt.callLater(() => list.positionViewAtIndex(list.currentIndex, ListView.Contain))
+            onCountChanged: Qt.callLater(() => list.positionViewAtIndex(list.currentIndex, ListView.Contain))
+
+            add: Transition {
+                NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.animationSlowMs; easing.type: Easing.OutCubic }
+            }
+            remove: Transition {
+                NumberAnimation { property: "opacity"; to: 0; duration: Theme.animationMs }
+            }
 
             delegate: Rectangle {
                 id: tab
 
                 required property int index
                 required property string title
+                required property string icon
+                required property bool suspended
                 readonly property bool current: index === strip.currentIndex
+                readonly property var view: {
+                    strip.viewsRevision
+                    return strip.views ? strip.views.itemAt(index) : null
+                }
 
-                width: Math.min(Theme.tabMaxWidth, Math.max(120, list.width / Math.max(1, list.count) - list.spacing))
+                width: Math.min(Theme.tabMaxWidth, Math.max(Theme.tabMinWidth, list.width / Math.max(1, list.count) - list.spacing))
                 height: list.height
                 radius: Theme.radius
                 z: tabMouse.dragging ? 1 : 0
@@ -61,6 +83,7 @@ Rectangle {
                     onActivated: index => strip.activated(index)
                     onCloseRequested: index => strip.closeRequested(index)
                     onMoveRequested: (from, to) => strip.moveRequested(from, to)
+                    onMenuRequested: index => strip.tabMenuRequested(index)
                 }
 
                 RowLayout {
@@ -68,6 +91,13 @@ Rectangle {
                     anchors.leftMargin: Theme.spacing * 2
                     anchors.rightMargin: Theme.spacing
                     spacing: Theme.spacing
+
+                    TabIcon {
+                        Layout.alignment: Qt.AlignVCenter
+                        view: tab.view
+                        savedIcon: tab.icon
+                        opacity: tab.suspended ? Theme.dimmedOpacity : 1
+                    }
 
                     Text {
                         Layout.fillWidth: true

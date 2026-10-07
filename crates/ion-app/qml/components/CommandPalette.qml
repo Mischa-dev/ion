@@ -17,14 +17,29 @@ Popup {
 
     required property var browser
     property var results: []
+    // Global pointer position last seen over a row; see pointed().
+    property point lastPointer
 
     readonly property int rowHeight: Theme.tabHeight + Theme.spacing * 2
-    readonly property bool mac: Qt.platform.os === "osx" || Qt.platform.os === "macos"
 
     // Open with `text` already typed, e.g. ">" for commands only.
     function show(text) {
         field.text = text ?? ""
         open()
+    }
+
+    function copyText(text) {
+        clipboard.text = text
+        clipboard.selectAll()
+        clipboard.copy()
+    }
+
+    // Moving the pointer selects the row under it; a resting pointer doesn't.
+    function pointed(index, position) {
+        const last = lastPointer
+        lastPointer = position
+        if (last.x >= 0 && (last.x !== position.x || last.y !== position.y))
+            list.currentIndex = index
     }
 
     function refresh() {
@@ -65,6 +80,10 @@ Popup {
         case "session":
             Tabs.openSession(item.value)
             break
+        case "save-session":
+            if (!Tabs.saveSessionAs(item.value))
+                console.warn("CommandPalette: could not save session", item.value)
+            break
         case "open":
             if (inNewTab || !view)
                 browser.openTab(item.value)
@@ -94,8 +113,19 @@ Popup {
         case "reopen-tab": Tabs.reopenClosedTab(); break
         case "next-tab": Tabs.cycle(1); break
         case "previous-tab": Tabs.cycle(-1); break
+        case "move-tab-left": Tabs.moveTab(Tabs.currentIndex, Tabs.currentIndex - 1); break
+        case "move-tab-right": Tabs.moveTab(Tabs.currentIndex, Tabs.currentIndex + 1); break
+        case "close-other-tabs":
+            for (let i = Tabs.count - 1; i >= 0; --i) {
+                if (i !== Tabs.currentIndex)
+                    Tabs.closeTab(i)
+            }
+            break
         case "focus-url": browser.focusUrlBar(); break
+        case "copy-url": copyText(view ? view.url.toString() : ""); break
         case "reload": view?.reload(); break
+        case "hard-reload": view?.reloadAndBypassCache(); break
+        case "stop": view?.stop(); break
         case "back": view?.goBack(); break
         case "forward": view?.goForward(); break
         case "bookmark-page": browser.toggleBookmark(); break
@@ -116,34 +146,22 @@ Popup {
             if (Sites.ensureDirectory())
                 Qt.openUrlExternally("file://" + Sites.directory)
             break
+        case "fullscreen":
+            browser.visibility = browser.visibility === Window.FullScreen ? Window.Windowed : Window.FullScreen
+            break
+        case "toggle-adblock":
+            if (view && Adblock.setEnabledOn(view.url, !Adblock.isEnabledOn(view.url)))
+                view.reload()
+            break
+        case "update-filter-lists": Adblock.updateLists(); break
         case "quit": Qt.quit(); break
         default: console.warn("CommandPalette: unknown command", id)
         }
     }
 
-    function glyph(kind) {
-        switch (kind) {
-        case "tab": return "▭"
-        case "bookmark": return "★"
-        case "history": return "↺"
-        case "session": return "▤"
-        case "setting": return "⚙"
-        case "command": return "›"
-        case "bang": return "!"
-        case "open": return "↗"
-        default: return "⌕"
-        }
-    }
-
-    // Shortcut hints are written as "Ctrl+…"; show them the macOS way there.
-    function hintText(hint) {
-        if (!mac)
-            return hint
-        return hint.replace("Alt+Left", "Ctrl+[").replace("Alt+Right", "Ctrl+]")
-            .replace("Ctrl+", "⌘").replace("Shift+", "⇧")
-    }
-
     PaletteSearch { id: search }
+    // QML has no clipboard API; an invisible text field copies for copyText().
+    TextInput { id: clipboard; visible: false }
 
     parent: Overlay.overlay
     x: Math.round((parent.width - width) / 2)
@@ -154,7 +172,10 @@ Popup {
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
-    onAboutToShow: refresh()
+    onAboutToShow: {
+        lastPointer = Qt.point(-1, -1)
+        refresh()
+    }
     onOpened: field.forceActiveFocus()
 
     Overlay.modal: Rectangle {
@@ -170,6 +191,7 @@ Popup {
 
     enter: Transition {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.animationMs }
+        NumberAnimation { property: "scale"; from: 0.97; to: 1; duration: Theme.animationSlowMs; easing.type: Easing.OutCubic }
     }
     exit: Transition {
         NumberAnimation { property: "opacity"; from: 1; to: 0; duration: Theme.animationMs }
@@ -225,66 +247,16 @@ Popup {
             highlightMoveDuration: 0
             model: root.results
 
-            delegate: Rectangle {
-                id: row
-
+            delegate: CommandPaletteRow {
                 required property var modelData
                 required property int index
 
                 width: ListView.view.width
                 height: root.rowHeight
-                radius: Theme.radius
-                color: ListView.isCurrentItem ? Theme.surfaceRaised : rowMouse.containsMouse ? Theme.surfaceHover : "transparent"
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Theme.spacing * 2
-                    anchors.rightMargin: Theme.spacing * 2
-                    spacing: Theme.spacing * 2
-
-                    Text {
-                        Layout.preferredWidth: Theme.iconSize
-                        text: root.glyph(row.modelData.kind)
-                        color: row.ListView.isCurrentItem ? Theme.accent : Theme.textMuted
-                        font.pixelSize: Theme.fontSize + 2
-                        horizontalAlignment: Text.AlignHCenter
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 0
-
-                        Text {
-                            Layout.fillWidth: true
-                            text: row.modelData.title
-                            color: Theme.text
-                            font.pixelSize: Theme.fontSize
-                            elide: Text.ElideRight
-                        }
-                        Text {
-                            Layout.fillWidth: true
-                            visible: text.length > 0
-                            text: row.modelData.subtitle
-                            color: Theme.textMuted
-                            font.pixelSize: Theme.fontSize - 2
-                            elide: Text.ElideMiddle
-                        }
-                    }
-
-                    Text {
-                        visible: text.length > 0
-                        text: root.hintText(row.modelData.hint)
-                        color: Theme.textMuted
-                        font.pixelSize: Theme.fontSize - 1
-                    }
-                }
-
-                MouseArea {
-                    id: rowMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: mouse => root.choose(row.modelData, mouse.modifiers & Qt.ControlModifier)
-                }
+                item: modelData
+                current: ListView.isCurrentItem
+                onPointerMoved: position => root.pointed(index, position)
+                onChosen: modifiers => root.choose(modelData, modifiers & Qt.ControlModifier)
             }
         }
 

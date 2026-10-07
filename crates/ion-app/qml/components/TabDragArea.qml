@@ -1,9 +1,10 @@
 import QtQuick
 
 // Mouse handling for one tab in TabStrip or VerticalTabStrip: left press
-// activates the tab, middle click closes it, and dragging it along the strip
-// reorders it live. The strip's model moves the row as the pointer passes over
-// a neighbour, so the dragged tab always stays under the pointer.
+// activates the tab, middle click closes it, right click opens its menu, and
+// dragging it along the strip reorders it live. The strip's model moves the
+// row as the pointer passes over a neighbour, so the dragged tab always stays
+// under the pointer.
 MouseArea {
     id: area
 
@@ -17,13 +18,18 @@ MouseArea {
     signal activated(int index)
     signal closeRequested(int index)
     signal moveRequested(int from, int to)
+    signal menuRequested(int index)
 
     anchors.fill: parent
     hoverEnabled: true
     preventStealing: true
-    acceptedButtons: Qt.LeftButton | Qt.MiddleButton
+    acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
 
     onPressed: mouse => {
+        if (mouse.button === Qt.RightButton) {
+            area.menuRequested(index)
+            return
+        }
         if (mouse.button !== Qt.LeftButton)
             return
         pressPos = Qt.point(mouse.x, mouse.y)
