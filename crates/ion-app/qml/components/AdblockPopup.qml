@@ -102,11 +102,20 @@ Popup {
                 font.weight: Font.DemiBold
             }
             ThemedSwitch {
+                id: globalSwitch
                 checked: Adblock.enabled
                 onToggled: {
-                    // Saved to overrides.toml; Adblock follows the config.
-                    Config.set("adblock.enable", checked)
-                    popup.view?.reload()
+                    // Saved to overrides.toml; Adblock follows the config a
+                    // moment later. On failure, show the real state again.
+                    if (Config.set("adblock.enable", checked) === "")
+                        popup.view?.reload()
+                    else
+                        checked = Adblock.enabled
+                }
+                // Toggling breaks the binding, so follow later config reloads by hand.
+                Connections {
+                    target: Adblock
+                    function onEnabledChanged() { globalSwitch.checked = Adblock.enabled }
                 }
                 ToolTip.visible: hovered
                 ToolTip.delay: 600
