@@ -121,6 +121,8 @@ use ion_adblock::{
 
 /// How often the worker checks whether lists went stale while Ion runs.
 const RECHECK_EVERY: Duration = Duration::from_secs(60 * 60);
+/// User-Agent client hint headers Chromium sends without being asked.
+const CLIENT_HINTS: &[&str] = &["Sec-CH-UA", "Sec-CH-UA-Mobile", "Sec-CH-UA-Platform"];
 
 /// Held by a worker from downloading lists until its result is queued for the
 /// UI thread. Workers never interleave writing lists with compiling them, so
@@ -454,6 +456,17 @@ impl qobject::Adblock {
                     &QString::from("User-Agent"),
                     &QString::from(agent.as_str()),
                 );
+                // Firefox and Safari send no client hints; blank the engine's
+                // so they don't name Chromium next to the override.
+                if !ion_sites::agent::is_chromium(&agent) {
+                    for name in CLIENT_HINTS {
+                        qobject::set_request_header(
+                            info.as_mut(),
+                            &QString::from(*name),
+                            &QString::default(),
+                        );
+                    }
+                }
             }
         }
         match verdict {

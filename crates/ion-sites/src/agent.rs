@@ -48,6 +48,13 @@ fn without_qtwebengine(engine: &str) -> String {
         .join(" ")
 }
 
+/// Whether `user_agent` names a Chromium browser. The engine's client hints
+/// (`Sec-CH-UA*`, `navigator.userAgentData`) only fit those; Firefox and
+/// Safari send none.
+pub fn is_chromium(user_agent: &str) -> bool {
+    user_agent.contains("Chrome/") || user_agent.contains("Chromium/")
+}
+
 /// The user agent to send for pages at `url`: the most specific matching
 /// entry that sets `userAgent`, or `None` for the engine's own.
 pub fn for_url(sites: &BTreeMap<String, Site>, url: &str, engine: &str) -> Option<String> {
@@ -90,6 +97,8 @@ pub fn script(sites: &BTreeMap<String, Site>, engine: &str) -> Option<Script> {
   const get = (value) => ({{ get: () => value, configurable: true, enumerable: true }});
   Object.defineProperty(Navigator.prototype, "userAgent", get(ua));
   Object.defineProperty(Navigator.prototype, "appVersion", get(ua.replace(/^Mozilla\//, "")));
+  if (!/Chrom(e|ium)\//.test(ua) && "userAgentData" in Navigator.prototype)
+    Object.defineProperty(Navigator.prototype, "userAgentData", get(undefined));
 }})();
 "#
     );
@@ -135,6 +144,9 @@ mod tests {
         assert_eq!(resolve(" default ", ENGINE), None);
         assert_eq!(resolve("", ENGINE), None);
         assert_eq!(resolve("MyAgent/1.0", ENGINE).unwrap(), "MyAgent/1.0");
+        assert!(is_chromium(&resolve("chrome", ENGINE).unwrap()));
+        assert!(!is_chromium(&resolve("firefox", ENGINE).unwrap()));
+        assert!(!is_chromium(&resolve("safari", ENGINE).unwrap()));
     }
 
     #[test]

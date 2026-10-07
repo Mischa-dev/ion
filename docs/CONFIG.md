@@ -86,7 +86,8 @@ clearOnExit = []             # any of "cookies", "cache", "history"
 javascript = true            # "*" covers every site, the most specific wins
                              # (CSS for a site goes in [theme.sites] above)
 # userAgent = "chrome"       # "chrome" (the engine's, minus "QtWebEngine"),
-                             # "firefox", "safari", "default" or a full string
+                             # "firefox", "safari", "default" or a full string;
+                             # non-Chrome values also blank Chromium's client hints
 ```
 
 ## User scripts and styles

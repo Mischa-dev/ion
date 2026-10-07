@@ -327,7 +327,9 @@ ApplicationWindow {
 
             Repeater {
                 id: views
-                model: Tabs
+                // No page loads before startup's cache clear is done; tabs
+                // opened meanwhile get their views then.
+                model: window.startupFinished ? Tabs : null
 
                 onItemAdded: window.viewsRevision++
                 onItemRemoved: window.viewsRevision++
