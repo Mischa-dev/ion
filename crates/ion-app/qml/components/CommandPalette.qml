@@ -26,6 +26,9 @@ Popup {
     function show(text) {
         field.text = text ?? ""
         open()
+        // Now rather than in onOpened, after the enter transition: the first
+        // keys typed right after Ctrl/Cmd+K must not be lost.
+        field.forceActiveFocus()
     }
 
     function copyText(text) {
