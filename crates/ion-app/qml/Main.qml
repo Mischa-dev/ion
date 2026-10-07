@@ -52,6 +52,10 @@ ApplicationWindow {
             Qt.quit()
             return
         }
+        // A workspace's last tab makes way for a blank one, so closing it
+        // doesn't jump to another workspace.
+        if (index === Tabs.currentIndex && Tabs.workspaceTabCount(Tabs.workspace) === 1)
+            Tabs.openTabAt(index + 1, "", true)
         Tabs.closeTab(index)
     }
 
@@ -59,16 +63,23 @@ ApplicationWindow {
         return index >= 0 && index < views.count ? views.itemAt(index) : null
     }
 
-    // For the tab menu. Closing from the end keeps the lower indexes valid.
+    // For the tab menu, within the tab's workspace. Closing from the end keeps
+    // the lower indexes valid.
     function closeTabsAfter(index) {
-        for (let i = Tabs.count - 1; i > index; i--)
-            Tabs.closeTab(i)
+        const workspace = Tabs.workspaceAt(index)
+        for (let i = Tabs.count - 1; i > index; i--) {
+            if (Tabs.workspaceAt(i) === workspace)
+                Tabs.closeTab(i)
+        }
     }
 
     function closeOtherTabs(index) {
+        const workspace = Tabs.workspaceAt(index)
         closeTabsAfter(index)
-        for (let i = index - 1; i >= 0; i--)
-            Tabs.closeTab(i)
+        for (let i = index - 1; i >= 0; i--) {
+            if (Tabs.workspaceAt(i) === workspace)
+                Tabs.closeTab(i)
+        }
     }
 
     function newTab() {
@@ -166,12 +177,14 @@ ApplicationWindow {
             visible: !window.verticalTabs
             tabs: Tabs
             currentIndex: Tabs.currentIndex
+            workspace: Tabs.workspace
             onActivated: index => Tabs.activate(index)
             onCloseRequested: index => window.closeTab(index)
             onMoveRequested: (from, to) => Tabs.moveTab(from, to)
             onNewTabRequested: window.newTab()
             onMenuRequested: anchor => sessionMenu.open(anchor)
             onTabMenuRequested: index => tabMenu.openFor(index)
+            onWorkspaceMenuRequested: anchor => workspaceMenu.open(anchor)
             views: views
             viewsRevision: window.viewsRevision
         }
@@ -184,7 +197,8 @@ ApplicationWindow {
     }
 
     SessionMenu { id: sessionMenu }
-    TabMenu { id: tabMenu; browser: window }
+    TabMenu { id: tabMenu; browser: window; workspaceMenu: workspaceMenu }
+    WorkspaceMenu { id: workspaceMenu }
 
     RowLayout {
         anchors.fill: parent
@@ -201,12 +215,14 @@ ApplicationWindow {
             }
             tabs: Tabs
             currentIndex: Tabs.currentIndex
+            workspace: Tabs.workspace
             onActivated: index => Tabs.activate(index)
             onCloseRequested: index => window.closeTab(index)
             onMoveRequested: (from, to) => Tabs.moveTab(from, to)
             onNewTabRequested: window.newTab()
             onMenuRequested: anchor => sessionMenu.open(anchor)
             onTabMenuRequested: index => tabMenu.openFor(index)
+            onWorkspaceMenuRequested: anchor => workspaceMenu.open(anchor)
             views: views
             viewsRevision: window.viewsRevision
         }
@@ -291,18 +307,18 @@ ApplicationWindow {
     Shortcut { sequences: ["Ctrl+L", "Alt+D", "F6"]; onActivated: window.focusUrlBar() }
     Shortcut { sequences: ["Ctrl+Tab", "Ctrl+PgDown"]; onActivated: Tabs.cycle(1) }
     Shortcut { sequences: ["Ctrl+Shift+Tab", "Ctrl+PgUp"]; onActivated: Tabs.cycle(-1) }
-    Shortcut { sequence: "Ctrl+Shift+PgDown"; onActivated: Tabs.moveTab(Tabs.currentIndex, Tabs.currentIndex + 1) }
-    Shortcut { sequence: "Ctrl+Shift+PgUp"; onActivated: Tabs.moveTab(Tabs.currentIndex, Tabs.currentIndex - 1) }
-    // Ctrl+1…8 pick a tab by position, Ctrl+9 the last one.
-    Shortcut { sequence: "Ctrl+1"; onActivated: Tabs.activate(0) }
-    Shortcut { sequence: "Ctrl+2"; onActivated: Tabs.activate(1) }
-    Shortcut { sequence: "Ctrl+3"; onActivated: Tabs.activate(2) }
-    Shortcut { sequence: "Ctrl+4"; onActivated: Tabs.activate(3) }
-    Shortcut { sequence: "Ctrl+5"; onActivated: Tabs.activate(4) }
-    Shortcut { sequence: "Ctrl+6"; onActivated: Tabs.activate(5) }
-    Shortcut { sequence: "Ctrl+7"; onActivated: Tabs.activate(6) }
-    Shortcut { sequence: "Ctrl+8"; onActivated: Tabs.activate(7) }
-    Shortcut { sequence: "Ctrl+9"; onActivated: Tabs.activate(Tabs.count - 1) }
+    Shortcut { sequence: "Ctrl+Shift+PgDown"; onActivated: Tabs.moveTab(Tabs.currentIndex, Tabs.neighbour(Tabs.currentIndex, 1)) }
+    Shortcut { sequence: "Ctrl+Shift+PgUp"; onActivated: Tabs.moveTab(Tabs.currentIndex, Tabs.neighbour(Tabs.currentIndex, -1)) }
+    // Ctrl+1…8 pick a tab of the workspace by position, Ctrl+9 its last one.
+    Shortcut { sequence: "Ctrl+1"; onActivated: Tabs.activateNth(0) }
+    Shortcut { sequence: "Ctrl+2"; onActivated: Tabs.activateNth(1) }
+    Shortcut { sequence: "Ctrl+3"; onActivated: Tabs.activateNth(2) }
+    Shortcut { sequence: "Ctrl+4"; onActivated: Tabs.activateNth(3) }
+    Shortcut { sequence: "Ctrl+5"; onActivated: Tabs.activateNth(4) }
+    Shortcut { sequence: "Ctrl+6"; onActivated: Tabs.activateNth(5) }
+    Shortcut { sequence: "Ctrl+7"; onActivated: Tabs.activateNth(6) }
+    Shortcut { sequence: "Ctrl+8"; onActivated: Tabs.activateNth(7) }
+    Shortcut { sequence: "Ctrl+9"; onActivated: Tabs.activateNth(-1) }
     Shortcut { sequences: [StandardKey.Refresh, "Ctrl+R"]; onActivated: window.currentView?.reload() }
     Shortcut { sequences: [StandardKey.Back]; onActivated: window.currentView?.goBack() }
     Shortcut { sequences: [StandardKey.Forward]; onActivated: window.currentView?.goForward() }

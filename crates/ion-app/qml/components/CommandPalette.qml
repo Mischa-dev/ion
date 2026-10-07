@@ -108,14 +108,9 @@ Popup {
         case "reopen-tab": Tabs.reopenClosedTab(); break
         case "next-tab": Tabs.cycle(1); break
         case "previous-tab": Tabs.cycle(-1); break
-        case "move-tab-left": Tabs.moveTab(Tabs.currentIndex, Tabs.currentIndex - 1); break
-        case "move-tab-right": Tabs.moveTab(Tabs.currentIndex, Tabs.currentIndex + 1); break
-        case "close-other-tabs":
-            for (let i = Tabs.count - 1; i >= 0; --i) {
-                if (i !== Tabs.currentIndex)
-                    Tabs.closeTab(i)
-            }
-            break
+        case "move-tab-left": Tabs.moveTab(Tabs.currentIndex, Tabs.neighbour(Tabs.currentIndex, -1)); break
+        case "move-tab-right": Tabs.moveTab(Tabs.currentIndex, Tabs.neighbour(Tabs.currentIndex, 1)); break
+        case "close-other-tabs": browser.closeOtherTabs(Tabs.currentIndex); break
         case "focus-url": browser.focusUrlBar(); break
         case "copy-url": copyText(view ? view.url.toString() : ""); break
         case "reload": view?.reload(); break
