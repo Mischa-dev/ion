@@ -102,6 +102,19 @@ impl Default for TabList {
     }
 }
 
+/// A workspace icon trimmed and cut to [`WORKSPACE_ICON_MAX_CHARS`] whole
+/// characters and [`WORKSPACE_ICON_MAX_BYTES`] bytes.
+fn clamp_icon(icon: &str) -> String {
+    let mut kept = String::new();
+    for g in icon.trim().graphemes(true).take(WORKSPACE_ICON_MAX_CHARS) {
+        if kept.len() + g.len() > WORKSPACE_ICON_MAX_BYTES {
+            break;
+        }
+        kept.push_str(g);
+    }
+    kept
+}
+
 impl TabList {
     pub fn new() -> Self {
         Self::default()
@@ -118,7 +131,7 @@ impl TabList {
                     id: w.id,
                     name: w.name.clone(),
                     color: w.color.clone(),
-                    icon: w.icon.clone(),
+                    icon: clamp_icon(&w.icon),
                 })
                 .collect();
             list.empty_workspace = list.workspaces[0].id;
@@ -516,14 +529,7 @@ impl TabList {
     /// [`WORKSPACE_ICON_MAX_BYTES`] bytes; empty shows the color dot).
     /// False if there is no such workspace or the icon is unchanged.
     pub fn set_workspace_icon(&mut self, id: WorkspaceId, icon: &str) -> bool {
-        let mut kept = String::new();
-        for g in icon.trim().graphemes(true).take(WORKSPACE_ICON_MAX_CHARS) {
-            if kept.len() + g.len() > WORKSPACE_ICON_MAX_BYTES {
-                break;
-            }
-            kept.push_str(g);
-        }
-        let icon = kept;
+        let icon = clamp_icon(icon);
         match self.workspaces.iter_mut().find(|w| w.id == id) {
             Some(w) if w.icon != icon => {
                 w.icon = icon;
@@ -915,6 +921,11 @@ mod tests {
         let mut odd = session.clone();
         odd.tabs[1].workspace = 42;
         assert_eq!(TabList::from_session(&odd).rows_in(0), [0, 1]);
+        // Hand-edited oversized icons are cut down on load.
+        let mut big = session.clone();
+        big.workspaces[1].icon = "x".repeat(100);
+        let restored = TabList::from_session(&big);
+        assert_eq!(restored.workspace(work).unwrap().icon, "xxxxxxxx");
         // Old files without workspaces load into the default one.
         let old = Session::from_json(r#"{"tabs":[{"url":"a"}]}"#).unwrap();
         assert_eq!(TabList::from_session(&old).workspaces().len(), 1);
