@@ -172,6 +172,34 @@ in
           lists = setting (types.listOf types.str) "Filter lists, by well-known name or URL.";
         };
 
+        extensions =
+          setting (types.listOf (types.coercedTo types.package toString types.str))
+            "Unpacked Chrome extension folders (Manifest V3), or packages that build one, to load at startup.";
+
+        keyboard = {
+          vim = setting types.bool "Vim-style keys and link hints in pages.";
+        };
+
+        privacy = {
+          globalPrivacyControl = setting types.bool "Send the Global Privacy Control signal to sites.";
+          blockThirdPartyCookies = setting types.bool "Refuse cookies from sites other than the one in the address bar.";
+        };
+
+        sites = mkOption {
+          type = types.attrsOf (
+            types.submodule {
+              options = {
+                javascript = setting types.bool "Run JavaScript on the site.";
+              };
+            }
+          );
+          default = { };
+          example = {
+            "example.com".javascript = false;
+          };
+          description = "Per-site settings keyed by host (site CSS is `theme.sites`); a host also covers its subdomains, `*` covers every site.";
+        };
+
         agents = mkOption {
           default = { };
           example = {

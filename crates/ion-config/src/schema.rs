@@ -27,8 +27,52 @@ pub struct Config {
     /// Shortcut remaps: command id (for example `"palette"`) to a Qt key
     /// sequence (for example `"Ctrl+K"`). Unlisted commands keep their default.
     pub shortcuts: BTreeMap<String, String>,
+    /// Per-site settings, keyed by host. `"example.com"` also covers its
+    /// subdomains; the most specific key wins. `"*"` covers every site.
+    pub sites: BTreeMap<String, Site>,
+    pub privacy: Privacy,
+    pub keyboard: Keyboard,
+    /// Unpacked Chrome extension folders (Manifest V3) loaded at startup,
+    /// on top of those in Ion's own extensions folder.
+    pub extensions: Vec<String>,
     pub agents: Agents,
     pub safety: Safety,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Keyboard {
+    /// Vim-style keys in pages: j/k to scroll, f for link hints, H/L for
+    /// back and forward.
+    pub vim: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Privacy {
+    /// Tell sites not to sell or share your data: the `Sec-GPC: 1` header
+    /// and `navigator.globalPrivacyControl`.
+    pub global_privacy_control: bool,
+    /// Refuse cookies set by sites other than the one in the address bar.
+    pub block_third_party_cookies: bool,
+}
+
+impl Default for Privacy {
+    fn default() -> Self {
+        Self {
+            global_privacy_control: true,
+            block_third_party_cookies: true,
+        }
+    }
+}
+
+/// Settings for one site. Unset fields fall back to less specific keys.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Site {
+    /// Run JavaScript on the site.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub javascript: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -408,6 +452,12 @@ mod tests {
 
             [adblock]
             lists = ["easylist", "easyprivacy", "ublock-filters"]
+
+            [privacy]
+            blockThirdPartyCookies = false
+
+            [sites."example.com"]
+            javascript = false
             "#,
         )
         .unwrap();
@@ -421,6 +471,9 @@ mod tests {
         assert_eq!(config.ui.tabs, TabLayout::Vertical);
         assert_eq!(config.bangs["gh"], "https://github.com/search?q={}");
         assert_eq!(config.general, General::default());
+        assert_eq!(config.sites["example.com"].javascript, Some(false));
+        assert!(!config.privacy.block_third_party_cookies);
+        assert!(config.privacy.global_privacy_control);
     }
 
     #[test]

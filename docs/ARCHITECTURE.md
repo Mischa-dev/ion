@@ -24,6 +24,9 @@ crates/
   ion-platform/           Chromium switches, one-instance-per-profile hand-off
   ion-bangs/              !bangs and the command palette's ranking
   ion-session/            tabs and workspaces, saved and named sessions, history
+  ion-bookmarks/          bookmarks; importing bookmarks and history from Chrome/Firefox
+  ion-sites/              per-site settings ([sites] in config), user scripts and styles
+  ion-reader/             reader mode: article extraction and the themed reader page
   ion-safety/             permissions and agent trust: decisions, prompts, activity log
   ion-app/                the binary (`ion`)
     build.rs              auto-discovers bridges, C++ shims and QML files

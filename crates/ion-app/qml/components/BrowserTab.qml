@@ -7,6 +7,9 @@ import Ion
 WebEngineView {
     id: view
 
+    // Reader mode for this tab: `reader.toggle()`, `reader.active`.
+    readonly property alias reader: readerMode
+
     // Emitted when the page asks for a new tab or window (target=_blank, window.open).
     signal newTabRequested(var request)
 
@@ -75,6 +78,21 @@ WebEngineView {
         }
     }
     onNewWindowRequested: request => view.newTabRequested(request)
+
+    // Show a short message over the page.
+    function notify(message) {
+        notice.show(message)
+    }
+
+    ReaderMode { id: readerMode; view: view }
+    PageNotice { id: notice }
+
+    // Per-site JavaScript switch from `[sites]` in config, applied as each
+    // page starts loading.
+    onNavigationRequested: request => {
+        if (request.isMainFrame)
+            view.settings.javascriptEnabled = Sites.javascriptEnabled(request.url.toString())
+    }
 
     Connections {
         target: Theme.engine

@@ -23,6 +23,7 @@ Rectangle {
     function glyph(kind) {
         switch (kind) {
         case "tab": return "▭"
+        case "bookmark": return "★"
         case "history": return "↺"
         case "session": return "▤"
         case "setting": return "⚙"
