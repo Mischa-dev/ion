@@ -47,6 +47,11 @@ pages = "match"              # what web pages see: "match" gives them the theme'
                              # system's; "darken" is "match" plus darkening pages
                              # that have no dark style when the theme is dark
 
+[theme.sites."example.com"]  # per site; also covers subdomains, most specific wins
+# darken = false             # never darken this site (true: darken under a dark
+                             # theme even when pages isn't "darken")
+# css = "body { max-width: 50em; margin: auto }"   # added to the site's pages
+
 [bangs]                      # your own, on top of Ion's built-in set
 # gh = "https://github.com/search?q={}"   # adds or replaces !gh
 # yt = ""                                 # removes the built-in !yt

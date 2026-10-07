@@ -6,8 +6,9 @@
 //! system light/dark and accent) and when the watched palette file changes.
 //!
 //! It also decides what web pages see of the theme (`theme.pages`): it sets
-//! the `prefers-color-scheme` QtWebEngine hands to pages, and `darkenPages`
-//! tells each `BrowserTab` whether to force-darken pages.
+//! the `prefers-color-scheme` QtWebEngine hands to pages, and tells each
+//! `BrowserTab` whether to force-darken its page (`darkenPage`) and what CSS
+//! to add to it (`siteCssScript`), from `[theme.sites]` in the config.
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -51,8 +52,11 @@ pub mod qobject {
         // error: why the configured theme could not be used; empty when it was.
         // Its own signal, so a handler fires once per new error.
         #[qproperty(QString, error, READ, NOTIFY)]
-        // Whether pages without a dark style should be force-darkened.
+        // Whether pages without a dark style should be force-darkened, before
+        // per-site settings (see `darkenPage`).
         #[qproperty(bool, darken_pages, cxx_name = "darkenPages", READ, NOTIFY = page_scheme_changed)]
+        // A user script adding `[theme.sites]` CSS to pages; empty when none.
+        #[qproperty(QString, site_css_script, cxx_name = "siteCssScript", READ, NOTIFY = page_scheme_changed)]
         type ThemeEngine = super::ThemeEngineRust;
 
         #[qsignal]
@@ -71,6 +75,12 @@ pub mod qobject {
         #[cxx_name = "applyPageScheme"]
         fn apply_page_scheme(self: &ThemeEngine);
 
+        /// Whether the page at `url` should be force-darkened: `darkenPages`
+        /// unless a `[theme.sites]` entry says otherwise.
+        #[qinvokable]
+        #[cxx_name = "darkenPage"]
+        fn darken_page(self: &ThemeEngine, url: &QString) -> bool;
+
         /// Resolve the palette again. Runs on its own when an input changes.
         #[qinvokable]
         fn reload(self: Pin<&mut ThemeEngine>);
@@ -88,6 +98,7 @@ pub mod qobject {
     impl cxx_qt::Threading for ThemeEngine {}
 }
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -96,7 +107,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QColor, QString, QStringList};
 use ion_theme::{
-    Color, Dirs, FileWatcher, PageTheming, Palette, Scheme, SystemAppearance, ThemeSource,
+    Color, Dirs, FileWatcher, PageTheming, Palette, Scheme, SiteTheme, SystemAppearance,
+    ThemeSource,
 };
 
 pub struct ThemeEngineRust {
@@ -129,6 +141,10 @@ pub struct ThemeEngineRust {
     /// The system's light/dark when pages follow it, so they re-apply when
     /// it changes.
     page_system_dark: Option<bool>,
+    site_css_script: QString,
+    /// `[theme.sites]`, with site names lower-cased.
+    sites: BTreeMap<String, SiteTheme>,
+    config_subscription: Option<ion_config::Subscription>,
 
     /// The palette file being watched, and its watcher.
     watched: Option<(PathBuf, FileWatcher)>,
@@ -169,6 +185,9 @@ impl Default for ThemeEngineRust {
             // Not a valid scheme, so the first reload always sets it.
             page_scheme: -1,
             page_system_dark: None,
+            site_css_script: QString::default(),
+            sites: BTreeMap::new(),
+            config_subscription: None,
             watched: None,
             reload_queued: Arc::default(),
         };
@@ -253,6 +272,12 @@ impl cxx_qt::Initialize for qobject::ThemeEngine {
         self.as_mut()
             .on_pages_changed(|this| this.reload())
             .release();
+        let qt_thread = self.qt_thread();
+        let subscription = ion_config::global().subscribe(move |_| {
+            let _ = qt_thread.queue(|this| this.reload_sites());
+        });
+        self.as_mut().rust_mut().config_subscription = Some(subscription);
+        self.as_mut().reload_sites();
         self.reload();
     }
 }
@@ -303,6 +328,36 @@ impl qobject::ThemeEngine {
 
     fn apply_page_scheme(&self) {
         qobject::set_web_color_scheme(self.page_scheme);
+    }
+
+    fn darken_page(&self, url: &QString) -> bool {
+        ion_theme::sites::darken(&self.sites, &url.to_string(), self.dark, self.darken_pages)
+    }
+
+    /// Re-read `[theme.sites]`; tells pages when it changed.
+    fn reload_sites(mut self: Pin<&mut Self>) {
+        let sites: BTreeMap<String, SiteTheme> = ion_config::global()
+            .config()
+            .theme
+            .sites
+            .iter()
+            .map(|(site, theme)| {
+                let site = site.trim_end_matches('.').to_ascii_lowercase();
+                let theme = SiteTheme {
+                    darken: theme.darken,
+                    css: theme.css.clone(),
+                };
+                (site, theme)
+            })
+            .collect();
+        if sites == self.sites {
+            return;
+        }
+        let script = QString::from(ion_theme::sites::css_script(&sites).as_str());
+        let mut rust = self.as_mut().rust_mut();
+        rust.sites = sites;
+        rust.site_css_script = script;
+        self.page_scheme_changed();
     }
 
     /// Watch `path` for changes (or stop watching). Returns an error message
