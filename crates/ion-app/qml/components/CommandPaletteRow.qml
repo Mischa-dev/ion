@@ -30,6 +30,7 @@ Rectangle {
         case "command": return "›"
         case "bang": return "!"
         case "open": return "↗"
+        case "agent": return "@"
         default: return "⌕"
         }
     }
