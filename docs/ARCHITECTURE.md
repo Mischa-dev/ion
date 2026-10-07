@@ -74,6 +74,9 @@ Shared files with small, append-only edits: root `Cargo.toml`,
   themes, DMS or manual palette files (live reloaded) and the system accent.
   `Theme.qml` binds them to the `[theme]` config section; see
   `crates/ion-theme/README.md`. Sizes and motion tokens are still static.
+- Web pages follow the theme's light/dark (`theme.pages`); `BrowserTab`
+  re-applies its settings when that changes. Per-site control and palette-tinted
+  dark mode are not built yet.
 - `ion_core::navigation::Omnibox` decides between address and search. Extra
   stages implement `InputStep` and run first; `ion_bangs::BangTable` is one.
   Config feeds user bangs through `BangTable::apply`.
