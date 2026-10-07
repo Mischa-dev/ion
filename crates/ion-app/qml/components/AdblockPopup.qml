@@ -152,8 +152,12 @@ Popup {
                 ThemedSwitch {
                     checked: popup.siteEnabled
                     onToggled: {
-                        Adblock.setEnabledOn(popup.pageUrl, checked)
-                        popup.view?.reload()
+                        const changed = Adblock.setEnabledOn(popup.pageUrl, checked)
+                        // Toggling breaks the binding; restore it so a rejected
+                        // switch (e.g. on github.io) snaps back.
+                        checked = Qt.binding(() => popup.siteEnabled)
+                        if (changed)
+                            popup.view?.reload()
                     }
                 }
             }

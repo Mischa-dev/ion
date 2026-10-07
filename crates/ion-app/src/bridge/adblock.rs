@@ -81,9 +81,10 @@ pub mod qobject {
         fn is_enabled_on(self: &Adblock, url: &QUrl) -> bool;
 
         /// Switch blocking on or off for `url`'s site; remembered across restarts.
+        /// Returns false if nothing changed, e.g. for a public suffix like `github.io`.
         #[qinvokable]
         #[cxx_name = "setEnabledOn"]
-        fn set_enabled_on(self: Pin<&mut Adblock>, url: &QUrl, enabled: bool);
+        fn set_enabled_on(self: Pin<&mut Adblock>, url: &QUrl, enabled: bool) -> bool;
 
         /// The site name shown for `url` ("example.com"); empty for pages without one.
         #[qinvokable]
@@ -424,14 +425,14 @@ impl qobject::Adblock {
         self.shield.is_enabled_on(&url.to_string())
     }
 
-    fn set_enabled_on(mut self: Pin<&mut Self>, url: &QUrl, enabled: bool) {
+    fn set_enabled_on(mut self: Pin<&mut Self>, url: &QUrl, enabled: bool) -> bool {
         let changed = self
             .as_mut()
             .rust_mut()
             .shield
             .set_enabled_on(&url.to_string(), enabled);
         if !changed {
-            return;
+            return false;
         }
         let saved = match &self.sites_path {
             Some(path) => self.shield.sites().save(path),
@@ -443,6 +444,7 @@ impl qobject::Adblock {
         }
         let next = self.revision.wrapping_add(1);
         self.as_mut().set_revision(next);
+        true
     }
 
     fn site_of(&self, url: &QUrl) -> QString {
