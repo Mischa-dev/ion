@@ -13,6 +13,10 @@ Rectangle {
     property bool current: false
     // Clicked, with the keyboard modifiers held.
     signal chosen(int modifiers)
+    // The pointer moved over the row; `position` is in global coordinates.
+    // Lists select on real movement only, so rows sliding under a resting
+    // pointer don't steal the keyboard selection.
+    signal pointerMoved(point position)
 
     readonly property bool mac: Qt.platform.os === "osx" || Qt.platform.os === "macos"
 
@@ -39,7 +43,8 @@ Rectangle {
 
     implicitHeight: Theme.tabHeight + Theme.spacing * 2
     radius: Theme.radius
-    color: current ? Theme.surfaceRaised : rowMouse.containsMouse ? Theme.surfaceHover : "transparent"
+    // One highlight only: pointing at a row selects it, like the arrow keys.
+    color: current ? Theme.surfaceRaised : "transparent"
 
     RowLayout {
         anchors.fill: parent
@@ -88,6 +93,7 @@ Rectangle {
         id: rowMouse
         anchors.fill: parent
         hoverEnabled: true
+        onPositionChanged: mouse => row.pointerMoved(mapToGlobal(mouse.x, mouse.y))
         onClicked: mouse => row.chosen(mouse.modifiers)
     }
 }

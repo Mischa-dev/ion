@@ -13,8 +13,12 @@ TextField {
     property url currentUrl
     // Emitted with the resolved URL when the person presses Enter.
     signal navigate(url target)
+    // Emitted after Enter or Escape, so the page can take keyboard focus back.
+    signal finished()
 
     property var suggestions: []
+    // Global pointer position last seen over a suggestion.
+    property point lastPointer: Qt.point(-1, -1)
 
     Omnibox {
         id: omnibox
@@ -62,10 +66,10 @@ TextField {
         list.currentIndex = 0
     }
 
-    // Leave the field, showing the current page's address again.
+    // Hand focus back to the page, which shows the current address again.
     function done() {
         suggestions = []
-        focus = false
+        finished()
     }
 
     function go(inNewTab) {
@@ -133,7 +137,7 @@ TextField {
             return
         }
         showUrl()
-        focus = false
+        finished()
     }
 
     Popup {
@@ -143,6 +147,7 @@ TextField {
         width: field.width
         padding: Theme.spacing / 2
         visible: field.suggestions.length > 0
+        onAboutToShow: field.lastPointer = Qt.point(-1, -1)
         closePolicy: Popup.NoAutoClose
 
         background: Rectangle {
@@ -161,10 +166,17 @@ TextField {
 
             delegate: CommandPaletteRow {
                 required property var modelData
+                required property int index
 
                 width: ListView.view.width
                 item: modelData
                 current: ListView.isCurrentItem
+                onPointerMoved: position => {
+                    const last = field.lastPointer
+                    field.lastPointer = position
+                    if (last.x >= 0 && (last.x !== position.x || last.y !== position.y))
+                        list.currentIndex = index
+                }
                 onChosen: modifiers => field.choose(modelData, modifiers & (Qt.ControlModifier | Qt.AltModifier))
             }
         }

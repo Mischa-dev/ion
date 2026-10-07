@@ -15,6 +15,8 @@ Popup {
 
     required property var browser
     property var results: []
+    // Global pointer position last seen over a row; see pointed().
+    property point lastPointer
 
     readonly property int rowHeight: Theme.tabHeight + Theme.spacing * 2
 
@@ -22,6 +24,14 @@ Popup {
     function show(text) {
         field.text = text ?? ""
         open()
+    }
+
+    // Moving the pointer selects the row under it; a resting pointer doesn't.
+    function pointed(index, position) {
+        const last = lastPointer
+        lastPointer = position
+        if (last.x >= 0 && (last.x !== position.x || last.y !== position.y))
+            list.currentIndex = index
     }
 
     function refresh() {
@@ -108,7 +118,10 @@ Popup {
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
-    onAboutToShow: refresh()
+    onAboutToShow: {
+        lastPointer = Qt.point(-1, -1)
+        refresh()
+    }
     onOpened: field.forceActiveFocus()
 
     Overlay.modal: Rectangle {
@@ -124,6 +137,7 @@ Popup {
 
     enter: Transition {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.animationMs }
+        NumberAnimation { property: "scale"; from: 0.97; to: 1; duration: Theme.animationSlowMs; easing.type: Easing.OutCubic }
     }
     exit: Transition {
         NumberAnimation { property: "opacity"; from: 1; to: 0; duration: Theme.animationMs }
@@ -181,11 +195,13 @@ Popup {
 
             delegate: CommandPaletteRow {
                 required property var modelData
+                required property int index
 
                 width: ListView.view.width
                 height: root.rowHeight
                 item: modelData
                 current: ListView.isCurrentItem
+                onPointerMoved: position => root.pointed(index, position)
                 onChosen: modifiers => root.choose(modelData, modifiers & Qt.ControlModifier)
             }
         }
