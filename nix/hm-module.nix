@@ -77,6 +77,7 @@ in
             "horizontal"
             "vertical"
           ]) "Tab strip layout.";
+          collapseSidebar = setting types.bool "With vertical tabs, show only favicons until the sidebar is hovered.";
           animations = {
             enable = setting types.bool "Whether the interface animates.";
             speed = setting (types.addCheck types.number (x: x > 0)) "Animation speed multiplier.";

@@ -37,6 +37,7 @@ template = "https://duckduckgo.com/?q={}"
 density = "comfortable"      # "comfortable" | "compact"
 cornerRadius = 8
 tabs = "horizontal"          # "horizontal" | "vertical"
+collapseSidebar = false      # vertical tabs: show only favicons until hovered
 animations = { enable = true, speed = 1.0 }
 
 [theme]

@@ -123,6 +123,9 @@ pub struct Ui {
     /// Corner radius in logical pixels, from 0 (sharp) up.
     pub corner_radius: u32,
     pub tabs: TabLayout,
+    /// With vertical tabs, shrink the sidebar to favicons; it expands while
+    /// the pointer is over it.
+    pub collapse_sidebar: bool,
     pub animations: Animations,
 }
 
@@ -132,6 +135,7 @@ impl Default for Ui {
             density: Density::default(),
             corner_radius: 8,
             tabs: TabLayout::default(),
+            collapse_sidebar: false,
             animations: Animations::default(),
         }
     }
