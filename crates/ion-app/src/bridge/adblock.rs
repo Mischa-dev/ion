@@ -195,9 +195,17 @@ fn refresh(
     cache_dir: &PathBuf,
     lists: &[FilterList],
     force: bool,
-    have_blocker: bool,
+    mut have_blocker: bool,
+    install_cached: impl FnOnce(Blocker),
 ) -> Refreshed {
     let store = Store::new(cache_dir);
+    if !have_blocker {
+        // Filter with what's on disk now; downloads can take minutes offline.
+        if let Some(blocker) = update::build(&store, lists) {
+            install_cached(blocker);
+            have_blocker = true;
+        }
+    }
     let report = update::refresh(
         &store,
         lists,
@@ -273,8 +281,13 @@ impl qobject::Adblock {
                 }
                 let guard = REFRESHING.lock().unwrap_or_else(PoisonError::into_inner);
                 let lists = shared_lists.lock().map(|l| l.clone()).unwrap_or_default();
-                let refreshed = refresh(&cache_dir, &lists, false, have_blocker);
-                have_blocker |= refreshed.blocker.is_some();
+                let mut cached = false;
+                let refreshed = refresh(&cache_dir, &lists, false, have_blocker, |blocker| {
+                    cached = true;
+                    let lists = lists.clone();
+                    let _ = thread.queue(move |obj| obj.install_cached(&lists, blocker));
+                });
+                have_blocker |= cached || refreshed.blocker.is_some();
                 let queued = thread.queue(move |obj| obj.finish_refresh(refreshed));
                 drop(guard);
                 if queued.is_err() {
@@ -354,7 +367,10 @@ impl qobject::Adblock {
         let thread = self.qt_thread();
         std::thread::spawn(move || {
             let _guard = REFRESHING.lock().unwrap_or_else(PoisonError::into_inner);
-            let refreshed = refresh(&cache_dir, &lists, force, have_blocker);
+            let refreshed = refresh(&cache_dir, &lists, force, have_blocker, |blocker| {
+                let lists = lists.clone();
+                let _ = thread.queue(move |obj| obj.install_cached(&lists, blocker));
+            });
             let _ = thread.queue(move |obj| obj.finish_refresh(refreshed));
         });
     }
@@ -362,6 +378,13 @@ impl qobject::Adblock {
     fn install(mut self: Pin<&mut Self>, blocker: Blocker) {
         self.as_mut().rust_mut().shield.set_blocker(blocker);
         self.as_mut().set_ready(true);
+    }
+
+    /// Install a blocker compiled from the cache while its downloads run.
+    fn install_cached(mut self: Pin<&mut Self>, lists: &[FilterList], blocker: Blocker) {
+        if lists == self.current_lists() {
+            self.as_mut().install(blocker);
+        }
     }
 
     fn finish_refresh(mut self: Pin<&mut Self>, refreshed: Refreshed) {
