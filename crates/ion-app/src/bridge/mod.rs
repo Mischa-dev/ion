@@ -5,5 +5,7 @@
 
 pub mod adblock;
 pub mod config;
+pub mod history;
 pub mod omnibox;
+pub mod tabs;
 pub mod webengine;
