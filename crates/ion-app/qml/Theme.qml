@@ -72,6 +72,8 @@ QtObject {
     readonly property int paletteWidth: 640
     readonly property int paletteMaxRows: 8
     readonly property real scrimOpacity: 0.4
+    // Things that are present but asleep, like a suspended tab's icon.
+    readonly property real dimmedOpacity: 0.45
 
     readonly property SystemPalette systemPalette: SystemPalette {}
 

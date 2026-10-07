@@ -93,6 +93,23 @@ ApplicationWindow {
         interval: 1000
         onTriggered: Tabs.saveSession()
     }
+    // Unload background tabs nobody has looked at for `general.suspendTabsAfter`
+    // minutes. Tabs playing sound are left alone.
+    Timer {
+        interval: 60 * 1000
+        repeat: true
+        running: true
+        onTriggered: {
+            const minutes = Config.value("general.suspendTabsAfter")
+            if (!(minutes > 0))
+                return
+            for (const index of Tabs.idleTabs(minutes * 60)) {
+                const view = views.itemAt(index)
+                if (view && !view.recentlyAudible)
+                    Tabs.setSuspended(index, true)
+            }
+        }
+    }
     Timer {
         id: historySaveTimer
         interval: 5000
@@ -185,6 +202,7 @@ ApplicationWindow {
                     id: view
 
                     required property int index
+                    required property bool suspended
                     readonly property bool current: index === Tabs.currentIndex
                     // Background tabs restored from a session load when first shown.
                     property bool deferred: false
@@ -198,6 +216,9 @@ ApplicationWindow {
                     anchors.fill: parent
                     visible: current
                     profile: window.profile
+                    // A suspended tab's page is unloaded; it reloads when shown.
+                    lifecycleState: suspended ? WebEngineView.LifecycleState.Discarded
+                                              : WebEngineView.LifecycleState.Active
 
                     Component.onCompleted: {
                         deferred = Tabs.restoring && !current
