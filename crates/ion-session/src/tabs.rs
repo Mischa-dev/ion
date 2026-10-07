@@ -17,6 +17,9 @@ pub struct Tab {
     pub url: String,
     /// The page title, or empty until the page reports one.
     pub title: String,
+    /// The page's favicon as the web view reports it (an `image://favicon/…`
+    /// URL), or empty. Saved, so restored tabs show it before they load.
+    pub icon: String,
 }
 
 #[derive(Clone, Debug)]
@@ -49,6 +52,7 @@ impl TabList {
         for saved in &session.tabs {
             let index = list.tabs.len();
             list.open(index, &saved.url, &saved.title, false);
+            list.tabs[index].icon = saved.icon.clone();
         }
         list.current = session.current.min(list.tabs.len().saturating_sub(1));
         list
@@ -63,6 +67,7 @@ impl TabList {
                 .map(|t| SavedTab {
                     url: t.url.clone(),
                     title: t.title.clone(),
+                    icon: t.icon.clone(),
                 })
                 .collect(),
             current: self.current,
@@ -107,6 +112,7 @@ impl TabList {
             id: self.next_id,
             url: url.to_owned(),
             title: title.to_owned(),
+            icon: String::new(),
         };
         self.next_id += 1;
         self.insert(index, tab, activate)
@@ -206,6 +212,17 @@ impl TabList {
         match self.tabs.get_mut(index) {
             Some(tab) if tab.title != title => {
                 tab.title = title.to_owned();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Record the favicon of the tab at `index`. True if it changed.
+    pub fn set_icon(&mut self, index: usize, icon: &str) -> bool {
+        match self.tabs.get_mut(index) {
+            Some(tab) if tab.icon != icon => {
+                tab.icon = icon.to_owned();
                 true
             }
             _ => false,
@@ -373,6 +390,8 @@ mod tests {
         assert!(l.set_title(0, "B"));
         assert!(!l.set_title(0, "B"));
         assert!(!l.set_title(5, "x"));
+        assert!(l.set_icon(0, "image://favicon/b"));
+        assert!(!l.set_icon(0, "image://favicon/b"));
     }
 
     #[test]
@@ -387,8 +406,10 @@ mod tests {
     fn session_round_trip() {
         let mut l = list(&["a", "b", "c"]);
         l.set_title(1, "Bee");
+        l.set_icon(1, "image://favicon/b.png");
         l.activate(1);
         let restored = TabList::from_session(&l.to_session());
+        assert_eq!(restored.get(1).unwrap().icon, "image://favicon/b.png");
         assert_eq!(urls(&restored), ["a", "b", "c"]);
         assert_eq!(restored.get(1).unwrap().title, "Bee");
         assert_eq!(restored.current(), Some(1));
@@ -399,7 +420,7 @@ mod tests {
         let session = Session {
             tabs: vec![SavedTab {
                 url: "a".into(),
-                title: String::new(),
+                ..SavedTab::default()
             }],
             current: 7,
             ..Session::default()
