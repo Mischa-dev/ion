@@ -18,14 +18,17 @@ Rectangle {
     readonly property var current: queue.length > 0 ? queue[0] : null
     readonly property string message: current ? Basics.permissionText(current.permissionType, current.origin) : ""
     // Allow stays disabled for a moment after each new request shows, so a
-    // click aimed at the page can't grant it by accident.
+    // click aimed at the page can't grant it by accident. The delay starts
+    // again whenever the tab comes back into view.
     property bool armed: false
 
-    onCurrentChanged: {
+    function rearm() {
         armed = false
-        if (current)
-            armTimer.restart()
+        armTimer.stop()
+        if (current && view.visible)
+            armTimer.start()
     }
+    onCurrentChanged: rearm()
 
     Timer {
         id: armTimer
@@ -74,6 +77,9 @@ Rectangle {
         target: prompt.view
         function onPermissionRequested(permission) {
             prompt.enqueue(permission)
+        }
+        function onVisibleChanged() {
+            prompt.rearm()
         }
         function onLoadingChanged(request) {
             if (request.status === WebEngineView.LoadStartedStatus)

@@ -39,7 +39,9 @@ WebEngineView {
             Theme.engine.applyPageScheme()
             applyPageTheme()
         }
-        if (info.status === WebEngineView.LoadSucceededStatus)
+        // Failed loads too, so an error page doesn't keep the last site's zoom.
+        if (info.status === WebEngineView.LoadSucceededStatus
+                || info.status === WebEngineView.LoadFailedStatus)
             zoomFactor = Zoom.factorFor(url)
     }
     onNewWindowRequested: request => view.newTabRequested(request)
