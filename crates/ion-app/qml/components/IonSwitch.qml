@@ -9,6 +9,10 @@ Switch {
 
     padding: 0
     spacing: 0
+    // Just the indicator; the style's own size would leave it hanging out of
+    // the layout slot.
+    implicitWidth: indicator.implicitWidth + leftPadding + rightPadding
+    implicitHeight: indicator.implicitHeight + topPadding + bottomPadding
 
     indicator: Rectangle {
         implicitWidth: Theme.iconSize * 2
