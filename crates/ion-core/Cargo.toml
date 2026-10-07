@@ -1,0 +1,13 @@
+[package]
+name = "ion-core"
+description = "Qt-free core logic for the Ion browser"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+url.workspace = true
+
+[lints]
+workspace = true
