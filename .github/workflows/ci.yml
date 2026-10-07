@@ -1,5 +1,8 @@
 name: CI
 
+# Linux runs on every PR and push to main. macOS runners use Actions minutes
+# 10x faster, so that job only runs when started by hand (Actions tab →
+# CI → Run workflow).
 on:
   push:
     branches: [main]
@@ -11,13 +14,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
-    name: nix flake check (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+  linux:
+    name: nix flake check (ubuntu-latest)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v31
@@ -25,4 +24,16 @@ jobs:
           extra_nix_config: |
             accept-flake-config = true
       # Builds the package (with the workspace unit tests), clippy and format checks.
+      - run: nix flake check -L
+
+  macos:
+    name: nix flake check (macos-latest)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
       - run: nix flake check -L
