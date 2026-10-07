@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import Ion
 
 // Ctrl/Cmd+K palette: one search over open tabs, history, saved sessions, Ion
-// commands and bangs. Ranking lives in Rust (`PaletteSearch`); this file
+// commands, settings and bangs. Ranking lives in Rust (`PaletteSearch`); this file
 // gathers the sources, shows the results and carries out the chosen one.
 //
 // Tabs and history come from the `Tabs` and `History` singletons; `browser`
@@ -69,6 +69,13 @@ Popup {
         case "run":
             run(item.value)
             break
+        case "set":
+            for (let i = 0; i + 1 < item.value.length; i += 2) {
+                const error = Config.set(item.value[i], item.value[i + 1])
+                if (error.length > 0)
+                    console.warn("CommandPalette:", item.value[i], error)
+            }
+            break
         }
     }
 
@@ -96,6 +103,7 @@ Popup {
         case "tab": return "▭"
         case "history": return "↺"
         case "session": return "▤"
+        case "setting": return "⚙"
         case "command": return "›"
         case "bang": return "!"
         case "open": return "↗"
@@ -151,7 +159,7 @@ Popup {
             Layout.fillWidth: true
             implicitHeight: Theme.urlBarHeight
             color: Theme.text
-            placeholderText: qsTr("Search tabs, commands and !bangs")
+            placeholderText: qsTr("Search tabs, history, commands, settings and !bangs")
             placeholderTextColor: Theme.textMuted
             selectionColor: Theme.accent
             selectedTextColor: Theme.onAccent

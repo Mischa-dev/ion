@@ -490,6 +490,7 @@ dependencies = [
 name = "ion-bangs"
 version = "0.1.0"
 dependencies = [
+ "ion-config",
  "ion-core",
  "url",
 ]

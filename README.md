@@ -42,8 +42,9 @@ Type `!name query` (or `query !name`) in the URL bar or the palette to search
 a site directly, e.g. `!gh cxx-qt`, `!nix ripgrep`, `!yt`. A bang on its own
 opens the site. The built-in set lives in `crates/ion-bangs/src/bang.rs`;
 add, replace or remove bangs in the `[bangs]` config table (docs/CONFIG.md);
-unknown bangs go to the search engine. In the palette, `!` lists bangs and `>`
-lists commands.
+unknown bangs go to the search engine. The palette also changes settings in one
+step ("nord", "vertical tabs", "search with kagi"). In the palette, `!` lists bangs and `>`
+lists commands and settings.
 
 ## Layout
 
