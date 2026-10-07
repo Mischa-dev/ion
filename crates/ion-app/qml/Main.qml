@@ -253,7 +253,10 @@ ApplicationWindow {
     Connections {
         target: Qt.application
         function onAboutToQuit() {
-            Tabs.saveSession()
+            // Before startup restores it, the tab list would overwrite the
+            // saved session.
+            if (window.startupFinished)
+                Tabs.saveSession()
             History.save()
             window.clearOnExit()
         }
