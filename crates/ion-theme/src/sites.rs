@@ -26,9 +26,13 @@ pub fn normalize_site(site: &str) -> Option<String> {
     Some(host.trim_end_matches('.').to_ascii_lowercase())
 }
 
-/// The host of an http(s) URL, lower-cased and without a trailing dot.
+/// The host of an http(s) URL, lower-cased and without a trailing dot. A
+/// `blob:` URL counts as the http(s) origin it was made by.
 fn host_of(url: &str) -> Option<String> {
-    let parsed = url::Url::parse(url).ok()?;
+    let mut parsed = url::Url::parse(url).ok()?;
+    if parsed.scheme() == "blob" {
+        parsed = url::Url::parse(parsed.path()).ok()?;
+    }
     if !matches!(parsed.scheme(), "http" | "https") {
         return None;
     }
@@ -167,6 +171,11 @@ mod tests {
             Some("example.com")
         );
         assert_eq!(host_of("http://[::1]:8080/").as_deref(), Some("[::1]"));
+        assert_eq!(
+            host_of("blob:https://Example.com/5d1c-77").as_deref(),
+            Some("example.com")
+        );
+        assert_eq!(host_of("blob:null/5d1c-77"), None);
         assert_eq!(host_of("about:blank"), None);
         assert_eq!(host_of("file:///tmp/x.html"), None);
     }
