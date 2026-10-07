@@ -45,6 +45,8 @@ name = "dark"
 
 [adblock]
 enable = true
+# Names: easylist, easyprivacy, ublock-filters (brings ublock-unbreak and
+# ublock-quick-fixes along), ublock-privacy; or https:// URLs of other lists.
 lists = ["easylist", "easyprivacy", "ublock-filters"]
 
 [shortcuts]                  # command id = Qt key sequence

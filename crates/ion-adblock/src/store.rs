@@ -106,7 +106,10 @@ pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let tmp = path.with_extension("tmp");
+    // Unique per writer, so two refreshes racing never share a temp file.
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let tmp = path.with_extension(format!("{}.{n}.tmp", std::process::id()));
     let mut file = std::fs::File::create(&tmp)?;
     file.write_all(bytes)?;
     file.sync_all()?;

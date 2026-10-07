@@ -104,7 +104,8 @@ Popup {
             ThemedSwitch {
                 checked: Adblock.enabled
                 onToggled: {
-                    Adblock.enabled = checked
+                    // Saved to overrides.toml; Adblock follows the config.
+                    Config.set("adblock.enable", checked)
                     popup.view?.reload()
                 }
                 ToolTip.visible: hovered
