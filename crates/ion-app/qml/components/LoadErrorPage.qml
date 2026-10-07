@@ -34,8 +34,7 @@ Rectangle {
         retryButton.forceActiveFocus()
     }
 
-    // Above the page content and the new-tab page (a failed first load
-    // leaves the tab's blank page current), below find and prompts.
+    // Above the page content and the new-tab page, below find and prompts.
     z: 6
     visible: false
     color: Theme.background

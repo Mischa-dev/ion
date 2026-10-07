@@ -89,7 +89,7 @@ Shared files with small, append-only edits: root `Cargo.toml`,
   (`theme.pageControls`); `BrowserTab` re-applies its settings when any of these
   changes. Palette-tinted dark mode isn't possible: Chromium hard-codes the
   darkened background.
-- Failed loads show `LoadErrorPage` in Ion's colors instead of Chromium's error
+- Failed loads show `LoadErrorPage` in Ion's colors over Chromium's error
   page; `ion_core::load_error` decides its text (and when none shows: a
   stopped load, or an HTTP status the server sent a page for).
 - `ion_core::navigation::Omnibox` decides between address and search. Extra

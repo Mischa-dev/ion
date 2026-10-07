@@ -112,7 +112,7 @@ Popup {
         switch (id) {
         case "new-tab": browser.newTab(); break
         case "close-tab": browser.closeTab(Tabs.currentIndex); break
-        case "duplicate-tab": browser.openTab(view ? view.displayUrl : ""); break
+        case "duplicate-tab": browser.openTab(view ? view.url : ""); break
         case "reopen-tab": Tabs.reopenClosedTab(); break
         case "next-tab": Tabs.cycle(1); break
         case "previous-tab": Tabs.cycle(-1); break
@@ -120,8 +120,8 @@ Popup {
         case "move-tab-right": Tabs.moveTab(Tabs.currentIndex, Tabs.neighbour(Tabs.currentIndex, 1)); break
         case "close-other-tabs": browser.closeOtherTabs(Tabs.currentIndex); break
         case "focus-url": browser.focusUrlBar(); break
-        case "copy-url": copyText(view ? view.displayUrl.toString() : ""); break
-        case "reload": view?.reloadPage(); break
+        case "copy-url": copyText(view ? view.url.toString() : ""); break
+        case "reload": view?.reload(); break
         case "hard-reload": view?.reloadAndBypassCache(); break
         case "stop": view?.stop(); break
         case "back": view?.goBack(); break
@@ -138,7 +138,7 @@ Popup {
             if (Extensions.ensureFolder())
                 Qt.openUrlExternally("file://" + Extensions.folder)
             break
-        case "reload-userscripts": Sites.reload(); view?.reloadPage(); break
+        case "reload-userscripts": Sites.reload(); view?.reload(); break
         case "open-userscripts":
             if (Sites.ensureDirectory())
                 Qt.openUrlExternally("file://" + Sites.directory)
@@ -148,7 +148,7 @@ Popup {
             break
         case "toggle-adblock":
             if (view && Adblock.setEnabledOn(view.url, !Adblock.isEnabledOn(view.url)))
-                view.reloadPage()
+                view.reload()
             break
         case "update-filter-lists": Adblock.updateLists(); break
         case "stop-agents": Safety.stopAgents(); break

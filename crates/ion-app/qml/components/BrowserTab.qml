@@ -80,7 +80,7 @@ WebEngineView {
     // Ion's when this tab's first load starts. Later loads don't reset it.
     property bool pageSchemeRestored: false
     onLoadingChanged: info => {
-        // Ion's own error page replaces Chromium's (settings.errorPageEnabled).
+        // Ion's own error page covers Chromium's.
         if (info.status === WebEngineView.LoadFailedStatus)
             loadError.showFor(info)
         else if (info.status === WebEngineView.LoadStartedStatus)
@@ -96,19 +96,6 @@ WebEngineView {
             zoomFactor = Zoom.factorFor(url)
     }
     onNewWindowRequested: request => view.newTabRequested(request)
-    // The address the tab stands for: while the error page shows, the one
-    // that failed, since the page before it is still the current one.
-    readonly property url displayUrl: loadError.visible ? loadError.pageUrl : url
-
-    // Reloads, or retries the failed address while the error page shows
-    // (reload() would load the page before it). Use instead of reload().
-    function reloadPage() {
-        if (loadError.visible)
-            url = loadError.pageUrl
-        else
-            reload()
-    }
-
     // Keyboard focus belongs to the error page while it covers the view.
     onActiveFocusChanged: if (activeFocus && loadError.visible) loadError.takeFocus()
 
@@ -171,11 +158,13 @@ WebEngineView {
         }
     }
 
-    // Failed loads show LoadErrorPage, in Ion's colors, not Chromium's page.
-    settings.errorPageEnabled: false
+    // Failed loads show LoadErrorPage, in Ion's colors, over Chromium's error
+    // page. That page stays enabled underneath because it makes the failed
+    // address the current entry, so the URL bar, title, Reload and Back treat
+    // it like any other page.
     LoadErrorPage {
         id: loadError
         anchors.fill: parent
-        onRetry: view.reloadPage()
+        onRetry: view.reload()
     }
 }

@@ -108,7 +108,7 @@ Popup {
                     // Saved to overrides.toml; Adblock follows the config a
                     // moment later. On failure, show the real state again.
                     if (Config.set("adblock.enable", checked) === "")
-                        popup.view?.reloadPage()
+                        popup.view?.reload()
                     else
                         checked = Adblock.enabled
                 }
@@ -166,7 +166,7 @@ Popup {
                         // switch (e.g. on github.io) snaps back.
                         checked = Qt.binding(() => popup.siteEnabled)
                         if (changed)
-                            popup.view?.reloadPage()
+                            popup.view?.reload()
                     }
                 }
             }
