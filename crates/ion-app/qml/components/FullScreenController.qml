@@ -40,6 +40,12 @@ Item {
             pageView.triggerWebAction(WebEngineView.ExitFullScreen)
             return
         }
+        // Fullscreen entered outside Ion (the macOS green button, the window
+        // manager): the shortcut takes the window out of it.
+        if (!windowActive && window.visibility === Window.FullScreen) {
+            window.showNormal()
+            return
+        }
         windowActive = !windowActive
         if (windowActive)
             enter()
