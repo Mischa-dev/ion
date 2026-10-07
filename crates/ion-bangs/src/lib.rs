@@ -11,6 +11,7 @@
 //!
 //! [`InputStep`]: ion_core::navigation::InputStep
 
+pub mod autofill;
 pub mod bang;
 pub mod commands;
 mod fuzzy;

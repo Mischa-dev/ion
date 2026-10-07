@@ -25,7 +25,8 @@ pub mod qobject {
         /// saved session names.
         ///
         /// `action` is `tab` (value: tab index), `open` (value: URL),
-        /// `session` (value: session name), `run` (value: command id), `set`
+        /// `session` (value: session name), `save-session` (value: name for
+        /// the open tabs), `run` (value: command id), `set`
         /// (value: `[key, value, key, value, …]` for `Config.set`) or
         /// `complete` (value: new palette input).
         #[qinvokable]
@@ -51,6 +52,17 @@ pub mod qobject {
             current: i32,
             history: &QString,
         ) -> QVariant;
+
+        /// `input` with an address filled in from `urls` (open tabs) or
+        /// `history` (`History.search()`'s JSON), e.g. "git" → "github.com/";
+        /// `input` unchanged when nothing fits.
+        #[qinvokable]
+        fn autocomplete(
+            self: &PaletteSearch,
+            input: &QString,
+            urls: &QStringList,
+            history: &QString,
+        ) -> QString;
     }
 }
 
@@ -174,6 +186,23 @@ impl qobject::PaletteSearch {
     }
 }
 
+impl qobject::PaletteSearch {
+    fn autocomplete(&self, input: &QString, urls: &QStringList, history: &QString) -> QString {
+        let input = input.to_string();
+        let urls = strings(urls);
+        let history = history_entries(&history.to_string());
+        let candidates = urls
+            .iter()
+            .map(String::as_str)
+            .chain(history.iter().map(|page| page.url.as_str()));
+        QString::from(
+            ion_bangs::autofill::complete(&input, candidates)
+                .unwrap_or(input)
+                .as_str(),
+        )
+    }
+}
+
 /// Palette items as a list of `{ kind, title, subtitle, hint, action, value }`.
 fn rows(items: Vec<Item>) -> QVariant {
     let mut rows = QList::<QVariant>::default();
@@ -184,6 +213,10 @@ fn rows(items: Vec<Item>) -> QVariant {
             }
             Action::Open(url) => ("open", QVariant::from(&QString::from(url.as_str()))),
             Action::OpenSession(name) => ("session", QVariant::from(&QString::from(name.as_str()))),
+            Action::SaveSession(name) => (
+                "save-session",
+                QVariant::from(&QString::from(name.as_str())),
+            ),
             Action::Run(id) => ("run", QVariant::from(&QString::from(*id))),
             Action::Set(changes) => {
                 let mut pairs = QList::<QVariant>::default();

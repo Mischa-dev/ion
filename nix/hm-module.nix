@@ -59,6 +59,7 @@ in
         general = {
           homePage = setting types.str "Page opened at startup when there is nothing to restore.";
           restoreSession = setting types.bool "Reopen the previous session's tabs on start.";
+          suspendTabsAfter = setting types.ints.unsigned "Unload background tabs unseen for this many minutes (0 = never).";
         };
 
         search = {

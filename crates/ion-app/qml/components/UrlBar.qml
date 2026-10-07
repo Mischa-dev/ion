@@ -17,6 +17,8 @@ TextField {
     signal finished()
 
     property var suggestions: []
+    // What the person typed, without any address filled in after it.
+    property string typed: ""
     // Global pointer position last seen over a suggestion.
     property point lastPointer: Qt.point(-1, -1)
 
@@ -50,9 +52,17 @@ TextField {
         text = currentUrl.toString() === "about:blank" ? "" : currentUrl.toString()
     }
 
-    function refreshSuggestions() {
-        const typed = text.trim()
-        if (!activeFocus || typed.length === 0) {
+    // Fills in the rest of an address when typing added to the end of the
+    // text; the filled part is selected, so the next key replaces it.
+    function edited() {
+        const grew = text.length > typed.length && cursorPosition === text.length
+        typed = text
+        refreshSuggestions(grew)
+    }
+
+    function refreshSuggestions(fill) {
+        const query = text.trim()
+        if (!activeFocus || query.length === 0) {
             suggestions = []
             return
         }
@@ -61,7 +71,14 @@ TextField {
             titles.push(Tabs.titleAt(i))
             urls.push(Tabs.urlAt(i))
         }
-        const history = typed.startsWith("!") ? "[]" : History.search(typed, Theme.paletteMaxRows)
+        const history = query.startsWith("!") ? "[]" : History.search(query, Theme.paletteMaxRows)
+        if (fill) {
+            const filled = search.autocomplete(text, urls, history)
+            if (filled.length > text.length) {
+                text = filled
+                select(typed.length, filled.length)
+            }
+        }
         suggestions = search.suggest(text, titles, urls, Tabs.currentIndex, history)
         list.currentIndex = 0
     }
@@ -89,7 +106,8 @@ TextField {
         switch (item.action) {
         case "complete":
             text = item.value
-            refreshSuggestions()
+            typed = text
+            refreshSuggestions(false)
             break
         case "tab":
             done()
@@ -112,21 +130,26 @@ TextField {
     onCurrentUrlChanged: if (!activeFocus) showUrl()
     onActiveFocusChanged: {
         if (activeFocus) {
+            typed = ""
             selectAll()
         } else {
             suggestions = []
             showUrl()
         }
     }
-    onTextEdited: refreshSuggestions()
+    onTextEdited: edited()
 
     Keys.onReturnPressed: event => go(event.modifiers & Qt.AltModifier)
     Keys.onEnterPressed: event => go(event.modifiers & Qt.AltModifier)
     Keys.onUpPressed: list.decrementCurrentIndex()
     Keys.onDownPressed: list.incrementCurrentIndex()
+    // Tab completes the highlighted bang, or switches to the site search
+    // offered for a typed trigger ("gh" → "!gh ").
     Keys.onTabPressed: event => {
-        const item = suggestions[list.currentIndex]
-        if (item && item.action === "complete")
+        const selected = suggestions[list.currentIndex]
+        const item = selected && selected.action === "complete" ? selected
+            : suggestions.find(s => s.action === "complete" && s.hint === "Tab")
+        if (item)
             choose(item, false)
         else
             event.accepted = false

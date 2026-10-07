@@ -26,6 +26,12 @@ Popup {
         open()
     }
 
+    function copyText(text) {
+        clipboard.text = text
+        clipboard.selectAll()
+        clipboard.copy()
+    }
+
     // Moving the pointer selects the row under it; a resting pointer doesn't.
     function pointed(index, position) {
         const last = lastPointer
@@ -69,6 +75,10 @@ Popup {
         case "session":
             Tabs.openSession(item.value)
             break
+        case "save-session":
+            if (!Tabs.saveSessionAs(item.value))
+                console.warn("CommandPalette: could not save session", item.value)
+            break
         case "open":
             if (inNewTab || !view)
                 browser.openTab(item.value)
@@ -98,16 +108,37 @@ Popup {
         case "reopen-tab": Tabs.reopenClosedTab(); break
         case "next-tab": Tabs.cycle(1); break
         case "previous-tab": Tabs.cycle(-1); break
+        case "move-tab-left": Tabs.moveTab(Tabs.currentIndex, Tabs.currentIndex - 1); break
+        case "move-tab-right": Tabs.moveTab(Tabs.currentIndex, Tabs.currentIndex + 1); break
+        case "close-other-tabs":
+            for (let i = Tabs.count - 1; i >= 0; --i) {
+                if (i !== Tabs.currentIndex)
+                    Tabs.closeTab(i)
+            }
+            break
         case "focus-url": browser.focusUrlBar(); break
+        case "copy-url": copyText(view ? view.url.toString() : ""); break
         case "reload": view?.reload(); break
+        case "hard-reload": view?.reloadAndBypassCache(); break
+        case "stop": view?.stop(); break
         case "back": view?.goBack(); break
         case "forward": view?.goForward(); break
+        case "fullscreen":
+            browser.visibility = browser.visibility === Window.FullScreen ? Window.Windowed : Window.FullScreen
+            break
+        case "toggle-adblock":
+            if (view && Adblock.setEnabledOn(view.url, !Adblock.isEnabledOn(view.url)))
+                view.reload()
+            break
+        case "update-filter-lists": Adblock.updateLists(); break
         case "quit": Qt.quit(); break
         default: console.warn("CommandPalette: unknown command", id)
         }
     }
 
     PaletteSearch { id: search }
+    // QML has no clipboard API; an invisible text field copies for copyText().
+    TextInput { id: clipboard; visible: false }
 
     parent: Overlay.overlay
     x: Math.round((parent.width - width) / 2)

@@ -155,6 +155,17 @@ pub mod qobject {
         #[cxx_name = "setIcon"]
         fn set_icon(self: Pin<&mut Tabs>, index: i32, icon: &QString);
 
+        /// Background tabs not shown for `seconds` and not suspended yet.
+        #[qinvokable]
+        #[cxx_name = "idleTabs"]
+        fn idle_tabs(self: &Tabs, seconds: i32) -> QList_i32;
+
+        /// Suspend (unload) or wake a background tab. The current tab is
+        /// always awake.
+        #[qinvokable]
+        #[cxx_name = "setSuspended"]
+        fn set_suspended(self: Pin<&mut Tabs>, index: i32, suspended: bool);
+
         #[qinvokable]
         #[cxx_name = "urlAt"]
         fn url_at(self: &Tabs, index: i32) -> QString;
@@ -201,12 +212,14 @@ use cxx_qt::CxxQtType;
 use cxx_qt_lib::{
     QByteArray, QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QStringList, QVariant,
 };
+use ion_session::history::now;
 use ion_session::{Session, SessionStore, TabList};
 
 const ROLE_ID: i32 = 0x0100; // Qt::UserRole
 const ROLE_URL: i32 = ROLE_ID + 1;
 const ROLE_TITLE: i32 = ROLE_ID + 2;
 const ROLE_ICON: i32 = ROLE_ID + 3;
+const ROLE_SUSPENDED: i32 = ROLE_ID + 4;
 
 pub struct TabsRust {
     list: TabList,
@@ -249,6 +262,7 @@ impl qobject::Tabs {
             ROLE_URL => QVariant::from(&QString::from(tab.url.as_str())),
             ROLE_TITLE => QVariant::from(&QString::from(tab.title.as_str())),
             ROLE_ICON => QVariant::from(&QString::from(tab.icon.as_str())),
+            ROLE_SUSPENDED => QVariant::from(&tab.suspended),
             _ => QVariant::default(),
         }
     }
@@ -259,6 +273,7 @@ impl qobject::Tabs {
         roles.insert(ROLE_URL, QByteArray::from("url"));
         roles.insert(ROLE_TITLE, QByteArray::from("title"));
         roles.insert(ROLE_ICON, QByteArray::from("icon"));
+        roles.insert(ROLE_SUSPENDED, QByteArray::from("suspended"));
         roles
     }
 
@@ -268,6 +283,11 @@ impl qobject::Tabs {
 
     /// Push count, current index and closed count to QML after a change.
     fn sync(mut self: Pin<&mut Self>) {
+        // Wake the current tab before announcing it, so its view is never shown
+        // while still unloaded.
+        if let Some(woken) = self.as_mut().rust_mut().list.note_current(now()) {
+            self.as_mut().notify_row(woken as i32, ROLE_SUSPENDED);
+        }
         let count = self.list.len() as i32;
         let current = self.list.current().map_or(-1, |i| i as i32);
         let closed = self.list.closed_count() as i32;
@@ -410,6 +430,23 @@ impl qobject::Tabs {
         };
         if self.as_mut().rust_mut().list.set_icon(i, &icon.to_string()) {
             self.notify_row(index, ROLE_ICON);
+        }
+    }
+
+    fn idle_tabs(&self, seconds: i32) -> QList<i32> {
+        let mut rows = QList::<i32>::default();
+        for i in self.list.idle_tabs(now(), seconds.max(0) as u64) {
+            rows.append(i as i32);
+        }
+        rows
+    }
+
+    fn set_suspended(mut self: Pin<&mut Self>, index: i32, suspended: bool) {
+        let Some(i) = to_index(index, self.list.len()) else {
+            return;
+        };
+        if self.as_mut().rust_mut().list.set_suspended(i, suspended) {
+            self.notify_row(index, ROLE_SUSPENDED);
         }
     }
 

@@ -89,6 +89,8 @@ pub enum Action {
     Open(String),
     /// Replace the open tabs with this saved session.
     OpenSession(String),
+    /// Save the open tabs as a session with this name.
+    SaveSession(String),
     /// Run the command with this id.
     Run(&'static str),
     /// Write these config keys.
@@ -134,7 +136,8 @@ impl Palette {
         let input = input.trim_start();
 
         if let Some(rest) = input.strip_prefix('>') {
-            let mut items = commands(rest.trim());
+            let mut items: Vec<Item> = save_session_item(rest.trim()).into_iter().collect();
+            items.extend(commands(rest.trim()));
             items.extend(setting_items(settings, rest.trim()));
             return finish(items);
         }
@@ -156,7 +159,8 @@ impl Palette {
             return vec![item];
         }
 
-        let mut items = tab_items(tabs, current_tab, query);
+        let mut items: Vec<Item> = save_session_item(query).into_iter().collect();
+        items.extend(tab_items(tabs, current_tab, query));
         items.extend(history_items(history, tabs, query));
         items.extend(session_items(sessions, query));
         items.extend(commands(query));
@@ -192,6 +196,18 @@ impl Palette {
         };
 
         let mut rest = Vec::new();
+        // Typing a trigger without the "!" offers that site's search; Tab
+        // (or choosing it) switches the input to "!trigger ".
+        if let Some(bang) = self.bangs.get(query).filter(|_| !query.starts_with('!')) {
+            rest.push(Item {
+                kind: Kind::Bang,
+                title: format!("Search {}", bang.name),
+                subtitle: bang.home(),
+                hint: "Tab".to_owned(),
+                action: Action::Complete(format!("!{} ", bang.trigger)),
+                score: i32::MAX,
+            });
+        }
         if let Some(trigger) = query.strip_prefix('!') {
             if !trigger.contains(char::is_whitespace) {
                 let exact = trigger.to_lowercase();
@@ -202,7 +218,7 @@ impl Palette {
                 );
             }
         }
-        if rest.is_empty() {
+        if !query.starts_with('!') {
             // Switching to the tab you're already in isn't a suggestion.
             rest.extend(
                 tab_items(sources.tabs, sources.current_tab, query)
@@ -360,6 +376,28 @@ fn session_items(sessions: &[String], query: &str) -> Vec<Item> {
             })
         })
         .collect()
+}
+
+/// "save session work" (or "save as work") offers to save the open tabs as
+/// the session "work".
+fn save_session_item(query: &str) -> Option<Item> {
+    let lower = query.to_lowercase();
+    let prefix = ["save session as ", "save session ", "save as "]
+        .into_iter()
+        .find(|prefix| lower.starts_with(prefix))?;
+    // The prefixes are ASCII, so lowercasing kept their byte length.
+    let name = query[prefix.len()..].trim();
+    if name.is_empty() {
+        return None;
+    }
+    Some(Item {
+        kind: Kind::Session,
+        title: format!("Save open tabs as session “{name}”"),
+        subtitle: String::new(),
+        hint: String::new(),
+        action: Action::SaveSession(name.to_owned()),
+        score: i32::MAX,
+    })
 }
 
 fn setting_items(settings: &[SettingOption], query: &str) -> Vec<Item> {
@@ -653,11 +691,13 @@ mod tests {
     fn suggestions_start_with_what_enter_does() {
         assert!(suggest("  ").is_empty());
 
+        // "rust" is also a bang trigger, so its search comes right after.
         let items = suggest("rust");
         assert_eq!(items[0].kind, Kind::Search);
-        assert_eq!(items[1].action, Action::SwitchTab(1));
-        assert_eq!(items[1].hint, "Switch to tab");
-        assert_eq!(items[2].kind, Kind::History);
+        assert_eq!(items[1].action, Action::Complete("!rust ".into()));
+        assert_eq!(items[2].action, Action::SwitchTab(1));
+        assert_eq!(items[2].hint, "Switch to tab");
+        assert_eq!(items[3].kind, Kind::History);
 
         let items = suggest("example.com");
         assert_eq!(items[0].kind, Kind::Open);
@@ -690,5 +730,41 @@ mod tests {
                 .any(|i| i.action == Action::Complete("!gh ".into()))
         );
         assert!(items.len() <= SUGGESTIONS);
+    }
+
+    #[test]
+    fn typing_save_session_offers_to_save_one() {
+        for input in [
+            "save session Work stuff",
+            "Save as Work stuff",
+            ">save session as Work stuff",
+        ] {
+            let items = query(input);
+            assert_eq!(
+                items[0].action,
+                Action::SaveSession("Work stuff".into()),
+                "{input}"
+            );
+        }
+        assert!(
+            query("save session")
+                .iter()
+                .all(|i| !matches!(i.action, Action::SaveSession(_)))
+        );
+    }
+
+    #[test]
+    fn new_commands_are_found() {
+        assert_eq!(query(">copy")[0].action, Action::Run("copy-url"));
+        assert_eq!(query("ads")[0].action, Action::Run("toggle-adblock"));
+        assert_eq!(query("full screen")[0].action, Action::Run("fullscreen"));
+    }
+
+    #[test]
+    fn typing_a_trigger_offers_tab_to_search() {
+        let items = suggest("gh");
+        assert_eq!(items[1].action, Action::Complete("!gh ".into()));
+        assert_eq!(items[1].hint, "Tab");
+        assert!(suggest("ghx").iter().all(|i| i.hint != "Tab"));
     }
 }

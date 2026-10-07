@@ -76,6 +76,7 @@ Rectangle {
                 required property int index
                 required property string title
                 required property string icon
+                required property bool suspended
                 required property string url
                 readonly property bool current: index === strip.currentIndex
                 readonly property var view: {
@@ -111,6 +112,7 @@ Rectangle {
                         Layout.alignment: Qt.AlignVCenter
                         view: tab.view
                         savedIcon: tab.icon
+                        opacity: tab.suspended ? Theme.dimmedOpacity : 1
                     }
 
                     Text {

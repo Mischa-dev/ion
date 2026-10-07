@@ -84,7 +84,8 @@ Shared files with small, append-only edits: root `Cargo.toml`,
   `ion_bangs::palette`; commands are
   listed in `ion_bangs::commands` and carried out in `CommandPalette.qml`.
   `Palette::suggest` is the URL bar's narrower version (typed entry first,
-  then tabs, history and bang completions); both lists draw their rows with
+  then tabs, history and bang completions), and `ion_bangs::autofill` fills
+  in addresses inline; both lists draw their rows with
   `CommandPaletteRow.qml`.
 - The browser profile is persistent (`storageName: "Default"`).
 - Settings come from `ion-config` (layered TOML, live reload, `programs.ion`
