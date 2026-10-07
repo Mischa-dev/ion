@@ -217,6 +217,7 @@ Item {
         onAccepted: if (target) Tabs.deleteWorkspace(target.id)
 
         Label {
+            textFormat: Text.PlainText
             text: {
                 const tabs = deleteDialog.target?.tabs ?? 0
                 return qsTr("Delete “%1” and close its %n tab(s)? Closed tabs can be reopened one by one.", "", tabs)

@@ -59,6 +59,7 @@ ToolButton {
             fontSizeMode: Text.HorizontalFit
             minimumPixelSize: Theme.fontSizeMin
             elide: Text.ElideRight
+            textFormat: Text.PlainText
         }
         Rectangle {
             Layout.alignment: Qt.AlignVCenter
@@ -72,6 +73,7 @@ ToolButton {
             Layout.fillWidth: true
             visible: control.showName
             text: control.current.name
+            textFormat: Text.PlainText
             color: Theme.text
             font.pixelSize: Theme.fontSize
             elide: Text.ElideRight
