@@ -15,5 +15,31 @@ WebEngineView {
     backgroundColor: url.toString().length === 0 || url.toString() === "about:blank"
         ? Theme.background : Theme.pageCanvas
 
+    // Pages follow Ion's theme (theme.pages). QtWebEngine reads the light/dark
+    // preference and force-dark only when a page's settings are applied, so
+    // setting forceDarkMode (even to the same value) re-applies them.
+    function applyPageTheme() {
+        settings.forceDarkMode = Theme.engine.darkenPages
+    }
+
+    Component.onCompleted: applyPageTheme()
+
+    // Creating a tab resets the scheme QtWebEngine hands to pages, so restore
+    // Ion's when this tab's first load starts. Later loads don't reset it.
+    property bool pageSchemeRestored: false
+    onLoadingChanged: info => {
+        if (!pageSchemeRestored && info.status === WebEngineView.LoadStartedStatus) {
+            pageSchemeRestored = true
+            Theme.engine.applyPageScheme()
+            applyPageTheme()
+        }
+    }
     onNewWindowRequested: request => view.newTabRequested(request)
+
+    Connections {
+        target: Theme.engine
+        function onPageSchemeChanged() {
+            view.applyPageTheme()
+        }
+    }
 }

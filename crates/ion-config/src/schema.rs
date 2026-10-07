@@ -27,6 +27,8 @@ pub struct Config {
     /// Shortcut remaps: command id (for example `"palette"`) to a Qt key
     /// sequence (for example `"Ctrl+K"`). Unlisted commands keep their default.
     pub shortcuts: BTreeMap<String, String>,
+    pub agents: Agents,
+    pub safety: Safety,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -36,6 +38,9 @@ pub struct General {
     pub home_page: String,
     /// Reopen the previous session's tabs on start.
     pub restore_session: bool,
+    /// Unload background tabs not looked at for this many minutes, to save
+    /// memory; they reload when shown. 0 never unloads tabs.
+    pub suspend_tabs_after: u32,
 }
 
 impl Default for General {
@@ -43,6 +48,7 @@ impl Default for General {
         Self {
             home_page: "https://duckduckgo.com/".into(),
             restore_session: true,
+            suspend_tabs_after: 30,
         }
     }
 }
@@ -72,6 +78,9 @@ pub struct Ui {
     /// Corner radius in logical pixels, from 0 (sharp) up.
     pub corner_radius: u32,
     pub tabs: TabLayout,
+    /// With vertical tabs, shrink the sidebar to favicons; it expands while
+    /// the pointer is over it.
+    pub collapse_sidebar: bool,
     pub animations: Animations,
 }
 
@@ -81,6 +90,7 @@ impl Default for Ui {
             density: Density::default(),
             corner_radius: 8,
             tabs: TabLayout::default(),
+            collapse_sidebar: false,
             animations: Animations::default(),
         }
     }
@@ -130,6 +140,8 @@ pub struct Theme {
     /// of its own when this is unset).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub palette: Option<PathBuf>,
+    /// What web pages see of the theme.
+    pub pages: PageTheming,
 }
 
 impl Default for Theme {
@@ -138,6 +150,7 @@ impl Default for Theme {
             source: ThemeSource::default(),
             name: "auto".into(),
             palette: None,
+            pages: PageTheming::default(),
         }
     }
 }
@@ -156,6 +169,20 @@ pub enum ThemeSource {
     /// A palette file named by `theme.palette` (default
     /// `<config dir>/palette.toml`).
     Manual,
+}
+
+/// How web pages follow the theme.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PageTheming {
+    /// Pages get the theme's light/dark as `prefers-color-scheme`.
+    #[default]
+    Match,
+    /// Pages get the system's light/dark setting.
+    System,
+    /// Like `match`; with a dark theme, pages without a dark style of their
+    /// own are darkened too.
+    Darken,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -180,6 +207,95 @@ impl Default for Adblock {
     }
 }
 
+/// `[agents]`: Ion's MCP server, and each agent's trust under its id
+/// (`[agents.ion]`, `[agents.claude-code]`). Agents not listed ask before
+/// everything. `ion-safety` turns these into its agent profiles; see
+/// docs/SAFETY.md.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Agents {
+    pub mcp: Mcp,
+    /// Agent id to its settings. `mcp` is reserved for the section above.
+    #[serde(flatten)]
+    pub profiles: BTreeMap<String, Agent>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Mcp {
+    /// Serve Ion's browser tools to outside agents over localhost MCP.
+    pub enable: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Agent {
+    /// Name shown in prompts and the activity log; empty uses the id.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    pub trust: AgentTrust,
+    /// Sites a `trustedSites` agent acts on freely: `"github.com"` (and its
+    /// subdomains) or `"https://github.com"` (that origin only).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub trusted_sites: Vec<String>,
+    /// Connectors this agent may use without asking.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub connectors: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub rules: Vec<AgentRule>,
+}
+
+/// How much an agent may do without asking.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AgentTrust {
+    #[default]
+    Ask,
+    TrustedSites,
+    Full,
+    Custom,
+}
+
+/// One `[[agents.<id>.rules]]` entry.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRule {
+    /// An action id (`"submit"`), `"tier:<tier>"`, or `"*"`.
+    pub action: String,
+    /// A domain, an origin, or `"*"`.
+    #[serde(default = "any_site")]
+    pub site: String,
+    pub effect: RuleEffect,
+}
+
+fn any_site() -> String {
+    "*".into()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RuleEffect {
+    Allow,
+    Ask,
+    Deny,
+}
+
+/// `[safety]`: the permission model's own settings.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Safety {
+    /// Days of agent activity log kept (at least 1).
+    pub audit_retention_days: u32,
+}
+
+impl Default for Safety {
+    fn default() -> Self {
+        Self {
+            audit_retention_days: 30,
+        }
+    }
+}
+
 /// The lowercase word each enum value has in the TOML file.
 macro_rules! as_str {
     ($ty:ty { $($variant:ident => $word:literal),* $(,)? }) => {
@@ -195,7 +311,10 @@ macro_rules! as_str {
 
 as_str!(Density { Comfortable => "comfortable", Compact => "compact" });
 as_str!(TabLayout { Horizontal => "horizontal", Vertical => "vertical" });
+as_str!(AgentTrust { Ask => "ask", TrustedSites => "trustedSites", Full => "full", Custom => "custom" });
+as_str!(RuleEffect { Allow => "allow", Ask => "ask", Deny => "deny" });
 as_str!(ThemeSource { Builtin => "builtin", Dms => "dms", System => "system", Manual => "manual" });
+as_str!(PageTheming { Match => "match", System => "system", Darken => "darken" });
 
 impl Config {
     /// Problems serde cannot express, as human-readable messages. The config
@@ -221,6 +340,12 @@ impl Config {
                     "bangs.{name} {template:?} has no {{}} for the query"
                 ));
             }
+        }
+        if self.agents.profiles.contains_key("mcp") {
+            problems.push("agents.mcp is Ion's MCP server settings, not an agent".into());
+        }
+        if self.safety.audit_retention_days == 0 {
+            problems.push("safety.auditRetentionDays must be at least 1".into());
         }
         problems
     }
@@ -301,6 +426,79 @@ mod tests {
             assert_eq!(
                 toml::Value::try_from(tabs).unwrap().as_str(),
                 Some(tabs.as_str())
+            );
+        }
+        for pages in [PageTheming::Match, PageTheming::System, PageTheming::Darken] {
+            assert_eq!(
+                toml::Value::try_from(pages).unwrap().as_str(),
+                Some(pages.as_str())
+            );
+        }
+    }
+
+    #[test]
+    fn agents_parse_beside_the_mcp_section() {
+        let config: Config = toml::from_str(
+            r#"
+            [agents.mcp]
+            enable = true
+
+            [agents.claude-code]
+            trust = "full"
+
+            [agents.ion]
+            trust = "trustedSites"
+            trustedSites = ["github.com"]
+            connectors = ["github"]
+
+            [[agents.ion.rules]]
+            action = "submit"
+            site = "example.com"
+            effect = "deny"
+
+            [[agents.ion.rules]]
+            action = "tier:read"
+            effect = "allow"
+
+            [safety]
+            auditRetentionDays = 7
+            "#,
+        )
+        .unwrap();
+        assert!(config.agents.mcp.enable);
+        assert_eq!(config.agents.profiles.len(), 2);
+        assert_eq!(
+            config.agents.profiles["claude-code"].trust,
+            AgentTrust::Full
+        );
+        let ion = &config.agents.profiles["ion"];
+        assert_eq!(ion.trust, AgentTrust::TrustedSites);
+        assert_eq!(ion.trusted_sites, ["github.com"]);
+        assert_eq!(ion.rules[0].effect, RuleEffect::Deny);
+        assert_eq!(ion.rules[1].site, "*");
+        assert_eq!(config.safety.audit_retention_days, 7);
+        assert!(config.check().is_empty());
+        let text = toml::to_string(&config).unwrap();
+        assert_eq!(toml::from_str::<Config>(&text).unwrap(), config);
+    }
+
+    #[test]
+    fn agent_enums_match_serde() {
+        for trust in [
+            AgentTrust::Ask,
+            AgentTrust::TrustedSites,
+            AgentTrust::Full,
+            AgentTrust::Custom,
+        ] {
+            assert_eq!(
+                toml::Value::try_from(trust).unwrap().as_str(),
+                Some(trust.as_str())
+            );
+        }
+        for effect in [RuleEffect::Allow, RuleEffect::Ask, RuleEffect::Deny] {
+            assert_eq!(
+                toml::Value::try_from(effect).unwrap().as_str(),
+                Some(effect.as_str())
             );
         }
     }
