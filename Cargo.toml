@@ -36,6 +36,9 @@ tempfile = "3"
 toml = "1"
 toml_edit = "0.25"
 
+# ion-session
+unicode-segmentation = "1.13"
+
 # ion-bookmarks
 rusqlite = { version = "0.40", features = ["bundled"] }
 

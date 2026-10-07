@@ -21,6 +21,9 @@ MenuItem {
         Text {
             Layout.fillWidth: true
             text: item.text
+            // Plain text: workspace names and icons in menus are typed by the
+            // user, and markup such as <b> in them must show as typed.
+            textFormat: Text.PlainText
             color: item.enabled ? Theme.text : Theme.textMuted
             opacity: item.enabled ? 1 : 0.6
             font.pixelSize: Theme.fontSize
