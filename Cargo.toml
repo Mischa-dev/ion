@@ -21,6 +21,7 @@ ion-bookmarks = { path = "crates/ion-bookmarks" }
 ion-sites = { path = "crates/ion-sites" }
 ion-reader = { path = "crates/ion-reader" }
 ion-safety = { path = "crates/ion-safety" }
+ion-agent = { path = "crates/ion-agent" }
 
 cxx = "1.0"
 cxx-qt = "0.10"

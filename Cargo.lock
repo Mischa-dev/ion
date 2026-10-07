@@ -756,6 +756,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ion-agent"
+version = "0.1.0"
+dependencies = [
+ "ion-safety",
+ "serde_json",
+ "ureq",
+]
+
+[[package]]
 name = "ion-app"
 version = "0.1.0"
 dependencies = [
