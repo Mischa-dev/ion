@@ -1,5 +1,5 @@
 //! `Basics` QML singleton: the words and choices behind permission prompts,
-//! find in page, the context menu and the new-tab page, from `ion_basics`.
+//! page dialogs, find in page, the context menu and the new-tab page, from `ion_basics`.
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -16,7 +16,6 @@ pub mod qobject {
         #[qobject]
         #[qml_element]
         #[qml_singleton]
-        #[qproperty(i32, shortcut_count, cxx_name = "shortcutCount")]
         #[namespace = "ion"]
         type Basics = super::BasicsRust;
 
@@ -26,10 +25,74 @@ pub mod qobject {
         #[cxx_name = "permissionText"]
         fn permission_text(self: &Basics, permission_type: i32, origin: &QUrl) -> QString;
 
+        /// "Camera", "Location"… for the site permissions panel.
+        #[qinvokable]
+        #[cxx_name = "permissionName"]
+        fn permission_name(self: &Basics, permission_type: i32) -> QString;
+
+        /// The origin permissions are stored under, or an empty URL for
+        /// pages without one.
+        #[qinvokable]
+        #[cxx_name = "permissionOrigin"]
+        fn permission_origin(self: &Basics, url: &QUrl) -> QUrl;
+
+        /// "Permissions for example.com".
+        #[qinvokable]
+        #[cxx_name = "permissionPanelHeading"]
+        fn permission_panel_heading(self: &Basics, origin: &QUrl) -> QString;
+
+        /// A site permission was granted, blocked or reset somewhere in Ion.
+        #[qsignal]
+        #[cxx_name = "permissionsChanged"]
+        fn permissions_changed(self: Pin<&mut Basics>);
+
+        /// Emit `permissionsChanged` so every panel and button re-reads the
+        /// profile's stored permissions.
+        #[qinvokable]
+        #[cxx_name = "notifyPermissionsChanged"]
+        fn notify_permissions_changed(self: Pin<&mut Basics>);
+
         /// Glyph for a permission type's prompt.
         #[qinvokable]
         #[cxx_name = "permissionGlyph"]
         fn permission_glyph(self: &Basics, permission_type: i32) -> QString;
+
+        /// "example.com says", or "Leave this page?" for the unsaved-changes
+        /// check. `dialog_type` is `JavaScriptDialogRequest.DialogType`.
+        #[qinvokable]
+        #[cxx_name = "dialogHeading"]
+        fn dialog_heading(self: &Basics, dialog_type: i32, origin: &QUrl) -> QString;
+
+        /// The accepting button's label ("OK", "Leave").
+        #[qinvokable]
+        #[cxx_name = "dialogAcceptLabel"]
+        fn dialog_accept_label(self: &Basics, dialog_type: i32) -> QString;
+
+        /// The dismissing button's label, or empty when there is none.
+        #[qinvokable]
+        #[cxx_name = "dialogRejectLabel"]
+        fn dialog_reject_label(self: &Basics, dialog_type: i32) -> QString;
+
+        /// The body shown for the unsaved-changes check.
+        #[qinvokable]
+        #[cxx_name = "beforeUnloadMessage"]
+        fn before_unload_message(self: &Basics) -> QString;
+
+        /// Whether the `count`-th dialog since the page loaded offers to
+        /// block the rest.
+        #[qinvokable]
+        #[cxx_name = "offerDialogBlock"]
+        fn offer_dialog_block(self: &Basics, count: i32) -> bool;
+
+        /// "Sign in to example.com" (or to a proxy).
+        #[qinvokable]
+        #[cxx_name = "authHeading"]
+        fn auth_heading(self: &Basics, proxy: bool, url: &QUrl, proxy_host: &QString) -> QString;
+
+        /// The site's realm and a warning for unencrypted connections.
+        #[qinvokable]
+        #[cxx_name = "authDetail"]
+        fn auth_detail(self: &Basics, realm: &QString, url: &QUrl, proxy: bool) -> QString;
 
         /// "3 of 12", "No matches", or empty.
         #[qinvokable]
@@ -63,46 +126,23 @@ pub mod qobject {
         #[cxx_name = "isNewTabUrl"]
         fn is_new_tab_url(self: &Basics, url: &QUrl) -> bool;
 
+        /// The new-tab page's tiles as a JSON array of `{title, url, iconPage, letter}`:
+        /// `newTab.shortcuts` from the config, then the most-visited sites
+        /// from `history` (`History.search("", n)` output, best first).
         #[qinvokable]
-        #[cxx_name = "shortcutTitle"]
-        fn shortcut_title(self: &Basics, index: i32) -> QString;
-
-        #[qinvokable]
-        #[cxx_name = "shortcutUrl"]
-        fn shortcut_url(self: &Basics, index: i32) -> QUrl;
-
-        #[qinvokable]
-        #[cxx_name = "shortcutLetter"]
-        fn shortcut_letter(self: &Basics, index: i32) -> QString;
+        #[cxx_name = "newTabTiles"]
+        fn new_tab_tiles(self: &Basics, history: &QString) -> QString;
     }
 }
+
+use core::pin::Pin;
 
 use cxx_qt_lib::{QString, QStringList, QUrl};
 use ion_basics::new_tab::{self, Shortcut};
-use ion_basics::{context_menu, find, permissions};
+use ion_basics::{context_menu, dialogs, find, permissions};
 
-pub struct BasicsRust {
-    shortcut_count: i32,
-    shortcuts: Vec<Shortcut>,
-}
-
-impl Default for BasicsRust {
-    fn default() -> Self {
-        let shortcuts = new_tab::default_shortcuts();
-        Self {
-            shortcut_count: i32::try_from(shortcuts.len()).unwrap_or(i32::MAX),
-            shortcuts,
-        }
-    }
-}
-
-impl BasicsRust {
-    fn shortcut(&self, index: i32) -> Option<&Shortcut> {
-        usize::try_from(index)
-            .ok()
-            .and_then(|i| self.shortcuts.get(i))
-    }
-}
+#[derive(Default)]
+pub struct BasicsRust;
 
 fn flags(value: i32) -> u32 {
     u32::try_from(value).unwrap_or(0)
@@ -116,6 +156,61 @@ impl qobject::Basics {
             }
             None => QString::default(),
         }
+    }
+
+    fn dialog_heading(&self, dialog_type: i32, origin: &QUrl) -> QString {
+        let kind = dialogs::Kind::from_qt(dialog_type).unwrap_or(dialogs::Kind::Alert);
+        QString::from(dialogs::heading(kind, &origin.to_string()).as_str())
+    }
+
+    fn dialog_accept_label(&self, dialog_type: i32) -> QString {
+        let kind = dialogs::Kind::from_qt(dialog_type).unwrap_or(dialogs::Kind::Alert);
+        QString::from(kind.accept_label())
+    }
+
+    fn dialog_reject_label(&self, dialog_type: i32) -> QString {
+        dialogs::Kind::from_qt(dialog_type)
+            .and_then(dialogs::Kind::reject_label)
+            .map(QString::from)
+            .unwrap_or_default()
+    }
+
+    fn before_unload_message(&self) -> QString {
+        QString::from(dialogs::BEFORE_UNLOAD_MESSAGE)
+    }
+
+    fn offer_dialog_block(&self, count: i32) -> bool {
+        dialogs::offer_block(count.max(0) as u32)
+    }
+
+    fn auth_heading(&self, proxy: bool, url: &QUrl, proxy_host: &QString) -> QString {
+        let heading = dialogs::auth_heading(proxy, &url.to_string(), &proxy_host.to_string());
+        QString::from(heading.as_str())
+    }
+
+    fn auth_detail(&self, realm: &QString, url: &QUrl, proxy: bool) -> QString {
+        let detail = dialogs::auth_detail(&realm.to_string(), &url.to_string(), proxy);
+        QString::from(detail.as_str())
+    }
+
+    fn permission_name(&self, permission_type: i32) -> QString {
+        permissions::Kind::from_qt(permission_type)
+            .map(|kind| QString::from(kind.setting_name()))
+            .unwrap_or_default()
+    }
+
+    fn permission_origin(&self, url: &QUrl) -> QUrl {
+        permissions::origin_of(&url.to_string())
+            .map(|origin| QUrl::from(origin.as_str()))
+            .unwrap_or_default()
+    }
+
+    fn permission_panel_heading(&self, origin: &QUrl) -> QString {
+        QString::from(permissions::panel_heading(&origin.to_string()).as_str())
+    }
+
+    fn notify_permissions_changed(self: Pin<&mut Self>) {
+        self.permissions_changed();
     }
 
     fn permission_glyph(&self, permission_type: i32) -> QString {
@@ -168,21 +263,36 @@ impl qobject::Basics {
         new_tab::is_new_tab_url(&url.to_string())
     }
 
-    fn shortcut_title(&self, index: i32) -> QString {
-        self.shortcut(index)
-            .map(|s| QString::from(s.title.as_str()))
-            .unwrap_or_default()
-    }
-
-    fn shortcut_url(&self, index: i32) -> QUrl {
-        self.shortcut(index)
-            .map(|s| QUrl::from(s.url.as_str()))
-            .unwrap_or_default()
-    }
-
-    fn shortcut_letter(&self, index: i32) -> QString {
-        self.shortcut(index)
-            .map(|s| QString::from(s.letter().as_str()))
-            .unwrap_or_default()
+    fn new_tab_tiles(&self, history: &QString) -> QString {
+        let config = ion_config::global().config();
+        let pinned: Vec<Shortcut> = config
+            .new_tab
+            .shortcuts
+            .iter()
+            .map(|s| Shortcut::new(&s.title, &s.url))
+            .collect();
+        let visited: Vec<Shortcut> =
+            serde_json::from_str::<Vec<serde_json::Value>>(&history.to_string())
+                .unwrap_or_default()
+                .iter()
+                .map(|page| {
+                    let field = |key: &str| page.get(key).and_then(|v| v.as_str()).unwrap_or("");
+                    Shortcut::new(field("title"), field("url"))
+                })
+                .collect();
+        let max = usize::try_from(config.new_tab.tiles).unwrap_or(usize::MAX);
+        let tiles: Vec<serde_json::Value> =
+            new_tab::tiles(&pinned, &visited, config.new_tab.most_visited, max)
+                .iter()
+                .map(|t| {
+                    serde_json::json!({
+                        "title": t.title,
+                        "url": t.url,
+                        "iconPage": t.icon_page,
+                        "letter": t.letter(),
+                    })
+                })
+                .collect();
+        QString::from(serde_json::Value::Array(tiles).to_string().as_str())
     }
 }

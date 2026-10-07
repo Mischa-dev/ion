@@ -130,6 +130,13 @@ impl FolderRules {
         }
     }
 
+    /// Add `other`'s rules on top of these; `other` wins where both have one.
+    pub fn merge(&mut self, other: &FolderRules) {
+        for (category, folder) in &other.folders {
+            self.folders.insert(*category, folder.clone());
+        }
+    }
+
     /// The folder for a download, or `default_dir` when no rule matches.
     pub fn folder_for<'a>(
         &'a self,
@@ -141,6 +148,18 @@ impl FolderRules {
             .get(&Category::classify(file_name, mime_type))
             .map(String::as_str)
             .unwrap_or(default_dir)
+    }
+}
+
+/// Expand a leading `~` (or `~/…`) to `home`. Other paths are returned as
+/// they are, so config files can say `~/Pictures`.
+pub fn expand_home(path: &str, home: Option<&str>) -> String {
+    let path = path.trim();
+    match (path.strip_prefix('~'), home) {
+        (Some(rest), Some(home)) if rest.is_empty() || rest.starts_with('/') => {
+            format!("{}{rest}", home.trim_end_matches('/'))
+        }
+        _ => path.to_owned(),
     }
 }
 
@@ -333,6 +352,35 @@ pub fn smooth_rate(previous: f64, sample: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn merged_rules_win() {
+        let mut base = FolderRules::new();
+        base.set(Category::Image, "/config/images");
+        base.set(Category::Video, "/config/videos");
+        let mut runtime = FolderRules::new();
+        runtime.set(Category::Image, "/runtime/images");
+        base.merge(&runtime);
+        assert_eq!(
+            base.folder_for("a.png", "image/png", "/dl"),
+            "/runtime/images"
+        );
+        assert_eq!(
+            base.folder_for("a.mp4", "video/mp4", "/dl"),
+            "/config/videos"
+        );
+        assert_eq!(base.folder_for("a.txt", "text/plain", "/dl"), "/dl");
+    }
+
+    #[test]
+    fn expand_home_only_touches_a_leading_tilde() {
+        let home = Some("/home/me/");
+        assert_eq!(expand_home("~/Pictures", home), "/home/me/Pictures");
+        assert_eq!(expand_home("~", home), "/home/me");
+        assert_eq!(expand_home(" /srv/dl ", home), "/srv/dl");
+        assert_eq!(expand_home("~other/x", home), "~other/x");
+        assert_eq!(expand_home("~/x", None), "~/x");
+    }
     use std::collections::HashSet;
 
     #[test]

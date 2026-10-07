@@ -17,6 +17,7 @@ pub mod platform;
 pub mod privacy;
 pub mod reader;
 pub mod safety;
+pub mod screenshot;
 pub mod sites;
 pub mod tabs;
 pub mod theme;

@@ -119,12 +119,35 @@ impl qobject::Downloads {
         mime_type: &QString,
         default_dir: &QString,
     ) -> QString {
-        let default_dir = default_dir.to_string();
-        QString::from(self.rules.folder_for(
-            &file_name.to_string(),
-            &mime_type.to_string(),
-            &default_dir,
-        ))
+        // `downloads.directory` and `downloads.folders` from the config,
+        // read on every download so edits apply right away. Rules set with
+        // setFolder() win over the config.
+        let config = ion_config::global().config();
+        let home = std::env::var("HOME").ok();
+        let expand = |path: &str| downloads::expand_home(path, home.as_deref());
+        let mut default_dir = default_dir.to_string();
+        if !config.downloads.directory.trim().is_empty() {
+            default_dir = expand(&config.downloads.directory);
+        }
+        let mut rules = FolderRules::new();
+        for (name, folder) in &config.downloads.folders {
+            match Category::from_name(name) {
+                Some(category) => rules.set(category, &expand(folder)),
+                None => eprintln!("ion: unknown download type {name:?} in downloads.folders"),
+            }
+        }
+        rules.merge(&self.rules);
+
+        let target = rules
+            .folder_for(&file_name.to_string(), &mime_type.to_string(), &default_dir)
+            .to_owned();
+        // A configured folder may not exist yet; fall back to the default
+        // folder when it cannot be created.
+        if let Err(err) = std::fs::create_dir_all(&target) {
+            eprintln!("ion: cannot create download folder {target}: {err}");
+            return QString::from(default_dir.as_str());
+        }
+        QString::from(target.as_str())
     }
 
     fn unique_file_name(&self, dir: &QString, name: &QString) -> QString {

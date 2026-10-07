@@ -31,6 +31,7 @@ pub enum Item {
     SelectAll,
     SearchSelection,
     SavePage,
+    Screenshot,
     ViewSource,
     Separator,
 }
@@ -64,6 +65,7 @@ impl Item {
             Item::SelectAll => "selectAll",
             Item::SearchSelection => "searchSelection",
             Item::SavePage => "savePage",
+            Item::Screenshot => "screenshot",
             Item::ViewSource => "viewSource",
             Item::Separator => "-",
         }
@@ -181,7 +183,7 @@ pub fn items(target: Target) -> Vec<Item> {
     let clicked_something = target.editable || groups.iter().any(|g| !g.is_empty());
     if !clicked_something {
         groups.push(vec![Item::Back, Item::Forward, Item::Reload]);
-        groups.push(vec![Item::SavePage, Item::ViewSource]);
+        groups.push(vec![Item::SavePage, Item::Screenshot, Item::ViewSource]);
     }
 
     let mut out = Vec::new();
@@ -219,7 +221,15 @@ mod tests {
     fn plain_page() {
         assert_eq!(
             ids(Target::default()),
-            ["back", "forward", "reload", "-", "savePage", "viewSource"]
+            [
+                "back",
+                "forward",
+                "reload",
+                "-",
+                "savePage",
+                "screenshot",
+                "viewSource"
+            ]
         );
     }
 

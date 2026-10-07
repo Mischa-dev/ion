@@ -12,6 +12,21 @@ Rectangle {
     required property WebEngineView view
 
     property date now: new Date()
+    // `{title, url, letter}` for each tile: pinned ones from the config, then
+    // the most-visited sites. Rebuilt whenever the page shows.
+    property var tiles: []
+
+    function refresh() {
+        tiles = JSON.parse(Basics.newTabTiles(History.search("", 200)))
+    }
+
+    onVisibleChanged: if (visible) refresh()
+    Component.onCompleted: refresh()
+
+    Connections {
+        target: Config
+        function onRevisionChanged() { page.refresh() }
+    }
 
     visible: view.showNewTabPage && Basics.isNewTabUrl(view.url) && !view.loading
     anchors.fill: parent
@@ -60,18 +75,18 @@ Rectangle {
                 id: grid
                 Layout.alignment: Qt.AlignHCenter
                 Layout.topMargin: Theme.spacing * 6
-                columns: Math.max(1, Math.min(Basics.shortcutCount, Math.floor(parent.width / (tileSize + columnSpacing))))
+                columns: Math.max(1, Math.min(page.tiles.length, Math.floor(parent.width / (tileSize + columnSpacing))))
                 columnSpacing: Theme.spacing * 2
                 rowSpacing: Theme.spacing * 2
 
                 readonly property int tileSize: Theme.tabHeight * 3
 
                 Repeater {
-                    model: Basics.shortcutCount
+                    model: page.tiles
 
                     delegate: Rectangle {
                         id: tile
-                        required property int index
+                        required property var modelData
 
                         Layout.preferredWidth: grid.tileSize
                         Layout.preferredHeight: grid.tileSize
@@ -92,9 +107,22 @@ Rectangle {
                                 radius: width / 2
                                 color: Theme.surfaceHover
 
+                                // The site's icon once Ion has seen it, else
+                                // its first letter.
+                                Image {
+                                    id: favicon
+                                    anchors.centerIn: parent
+                                    width: Theme.iconSize * 1.5
+                                    height: width
+                                    sourceSize: Qt.size(width, height)
+                                    source: "image://favicon/" + tile.modelData.iconPage
+                                    // Unknown icons load as an empty image.
+                                    visible: status === Image.Ready && implicitWidth > 0
+                                }
                                 Text {
                                     anchors.centerIn: parent
-                                    text: Basics.shortcutLetter(tile.index)
+                                    visible: !favicon.visible
+                                    text: tile.modelData.letter
                                     color: Theme.accent
                                     font.pixelSize: Theme.fontSize + 5
                                     font.bold: true
@@ -103,7 +131,7 @@ Rectangle {
 
                             Text {
                                 Layout.fillWidth: true
-                                text: Basics.shortcutTitle(tile.index)
+                                text: tile.modelData.title
                                 color: Theme.text
                                 font.pixelSize: Theme.fontSize - 1
                                 horizontalAlignment: Text.AlignHCenter
@@ -116,7 +144,7 @@ Rectangle {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: page.view.url = Basics.shortcutUrl(tile.index)
+                            onClicked: page.view.url = tile.modelData.url
                         }
                     }
                 }

@@ -100,6 +100,11 @@ ApplicationWindow {
         extensionsDialog.show()
     }
 
+    // Window fullscreen, the same as F11: hides the toolbars too.
+    function toggleFullScreen() {
+        fullScreen.toggleWindow()
+    }
+
     function showImport() {
         importDialog.show()
     }
@@ -394,6 +399,8 @@ ApplicationWindow {
     Shortcut { sequences: ["Ctrl+0"]; onActivated: window.currentView?.resetZoom() }
     Shortcut { sequence: "Ctrl+D"; onActivated: window.toggleBookmark() }
     Shortcut { sequence: "Ctrl+Alt+R"; onActivated: window.currentView?.reader.toggle() }
+    Shortcut { sequence: "Ctrl+Shift+S"; onActivated: window.currentView?.takeScreenshot(false) }
+    Shortcut { sequence: "Ctrl+Alt+Shift+S"; onActivated: window.currentView?.takeScreenshot(true) }
     Shortcut {
         sequence: { Config.revision; return Config.value("shortcuts.palette") || "Ctrl+K" }
         onActivated: palette.show()
