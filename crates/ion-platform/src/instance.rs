@@ -121,29 +121,51 @@ pub use fallback::{Listener, claim};
 #[cfg(unix)]
 mod unix {
     use super::*;
-    use std::fs::{DirBuilder, Permissions};
+    use std::fs::{DirBuilder, File, OpenOptions, Permissions};
     use std::io::ErrorKind;
-    use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+    use std::os::fd::AsRawFd;
+    use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
     use std::os::unix::net::{UnixListener, UnixStream};
 
     /// Hand `request` to a running instance at `path`, or become the primary.
+    ///
+    /// Runs under an exclusive lock on `<path>.lock`, so two launches at the
+    /// same moment cannot both find no listener and both bind: the second one
+    /// waits, then finds the first one's socket and hands over to it.
     pub fn claim(path: &Path, request: &Request) -> Claim {
-        for _ in 0..2 {
-            match forward(path, request) {
-                Ok(()) => return Claim::Forwarded,
-                // Nobody listening: a stale socket from a crash, or no socket.
-                Err(e)
-                    if matches!(e.kind(), ErrorKind::ConnectionRefused | ErrorKind::NotFound) => {}
-                Err(_) => return Claim::Primary(None),
-            }
-            match bind(path) {
-                Ok(listener) => return Claim::Primary(Some(listener)),
-                // Another launch bound it first: try handing over to it.
-                Err(e) if e.kind() == ErrorKind::AddrInUse => continue,
-                Err(_) => return Claim::Primary(None),
-            }
+        let Ok(_lock) = lock(path) else {
+            return Claim::Primary(None);
+        };
+        match forward(path, request) {
+            Ok(()) => return Claim::Forwarded,
+            // Nobody listening: a stale socket from a crash, or no socket.
+            Err(e) if matches!(e.kind(), ErrorKind::ConnectionRefused | ErrorKind::NotFound) => {}
+            Err(_) => return Claim::Primary(None),
         }
-        Claim::Primary(None)
+        Claim::Primary(bind(path).ok())
+    }
+
+    /// Create the private socket directory and take the claim lock, which is
+    /// released when the returned file is dropped (or the process exits).
+    fn lock(path: &Path) -> io::Result<File> {
+        let dir = path.parent().ok_or(ErrorKind::InvalidInput)?;
+        DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
+        // Refuse a directory others can reach (for example one pre-created in
+        // /tmp by another user).
+        if std::fs::metadata(dir)?.permissions().mode() & 0o077 != 0 {
+            return Err(ErrorKind::PermissionDenied.into());
+        }
+        let file = OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .mode(0o600)
+            .open(path.with_extension("lock"))?;
+        // SAFETY: `file` owns a valid descriptor for the duration of the call.
+        if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) } != 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(file)
     }
 
     fn forward(path: &Path, request: &Request) -> io::Result<()> {
@@ -159,14 +181,9 @@ mod unix {
         Ok(())
     }
 
+    /// Only called with the claim lock held, after nobody answered at `path`,
+    /// so a socket file still there is stale.
     fn bind(path: &Path) -> io::Result<Listener> {
-        let dir = path.parent().ok_or(ErrorKind::InvalidInput)?;
-        DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
-        // Refuse a directory others can reach (for example one pre-created in
-        // /tmp by another user).
-        if std::fs::metadata(dir)?.permissions().mode() & 0o077 != 0 {
-            return Err(ErrorKind::PermissionDenied.into());
-        }
         match std::fs::remove_file(path) {
             Err(e) if e.kind() != ErrorKind::NotFound => return Err(e),
             _ => {}
@@ -302,6 +319,35 @@ mod tests {
         };
         assert!(matches!(claim(&path, &request), Claim::Forwarded));
         assert_eq!(rx.recv_timeout(TIMEOUT).unwrap(), request);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn simultaneous_launches_elect_one_primary() {
+        let path = scratch_dir("race").join("Default.sock");
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(8));
+        let launches: Vec<_> = (0..8)
+            .map(|_| {
+                let (path, barrier) = (path.clone(), barrier.clone());
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    match claim(&path, &Request::default()) {
+                        Claim::Primary(Some(listener)) => {
+                            std::thread::spawn(move || listener.serve(|_| {}));
+                            true
+                        }
+                        Claim::Primary(None) => panic!("socket setup failed"),
+                        Claim::Forwarded => false,
+                    }
+                })
+            })
+            .collect();
+        let primaries = launches
+            .into_iter()
+            .map(|launch| launch.join().unwrap())
+            .filter(|&primary| primary)
+            .count();
+        assert_eq!(primaries, 1);
     }
 
     #[cfg(unix)]
