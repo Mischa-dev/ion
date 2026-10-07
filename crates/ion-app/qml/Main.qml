@@ -113,6 +113,9 @@ ApplicationWindow {
 
     PlatformIntegration { window: window }
 
+    // Command palette (Ctrl/Cmd+K).
+    CommandPalette { id: palette; browser: window }
+
     header: ColumnLayout {
         spacing: 0
 
@@ -239,4 +242,8 @@ ApplicationWindow {
     Shortcut { sequences: [StandardKey.Back]; onActivated: window.currentView?.goBack() }
     Shortcut { sequences: [StandardKey.Forward]; onActivated: window.currentView?.goForward() }
     Shortcut { sequences: [StandardKey.Quit]; onActivated: Qt.quit() }
+    Shortcut {
+        sequence: { Config.revision; return Config.value("shortcuts.palette") || "Ctrl+K" }
+        onActivated: palette.show()
+    }
 }
