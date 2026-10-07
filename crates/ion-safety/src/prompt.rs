@@ -171,8 +171,11 @@ impl Prompt {
             },
             Subject::Agent(request) => {
                 let tier = request.action.tier();
+                // Approving a site covers reading and acting there. Anything
+                // not about a site (listing tabs, a connector) covers only
+                // that action.
                 let what = match tier {
-                    Tier::Read | Tier::Act => What::UpTo(Tier::Act),
+                    Tier::Read | Tier::Act if request.site.is_some() => What::UpTo(Tier::Act),
                     _ => What::Action(request.action.clone()),
                 };
                 let site = match (&request.site, tier.is_site_tier()) {
@@ -343,6 +346,15 @@ mod tests {
             rule.site,
             SitePattern::Origin(Origin::parse("https://meet.example").unwrap())
         );
+    }
+
+    #[test]
+    fn listing_tabs_approves_only_listing_tabs() {
+        let p = agent(Action::ListTabs, None);
+        let (_, rule) = p.resolve(Choice::Allow, 0).unwrap();
+        let rule = rule.unwrap();
+        assert_eq!(rule.what, What::Action(Action::ListTabs));
+        assert_eq!(rule.site, SitePattern::Any);
     }
 
     #[test]

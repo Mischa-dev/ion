@@ -164,6 +164,9 @@ can):
   pending site prompts without recording an answer.
 - An unanswered agent prompt blocks only that agent's step, never the page or
   other tabs. Prompts expire with their tab.
+- An answer is checked against the policy again before it counts: if the tab
+  closed, agents were stopped, the agent paused or the tab taken back while
+  the prompt was up, the request is denied and nothing is remembered.
 
 ## 5. Untrusted content
 
@@ -193,6 +196,7 @@ append-only log, as are site permission answers and any rule change.
 - Privacy: no page content, no screenshots. Typed text is kept only for
   ordinary fields; anything marked sensitive (password or personal fields) is
   stored as `[redacted, N chars]`. URLs drop their query and fragment.
+- The log directory and files are private to the user (0700/0600 on Unix).
 - Retention: 30 days **(default)**, configurable with
   `safety.auditRetentionDays`; old files are pruned at startup.
 - The activity timeline UI (later) reads this log; screenshots for replay will

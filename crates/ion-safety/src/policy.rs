@@ -162,6 +162,8 @@ pub enum Reason {
     Paused,
     /// The person took this tab back from agents.
     TakenOver,
+    /// The tab closed before the prompt was answered.
+    TabClosed,
     /// A rule decided.
     Rule {
         source: Source,
@@ -192,6 +194,7 @@ impl fmt::Display for Reason {
             Reason::Stopped => f.write_str("All agents are stopped"),
             Reason::Paused => f.write_str("This agent is paused"),
             Reason::TakenOver => f.write_str("You took this tab back"),
+            Reason::TabClosed => f.write_str("The tab was closed"),
             Reason::Rule {
                 source: Source::Config,
                 ..

@@ -123,6 +123,15 @@ pub fn utc_date(unix_seconds: u64) -> String {
     format!("{year:04}-{month:02}-{day:02}")
 }
 
+/// Create `dir` and its missing parents, private to the user on Unix.
+pub(crate) fn create_private_dir(dir: &Path) -> io::Result<()> {
+    let mut builder = fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+    builder.create(dir)
+}
+
 /// The log's directory and how long it keeps files.
 #[derive(Debug, Clone)]
 pub struct AuditLog {
@@ -151,13 +160,18 @@ impl AuditLog {
         self.dir.join(format!("{}.jsonl", utc_date(time)))
     }
 
+    /// Append `entry`. The directory and files are private to the user
+    /// (0700 and 0600 on Unix): they say where agents went and what they
+    /// typed.
     pub fn append(&self, entry: &Entry) -> io::Result<()> {
-        fs::create_dir_all(&self.dir)?;
+        create_private_dir(&self.dir)?;
         let mut line = serde_json::to_string(entry).map_err(io::Error::other)?;
         line.push('\n');
-        OpenOptions::new()
-            .create(true)
-            .append(true)
+        let mut options = OpenOptions::new();
+        options.create(true).append(true);
+        #[cfg(unix)]
+        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+        options
             .open(self.file_for(entry.time))?
             .write_all(line.as_bytes())
     }
@@ -313,6 +327,20 @@ mod tests {
         assert!(dir.join("2026-10-06.jsonl").exists());
         assert!(!dir.join("2026-10-05.jsonl").exists());
         assert!(dir.join("notes.txt").exists());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn log_files_are_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = test_dir("private");
+        let log = AuditLog::new(dir.join("audit"));
+        log.append(&Entry::new(NOW, Kind::Stop)).unwrap();
+        let mode = |p: &Path| fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&dir), 0o700);
+        assert_eq!(mode(&dir.join("audit")), 0o700);
+        assert_eq!(mode(&dir.join("audit/2026-10-07.jsonl")), 0o600);
         fs::remove_dir_all(dir).unwrap();
     }
 

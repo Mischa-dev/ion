@@ -1,14 +1,14 @@
 //! [`Safety`]: the policy plus remembered rules, prompts and the activity log,
 //! behind one object.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::audit::{self, AuditLog, Entry, Kind};
 use crate::capability::Action;
-use crate::policy::{AgentProfile, AgentRequest, Decision, Policy, SiteRequest, Verdict};
+use crate::policy::{AgentProfile, AgentRequest, Decision, Policy, Reason, SiteRequest, Verdict};
 use crate::prompt::{Choice, Prompt, Subject};
 use crate::rule::{Lifetime, Rule, Source, Who};
 use crate::site::Origin;
@@ -62,6 +62,9 @@ fn system_clock() -> u64 {
 
 pub struct Safety {
     policy: Policy,
+    /// Tabs that have closed. Tab ids are never reused, so a prompt for one
+    /// of these can only be stale.
+    closed_tabs: BTreeSet<u64>,
     store: Option<RuleStore>,
     audit: Option<AuditLog>,
     clock: Clock,
@@ -78,21 +81,26 @@ impl Safety {
     pub fn in_memory() -> Safety {
         Safety {
             policy: Policy::new(),
+            closed_tabs: BTreeSet::new(),
             store: None,
             audit: None,
             clock: Box::new(system_clock),
         }
     }
 
-    /// Keep remembered rules in `dir/rules.json` and the log in `dir/audit/`.
-    /// An unreadable rules file is set aside and Ion starts with none, so
-    /// everything asks again rather than anything being allowed.
-    pub fn open(dir: &Path) -> Safety {
+    /// Keep remembered rules in `dir/rules.json` and the log in `dir/audit/`,
+    /// pruning log files older than `retention_days`. An unreadable rules
+    /// file is set aside and Ion starts with none, so everything asks again
+    /// rather than anything being allowed.
+    pub fn open(dir: &Path, retention_days: u32) -> Safety {
         let store = RuleStore::new(dir.join("rules.json"));
+        let mut audit = AuditLog::new(dir.join("audit"));
+        audit.set_retention_days(retention_days);
         let mut safety = Safety {
             policy: Policy::new(),
+            closed_tabs: BTreeSet::new(),
             store: None,
-            audit: Some(AuditLog::new(dir.join("audit"))),
+            audit: Some(audit),
             clock: Box::new(system_clock),
         };
         match store.load() {
@@ -184,11 +192,44 @@ impl Safety {
         Outcome { decision, prompt }
     }
 
+    /// Why an answer to a prompt about `subject` no longer counts: its tab
+    /// closed, or (for agents) all agents were stopped, the agent paused or
+    /// the tab taken back while the prompt was up.
+    fn overridden(&self, subject: &Subject) -> Option<Reason> {
+        let tab = match subject {
+            Subject::Agent(request) => request.tab,
+            Subject::Site(request) => request.tab,
+        };
+        if tab.is_some_and(|t| self.closed_tabs.contains(&t)) {
+            return Some(Reason::TabClosed);
+        }
+        let Subject::Agent(request) = subject else {
+            return None;
+        };
+        let decision = self.policy.decide_agent(request);
+        match decision.reason {
+            Reason::HardLimit { .. } | Reason::Stopped | Reason::Paused | Reason::TakenOver => {
+                Some(decision.reason)
+            }
+            _ => None,
+        }
+    }
+
     /// The person answered `prompt`. Remembers the answer as the prompt
     /// says, logs it, and returns the verdict for the waiting request.
+    ///
+    /// The policy is checked again first: if the tab closed, agents were
+    /// stopped, the agent paused or the tab taken back while the prompt was
+    /// up, the request is denied whatever the answer, and nothing is
+    /// remembered.
     pub fn answer(&mut self, prompt: &Prompt, choice: Choice) -> Result<Verdict, AnswerError> {
         let now = self.now();
-        let (verdict, rule) = prompt.resolve(choice, now).ok_or(AnswerError::NotOffered)?;
+        let (mut verdict, mut rule) = prompt.resolve(choice, now).ok_or(AnswerError::NotOffered)?;
+        let overridden = self.overridden(&prompt.subject);
+        if overridden.is_some() {
+            verdict = Verdict::Deny;
+            rule = None;
+        }
         let mut entry = match &prompt.subject {
             Subject::Agent(request) => agent_entry(now, Kind::Answer, request),
             Subject::Site(request) => {
@@ -200,6 +241,7 @@ impl Safety {
             }
         };
         entry.verdict = Some(verdict);
+        entry.reason = overridden.map(|r| r.to_string());
         entry.detail = Some(choice.id().to_owned());
         self.log(entry);
         if let Some(rule) = rule {
@@ -271,6 +313,7 @@ impl Safety {
     }
 
     pub fn tab_closed(&mut self, tab: u64) {
+        self.closed_tabs.insert(tab);
         self.policy.tab_closed(tab);
     }
 
@@ -379,7 +422,7 @@ mod tests {
     fn site_answers_persist_across_restarts() {
         let dir = test_dir("safety-site");
         {
-            let mut safety = Safety::open(&dir).with_clock(|| NOW);
+            let mut safety = Safety::open(&dir, 30).with_clock(|| NOW);
             let outcome = safety.request_site(camera("https://meet.example"));
             assert_eq!(outcome.verdict(), Verdict::Ask);
             let prompt = outcome.prompt.unwrap();
@@ -391,7 +434,7 @@ mod tests {
                 Verdict::Allow
             );
         }
-        let mut safety = Safety::open(&dir).with_clock(|| NOW);
+        let mut safety = Safety::open(&dir, 30).with_clock(|| NOW);
         assert_eq!(
             safety
                 .request_site(camera("https://meet.example"))
@@ -406,7 +449,7 @@ mod tests {
                 .verdict(),
             Verdict::Ask
         );
-        let safety = Safety::open(&dir);
+        let safety = Safety::open(&dir, 30);
         assert!(safety.site_permissions().is_empty());
         std::fs::remove_dir_all(dir).unwrap();
     }
@@ -447,7 +490,7 @@ mod tests {
     #[test]
     fn agent_flow_is_logged_end_to_end() {
         let dir = test_dir("safety-agent");
-        let mut safety = Safety::open(&dir).with_clock(|| NOW);
+        let mut safety = Safety::open(&dir, 30).with_clock(|| NOW);
         let outcome = safety.request_agent(agent_req(Action::ReadPage, "https://github.com/a?q=1"));
         assert_eq!(outcome.verdict(), Verdict::Ask);
         let prompt = outcome.prompt.unwrap();
@@ -509,7 +552,7 @@ mod tests {
     fn agent_denials_do_not_survive_a_restart() {
         let dir = test_dir("safety-deny");
         {
-            let mut safety = Safety::open(&dir);
+            let mut safety = Safety::open(&dir, 30);
             let prompt = safety
                 .request_agent(agent_req(Action::Interact, "https://github.com"))
                 .prompt
@@ -522,7 +565,7 @@ mod tests {
                 Verdict::Deny
             );
         }
-        let safety = Safety::open(&dir);
+        let safety = Safety::open(&dir, 30);
         assert_eq!(
             safety
                 .request_agent(agent_req(Action::Interact, "https://github.com"))
@@ -560,13 +603,65 @@ mod tests {
         let dir = test_dir("safety-corrupt");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("rules.json"), "garbage").unwrap();
-        let safety = Safety::open(&dir);
+        let safety = Safety::open(&dir, 30);
         assert!(safety.policy().user_rules().is_empty());
         assert!(dir.join("rules.json.unreadable").exists());
         assert_eq!(
             safety.request_site(camera("https://a.example")).verdict(),
             Verdict::Ask
         );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn answers_after_a_stop_or_take_over_deny() {
+        let mut safety = Safety::in_memory();
+        let req = agent_req(Action::Interact, "https://github.com");
+        let prompt = safety.request_agent(req.clone()).prompt.unwrap();
+        safety.stop_all();
+        assert_eq!(safety.answer(&prompt, Choice::Allow), Ok(Verdict::Deny));
+        assert!(safety.policy().user_rules().is_empty());
+        safety.resume_all();
+
+        safety.take_over(1);
+        assert_eq!(safety.answer(&prompt, Choice::AllowOnce), Ok(Verdict::Deny));
+        safety.hand_back(1);
+
+        safety.set_agent_paused("ion", true);
+        assert_eq!(safety.answer(&prompt, Choice::Allow), Ok(Verdict::Deny));
+        safety.set_agent_paused("ion", false);
+
+        assert_eq!(safety.answer(&prompt, Choice::Allow), Ok(Verdict::Allow));
+        assert_eq!(safety.request_agent(req).verdict(), Verdict::Allow);
+    }
+
+    #[test]
+    fn answers_for_closed_tabs_deny() {
+        let mut safety = Safety::in_memory();
+        let site = safety
+            .request_site(camera("https://meet.example"))
+            .prompt
+            .unwrap();
+        let agent = safety
+            .request_agent(agent_req(Action::ReadPage, "https://github.com"))
+            .prompt
+            .unwrap();
+        safety.tab_closed(1);
+        assert_eq!(safety.answer(&site, Choice::Allow), Ok(Verdict::Deny));
+        assert_eq!(safety.answer(&agent, Choice::Allow), Ok(Verdict::Deny));
+        assert!(safety.policy().user_rules().is_empty());
+    }
+
+    #[test]
+    fn open_prunes_with_the_given_retention() {
+        let dir = test_dir("safety-retention");
+        let audit = AuditLog::new(dir.join("audit"));
+        let old = system_clock() - 60 * 86_400;
+        audit.append(&Entry::new(old, Kind::Stop)).unwrap();
+        Safety::open(&dir, 90);
+        assert_eq!(audit.read_since(0).unwrap().len(), 1);
+        Safety::open(&dir, 30);
+        assert!(audit.read_since(0).unwrap().is_empty());
         std::fs::remove_dir_all(dir).unwrap();
     }
 

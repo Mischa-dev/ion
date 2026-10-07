@@ -79,7 +79,7 @@ impl RuleStore {
 
 fn write_atomic(path: &Path, contents: &[u8]) -> io::Result<()> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
+        crate::audit::create_private_dir(parent)?;
     }
     let mut tmp = path.as_os_str().to_owned();
     tmp.push(".tmp");
