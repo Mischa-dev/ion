@@ -11,6 +11,7 @@ publish = false
 [workspace.dependencies]
 ion-core = { path = "crates/ion-core" }
 ion-basics = { path = "crates/ion-basics" }
+ion-adblock = { path = "crates/ion-adblock" }
 ion-platform = { path = "crates/ion-platform" }
 ion-bangs = { path = "crates/ion-bangs" }
 ion-config = { path = "crates/ion-config" }

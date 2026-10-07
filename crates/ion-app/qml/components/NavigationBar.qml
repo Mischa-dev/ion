@@ -63,6 +63,7 @@ Rectangle {
             onClicked: bar.view.resetZoom()
         }
 
+        AdblockButton { view: bar.view }
         DownloadsButton { panel: bar.downloads }
     }
 

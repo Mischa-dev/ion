@@ -67,6 +67,7 @@ ApplicationWindow {
 
     Component.onCompleted: {
         profile = profilePrototype.instance()
+        Adblock.attach(window.profile)
         if (Config.value("general.restoreSession"))
             Tabs.restoreLastSession()
         // URLs on the command line (`ion %U` from the desktop file) open as new
