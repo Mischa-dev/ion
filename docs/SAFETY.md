@@ -261,18 +261,19 @@ Ion's layered config.
 - `ion-config` gains `[agents.*]` and `[safety]` sections; the bridge converts
   them into `ion-safety` profiles and reloads them live.
 - `bridge/safety.rs`: `Safety` QML singleton: site decisions and answers for
-  the permission prompt, the stop state and shortcut, and a list of remembered
-  site permissions for a later settings page.
+  the permission prompt, the stop state and shortcut, and the remembered
+  site permissions behind the toolbar's site permissions panel.
 
 ### Delivery
 
-1. PR: this design plus `ion-safety` with full unit tests. No UI change.
-2. PR: config sections, the `Safety` singleton, stop shortcut and palette
+1. **Done (#11).** PR: this design plus `ion-safety` with full unit tests. No UI change.
+2. **Done (#11).** PR: config sections, the `Safety` singleton, stop shortcut and palette
    command.
-3. PR (after daily-driver basics #7 merges): route the existing site
+3. **Done.** PR (after daily-driver basics #7 merges): route the existing site
    permission prompt through `Safety` (`decide` before prompting, answers
    recorded and logged), switch the profile to ask-every-time so Ion's store
-   is the single source of truth, and add "Allow this time".
+   is the single source of truth, and add "Allow this time". The toolbar's
+   site permissions panel reads and changes the same remembered answers.
 
 ## 10. Defaults Ion picked
 
