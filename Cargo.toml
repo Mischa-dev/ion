@@ -10,6 +10,7 @@ publish = false
 
 [workspace.dependencies]
 ion-core = { path = "crates/ion-core" }
+ion-platform = { path = "crates/ion-platform" }
 ion-bangs = { path = "crates/ion-bangs" }
 ion-config = { path = "crates/ion-config" }
 ion-session = { path = "crates/ion-session" }
