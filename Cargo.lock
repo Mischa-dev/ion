@@ -481,6 +481,7 @@ dependencies = [
  "ion-basics",
  "ion-config",
  "ion-core",
+ "ion-platform",
  "ion-session",
  "serde_json",
 ]
@@ -517,6 +518,13 @@ name = "ion-core"
 version = "0.1.0"
 dependencies = [
  "url",
+]
+
+[[package]]
+name = "ion-platform"
+version = "0.1.0"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

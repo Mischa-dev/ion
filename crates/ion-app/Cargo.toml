@@ -13,6 +13,7 @@ path = "src/main.rs"
 [dependencies]
 ion-core.workspace = true
 ion-basics.workspace = true
+ion-platform.workspace = true
 ion-bangs.workspace = true
 ion-config.workspace = true
 ion-session.workspace = true

@@ -7,6 +7,11 @@ use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QString, QUrl};
 const MAIN_QML: &str = "qrc:/qt/qml/Ion/qml/Main.qml";
 
 fn main() {
+    // Chromium switches, and hand-off to an already running Ion.
+    if !bridge::platform::startup() {
+        return;
+    }
+
     // QtWebEngine has to be initialized before the application object.
     bridge::webengine::initialize_web_engine();
 

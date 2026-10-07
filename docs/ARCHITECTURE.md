@@ -17,22 +17,26 @@ nix/
   package.nix             the `ion` package
   shell.nix               dev shell
   qt.nix                  the Qt modules Ion uses, merged for cxx-qt-build
+  icons.nix               renders the app icon (hicolor PNGs, macOS .icns)
+  packaging-check.nix     validates desktop file, AppStream data, Ion.app
 crates/
   ion-core/               shared core: app constants, URL-bar input resolution
   ion-basics/             downloads, per-site zoom, permission prompts, find,
                           context menu and new-tab page logic
+  ion-platform/           Chromium switches, one-instance-per-profile hand-off
   ion-bangs/              !bangs and the command palette's ranking
   ion-session/            tab list, saved and named sessions, browsing history
   ion-app/                the binary (`ion`)
     build.rs              auto-discovers bridges, C++ shims and QML files
     src/main.rs           startup: QtWebEngine init, app, QML engine
     src/bridge/           one cxx-qt QObject per file, exposed to QML as `import Ion`
-    cpp/                  small C++ shims for QtWebEngine APIs
+    cpp/                  small C++ shims for QtWebEngine and platform APIs
+    icons/                the app icon (SVG source for every render)
     qml/Main.qml          window, web view stack, shortcuts
     qml/Theme.qml         design tokens singleton (colors, radius, density, motion)
     qml/components/       UI pieces (TabStrip, NavigationBar, UrlBar, BrowserTab…)
-packaging/                desktop file, later the macOS bundle bits
-docs/
+packaging/                Linux desktop file + AppStream, macOS Info.plist
+docs/                     this file; platform.md for per-OS behaviour and checks
 ```
 
 ## Adding a feature module

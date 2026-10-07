@@ -41,6 +41,7 @@
         in
         {
           inherit ion;
+          packaging = pkgs.callPackage ./nix/packaging-check.nix { inherit ion; };
           hm-module = pkgs.callPackage ./nix/hm-module-test.nix {
             module = self.homeManagerModules.default;
           };

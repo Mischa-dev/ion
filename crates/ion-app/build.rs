@@ -55,5 +55,7 @@ fn main() {
     .qt_module("WebEngineQuick")
     .files(bridges)
     .cpp_files(collect("cpp", "cpp"))
+    // Window icon, at qrc:/qt/qml/Ion/icons/dev.ion.Ion.svg.
+    .qrc_resources(["icons/dev.ion.Ion.svg"])
     .build();
 }
