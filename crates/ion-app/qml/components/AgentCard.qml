@@ -21,6 +21,10 @@ Popup {
     readonly property bool working: task !== null
         && (task.status === "thinking" || task.status === "working")
     readonly property var prompt: task ? task.prompt : null
+    // The agent has been changing the page, and whether the person took the
+    // tab back from it.
+    readonly property bool acting: task !== null && task.acting
+    readonly property bool takenOver: task !== null && task.takenOver
     // Emitted when the card closes, so the page can take focus back.
     signal finished()
 
@@ -83,13 +87,17 @@ Popup {
             else
                 card.close()
         }
-        Keys.onReturnPressed: {
-            if (card.prompt) {
+        // Enter picks the prompt's primary choice; Ctrl+Enter hands the tab back.
+        function pressEnter(event) {
+            if (card.takenOver && (event.modifiers & Qt.ControlModifier)) {
+                Agent.handBack(card.taskId)
+            } else if (card.prompt) {
                 const choices = card.prompt.choices
                 card.answer(choices[choices.length - 1].id)
             }
         }
-        Keys.onEnterPressed: Keys.onReturnPressed(event)
+        Keys.onReturnPressed: event => pressEnter(event)
+        Keys.onEnterPressed: event => pressEnter(event)
 
         ColumnLayout {
             id: column
@@ -102,7 +110,7 @@ Popup {
                 spacing: Theme.spacing * 2
 
                 // Still while it waits for the person.
-                AgentRing { working: card.working && !card.prompt }
+                AgentRing { working: card.working && !card.prompt && !card.takenOver }
                 Text {
                     text: card.task ? card.task.agentName : ""
                     color: Theme.text
@@ -115,6 +123,13 @@ Popup {
                     color: Theme.textMuted
                     font.pixelSize: Theme.fontSize
                     elide: Text.ElideRight
+                }
+                // Your hands always win: take the tab back at any moment.
+                DialogButton {
+                    visible: card.working && card.acting && !card.takenOver
+                    implicitHeight: Theme.urlBarHeight - Theme.spacing
+                    text: qsTr("Take over")
+                    onClicked: Agent.takeOver(card.taskId)
                 }
                 DialogButton {
                     visible: card.working
@@ -203,12 +218,25 @@ Popup {
                     anchors.margins: Theme.spacing * 2
                     spacing: Theme.spacing * 2
 
-                    Text {
+                    ColumnLayout {
                         Layout.fillWidth: true
-                        text: card.prompt ? card.prompt.text : ""
-                        color: Theme.text
-                        font.pixelSize: Theme.fontSize
-                        wrapMode: Text.Wrap
+                        spacing: Theme.spacing / 2
+                        Text {
+                            Layout.fillWidth: true
+                            text: card.prompt ? card.prompt.text : ""
+                            color: Theme.text
+                            font.pixelSize: Theme.fontSize
+                            wrapMode: Text.Wrap
+                        }
+                        // Exactly what will happen.
+                        Text {
+                            Layout.fillWidth: true
+                            visible: text.length > 0
+                            text: card.prompt ? card.prompt.detail : ""
+                            color: Theme.textMuted
+                            font.pixelSize: Theme.fontSize - 1
+                            wrapMode: Text.Wrap
+                        }
                     }
                     RowLayout {
                         Layout.alignment: Qt.AlignRight
@@ -227,6 +255,36 @@ Popup {
                                 onClicked: card.answer(modelData.id)
                             }
                         }
+                    }
+                }
+            }
+
+            // The person has the tab; the agent waits for it back.
+            Rectangle {
+                Layout.fillWidth: true
+                visible: card.takenOver
+                implicitHeight: drivingRow.implicitHeight + Theme.spacing * 4
+                radius: Theme.radius
+                color: Theme.surfaceRaised
+
+                RowLayout {
+                    id: drivingRow
+                    anchors.fill: parent
+                    anchors.margins: Theme.spacing * 2
+                    spacing: Theme.spacing * 2
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: qsTr("You're driving. %1 waits until you hand the tab back.")
+                            .arg(card.task ? card.task.agentName : "")
+                        color: Theme.text
+                        font.pixelSize: Theme.fontSize
+                        wrapMode: Text.Wrap
+                    }
+                    DialogButton {
+                        text: qsTr("Hand back") + "  Ctrl ⏎"
+                        primary: true
+                        onClicked: Agent.handBack(card.taskId)
                     }
                 }
             }
