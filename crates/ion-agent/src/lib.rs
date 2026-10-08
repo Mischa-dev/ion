@@ -13,6 +13,7 @@
 //! prompt tells it to treat as data (docs/SAFETY.md §5).
 
 pub mod invoke;
+pub mod markdown;
 pub mod model;
 pub mod openai;
 pub mod task;

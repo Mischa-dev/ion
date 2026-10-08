@@ -15,6 +15,9 @@ TextField {
     signal navigate(url target)
     // Emitted after Enter or Escape, so the page can take keyboard focus back.
     signal finished()
+    // Emitted with the typed text when the person asks an agent (`@ion …`,
+    // `!ai …`).
+    signal askAgent(string input)
 
     property var suggestions: []
     // What the person typed, without any address filled in after it.
@@ -64,6 +67,13 @@ TextField {
         const query = text.trim()
         if (!activeFocus || query.length === 0) {
             suggestions = []
+            return
+        }
+        // Addressed to an agent: that is the only thing Enter can mean.
+        const agentRows = JSON.parse(Agent.suggest(text))
+        if (agentRows.length > 0) {
+            suggestions = agentRows
+            list.currentIndex = 0
             return
         }
         const titles = [], urls = []
@@ -117,6 +127,10 @@ TextField {
         case "open":
             done()
             openUrl(item.value, inNewTab)
+            break
+        case "agent":
+            done()
+            askAgent(item.value)
             break
         }
     }

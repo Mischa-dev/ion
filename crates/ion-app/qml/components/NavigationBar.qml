@@ -17,7 +17,25 @@ Rectangle {
 
     // Switching tabs replaces any half-typed text with the new tab's address.
     // Deferred so it runs after urlBar.currentUrl has re-evaluated for the new view.
-    onViewChanged: Qt.callLater(urlBar.showUrl)
+    // An agent's card belongs to its tab, so it goes away too.
+    onViewChanged: {
+        Qt.callLater(urlBar.showUrl)
+        agentCard.close()
+    }
+
+    // The agent task on the current tab, if any.
+    readonly property int agentTask: {
+        Agent.revision
+        return bar.view ? Agent.latestTask(bar.view.tabId) : -1
+    }
+
+    function askAgent(input) {
+        if (!bar.view)
+            return
+        const id = Agent.start(input, bar.view.tabId, bar.view.url.toString(), bar.view.title)
+        if (id >= 0)
+            agentCard.openFor(id)
+    }
 
     color: Theme.surface
 
@@ -60,6 +78,19 @@ Rectangle {
                 else
                     urlBar.focus = false
             }
+            onAskAgent: input => bar.askAgent(input)
+
+            AgentCard {
+                id: agentCard
+                y: urlBar.height + Theme.spacing
+                width: Math.min(urlBar.width, Theme.paletteWidth)
+                onFinished: if (bar.view && !urlBar.activeFocus) bar.view.forceActiveFocus()
+            }
+        }
+        AgentChip {
+            visible: bar.agentTask >= 0 && !agentCard.opened
+            taskId: bar.agentTask
+            onClicked: agentCard.openFor(bar.agentTask)
         }
         IconButton {
             readonly property bool reading: bar.view?.reader.active ?? false
