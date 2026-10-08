@@ -773,6 +773,7 @@ dependencies = [
  "cxx-qt-build",
  "cxx-qt-lib",
  "ion-adblock",
+ "ion-agent",
  "ion-bangs",
  "ion-basics",
  "ion-bookmarks",
