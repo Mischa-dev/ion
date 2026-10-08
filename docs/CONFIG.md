@@ -85,6 +85,8 @@ lists = ["easylist", "easyprivacy", "ublock-filters"]
 
 [shortcuts]                  # command id = Qt key sequence
 # palette = "Ctrl+K"
+# askAgent = "Ctrl+E"         # the address bar, ready with "@ion " (needs ai.enable)
+# agentSidebar = "Ctrl+Shift+E"  # the agent sidebar (needs ai.enable)
 
 [keyboard]
 vim = false                  # j/k scroll, gg/G, d/u, H/L back/forward,
@@ -102,6 +104,14 @@ provider = "openai"          # any OpenAI-compatible chat completions API
 model = "gpt-5-mini"
 baseUrl = "https://api.openai.com/v1"   # e.g. http://127.0.0.1:11434/v1 for Ollama
 apiKeyEnv = "OPENAI_API_KEY" # the key is read from this variable, never from config
+
+[agents.claude]              # your own agent, asked with @claude (needs ai.enable)
+name = "Claude"
+model = "claude-sonnet-5-5"  # a model makes an agent askable; without one,
+baseUrl = "https://api.anthropic.com/v1/"  # [agents.<id>] only sets its trust
+apiKeyEnv = "ANTHROPIC_API_KEY"  # unset uses ai.apiKeyEnv; baseUrl "" uses ai.baseUrl
+instructions = "Be brief. Cite the page."  # added to its system prompt
+trust = "ask"                # see docs/SAFETY.md
 
 [sites."example.com"]        # per-site settings; a host covers its subdomains,
 javascript = true            # "*" covers every site, the most specific wins

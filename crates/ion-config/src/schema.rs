@@ -342,6 +342,21 @@ pub struct Agent {
     pub connectors: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub rules: Vec<AgentRule>,
+    /// The model this agent runs on, which makes it one you can ask with
+    /// `@<id>` from the address bar. Empty for a trust profile only (an
+    /// outside agent, or Ion Agent, which runs on `[ai]`).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub model: String,
+    /// The model service's base URL; empty uses `ai.baseUrl`.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub base_url: String,
+    /// The environment variable holding its API key; unset uses
+    /// `ai.apiKeyEnv`, empty sends none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key_env: Option<String>,
+    /// Extra instructions for the agent, added to its system prompt.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub instructions: String,
 }
 
 /// How much an agent may do without asking.
@@ -665,6 +680,31 @@ mod tests {
                 Some(pages.as_str())
             );
         }
+    }
+
+    #[test]
+    fn custom_agents_name_their_own_model() {
+        let config: Config = toml::from_str(
+            r#"
+            [agents.claude]
+            name = "Claude"
+            model = "claude-sonnet-5-5"
+            baseUrl = "https://api.anthropic.com/v1/"
+            apiKeyEnv = "ANTHROPIC_API_KEY"
+            instructions = "Be brief."
+
+            [agents.claude-code]
+            trust = "full"
+            "#,
+        )
+        .unwrap();
+        let claude = &config.agents.profiles["claude"];
+        assert_eq!(claude.model, "claude-sonnet-5-5");
+        assert_eq!(claude.api_key_env.as_deref(), Some("ANTHROPIC_API_KEY"));
+        assert_eq!(claude.instructions, "Be brief.");
+        let outside = &config.agents.profiles["claude-code"];
+        assert!(outside.model.is_empty());
+        assert_eq!(outside.api_key_env, None);
     }
 
     #[test]

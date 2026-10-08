@@ -314,6 +314,7 @@ ApplicationWindow {
             Layout.fillWidth: true
             view: window.currentView
             downloads: downloads
+            agentSidebar: agentSidebar
             onBookmarkToggled: window.toggleBookmark()
         }
     }
@@ -426,6 +427,15 @@ ApplicationWindow {
                 }
             }
         }
+
+        AgentSidebar {
+            id: agentSidebar
+            Layout.fillHeight: true
+            Layout.preferredWidth: implicitWidth
+            view: window.currentView
+            onAsk: input => navBar.askAgent(input)
+            onFinished: window.currentView?.forceActiveFocus()
+        }
     }
 
     DownloadsPanel { id: downloads; profile: window.profile }
@@ -481,6 +491,24 @@ ApplicationWindow {
         sequence: { Config.revision; return Config.value("shortcuts.stopAgents") || "Ctrl+Shift+." }
         context: Qt.ApplicationShortcut
         onActivated: Safety.stopAgents()
+    }
+
+    // Ask an agent: the address bar, ready with "@ion ".
+    Shortcut {
+        sequence: { Config.revision; return Config.value("shortcuts.askAgent") || "Ctrl+E" }
+        enabled: { Config.revision; return Config.value("ai.enable") === true }
+        onActivated: {
+            navBar.urlBar.forceActiveFocus()
+            navBar.urlBar.text = "@ion "
+            navBar.urlBar.cursorPosition = navBar.urlBar.text.length
+        }
+    }
+
+    // The agent sidebar, with the current tab's latest conversation.
+    Shortcut {
+        sequence: { Config.revision; return Config.value("shortcuts.agentSidebar") || "Ctrl+Shift+E" }
+        enabled: { Config.revision; return Config.value("ai.enable") === true }
+        onActivated: agentSidebar.toggle(window.currentView ? Agent.latestTask(window.currentView.tabId) : -1)
     }
 
     AgentsStoppedNotice {}

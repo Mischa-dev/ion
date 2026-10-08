@@ -37,4 +37,20 @@ pub struct Reply {
 /// A model service. Calls block; the app runs them off the UI thread.
 pub trait Model: Send + Sync {
     fn reply(&self, messages: &[Message], tools: &[Tool]) -> Result<Reply, String>;
+
+    /// Like [`Model::reply`], calling `text` with each piece of the answer
+    /// as it arrives so it can be shown while the model writes. Services
+    /// that can't stream send it in one piece.
+    fn reply_streaming(
+        &self,
+        messages: &[Message],
+        tools: &[Tool],
+        text: &mut dyn FnMut(&str),
+    ) -> Result<Reply, String> {
+        let reply = self.reply(messages, tools)?;
+        if !reply.text.is_empty() {
+            text(&reply.text);
+        }
+        Ok(reply)
+    }
 }

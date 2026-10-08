@@ -193,7 +193,7 @@ QtObject {
         const fail = error => Agent.toolResult(task, call, false, JSON.stringify({ error: error }))
         const ok = payload => Agent.toolResult(task, call, true, JSON.stringify(payload))
         const view = viewForTab(tab)
-        if (!view && tool !== "list_tabs") {
+        if (!view && tool !== "list_tabs" && tool !== "open_tab") {
             fail(qsTr("the tab was closed"))
             return
         }
@@ -240,6 +240,22 @@ QtObject {
         case "fill":
             runScript(fillScript(details.element, details.text), false)
             break
+        case "open_tab": {
+            // Next to the task's other tabs, without switching to it.
+            let after = -1
+            for (let i = 0; i < views.count; ++i) {
+                if (views.itemAt(i) && views.itemAt(i).tabId === details.after)
+                    after = i
+            }
+            const index = Tabs.openTabAt(after >= 0 ? after + 1 : Tabs.count, details.url, false)
+            const opened = views.itemAt(index)
+            if (!opened) {
+                fail(qsTr("the tab didn't open"))
+                return
+            }
+            afterSettling(opened, 1000, () => ok({ tabId: opened.tabId, url: opened.url.toString(), title: opened.title }))
+            break
+        }
         case "go_to":
             view.url = details.url
             afterSettling(view, 1000, () => ok({ url: view.url.toString(), title: view.title }))

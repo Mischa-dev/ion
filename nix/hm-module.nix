@@ -68,6 +68,10 @@ let
           };
         }
       )) "Rules for this agent, most specific wins.";
+      model = setting types.str "Model this agent runs on, so it can be asked with `@<id>`; empty for a trust profile only.";
+      baseUrl = setting types.str "Model service base URL; empty uses `ai.baseUrl`.";
+      apiKeyEnv = setting types.str "Environment variable holding its API key; unset uses `ai.apiKeyEnv`.";
+      instructions = setting types.str "Extra instructions added to the agent's system prompt.";
     };
   };
 
