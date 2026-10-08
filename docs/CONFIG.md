@@ -85,7 +85,8 @@ lists = ["easylist", "easyprivacy", "ublock-filters"]
 
 [shortcuts]                  # command id = Qt key sequence
 # palette = "Ctrl+K"
-# askAgent = "Ctrl+E"        # the address bar, ready with "@ion " (needs ai.enable)
+# askAgent = "Ctrl+E"         # the address bar, ready with "@ion " (needs ai.enable)
+# agentSidebar = "Ctrl+Shift+E"  # the agent sidebar (needs ai.enable)
 
 [keyboard]
 vim = false                  # j/k scroll, gg/G, d/u, H/L back/forward,

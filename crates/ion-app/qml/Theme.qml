@@ -85,6 +85,9 @@ QtObject {
     // sentence. Fixed: reading time shouldn't follow animation speed.
     readonly property int toastMs: 6000
 
+    // The agent sidebar beside the page.
+    readonly property int agentSidebarWidth: 380
+
     // Command palette
     readonly property int paletteWidth: 640
     readonly property int paletteMaxRows: 8
