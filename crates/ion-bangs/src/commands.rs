@@ -167,6 +167,12 @@ pub const COMMANDS: &[Command] = &[
         "",
     ),
     command(
+        "agent-activity",
+        "Agent activity",
+        "ai log history permissions safety allowed take back",
+        "",
+    ),
+    command(
         "agent-sidebar",
         "Show or hide agent sidebar",
         "ai assistant chat conversation panel",

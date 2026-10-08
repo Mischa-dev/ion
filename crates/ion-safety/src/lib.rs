@@ -20,6 +20,7 @@ pub mod rule;
 mod safety;
 pub mod site;
 pub mod store;
+pub mod timeline;
 
 pub use capability::{Action, SiteCapability, Tier};
 pub use policy::{

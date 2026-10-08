@@ -10,8 +10,8 @@ import Ion
 // Tabs and history come from the `Tabs` and `History` singletons; `browser`
 // (the main window) provides openTab(url), newTab(), closeTab(i),
 // focusUrlBar(), toggleBookmark(), showImport(), showExtensions(),
-// askAgent(input), startAgentQuestion(), toggleAgentSidebar(), profile and
-// currentView. Bookmarks come from the `Bookmarks`
+// askAgent(input), startAgentQuestion(), toggleAgentSidebar(),
+// showAgentActivity(), profile and currentView. Bookmarks come from the `Bookmarks`
 // singleton.
 Popup {
     id: root
@@ -110,7 +110,7 @@ Popup {
         }
     }
 
-    readonly property var agentCommands: ["ask-agent", "summarize-page", "agent-sidebar"]
+    readonly property var agentCommands: ["ask-agent", "summarize-page", "agent-sidebar", "agent-activity"]
 
     // Command ids come from `ion_bangs::commands::COMMANDS`.
     function run(id) {
@@ -162,6 +162,7 @@ Popup {
         case "ask-agent": browser.startAgentQuestion(); break
         case "summarize-page": browser.askAgent("@ion Summarize this page."); break
         case "agent-sidebar": browser.toggleAgentSidebar(); break
+        case "agent-activity": browser.showAgentActivity(); break
         case "screenshot": view?.takeScreenshot(false); break
         case "screenshot-page": view?.takeScreenshot(true); break
         case "quit": Qt.quit(); break

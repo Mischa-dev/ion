@@ -368,6 +368,7 @@ ApplicationWindow {
             Layout.preferredWidth: implicitWidth
             view: window.currentView
             onAsk: input => navBar.askAgent(input)
+            onActivityRequested: agentActivity.show()
             onFinished: window.currentView?.forceActiveFocus()
         }
     }
@@ -437,6 +438,9 @@ ApplicationWindow {
         navBar.urlBar.text = "@ion "
         navBar.urlBar.cursorPosition = navBar.urlBar.text.length
     }
+    function showAgentActivity() {
+        agentActivity.show()
+    }
     function toggleAgentSidebar() {
         agentSidebar.toggle(window.currentView ? Agent.latestTask(window.currentView.tabId) : -1)
     }
@@ -455,5 +459,6 @@ ApplicationWindow {
     }
 
     AgentsStoppedNotice {}
+    AgentActivity { id: agentActivity }
     AgentTools { views: views }
 }

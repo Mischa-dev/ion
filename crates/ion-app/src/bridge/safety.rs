@@ -95,6 +95,26 @@ pub mod qobject {
         #[cxx_name = "forgetSitePermission"]
         fn forget_site_permission(self: &Safety, url: &QUrl, permission_type: i32) -> bool;
 
+        /// What agents did and what the person answered in the last `days`
+        /// days, newest first, for the agent activity view: `[{time, text,
+        /// mark, task}]` with `mark` one of done, failed, allowed, refused,
+        /// note.
+        #[qinvokable]
+        #[cxx_name = "activityJson"]
+        fn activity_json(self: &Safety, days: i32) -> QString;
+
+        /// What agents may do without asking (or may not do), as the
+        /// person answered: `[{agent, agentName, text, rule}]`, where
+        /// `rule` is passed back to `forgetAgentRule`.
+        #[qinvokable]
+        #[cxx_name = "agentRulesJson"]
+        fn agent_rules_json(self: &Safety) -> QString;
+
+        /// Forget one rule from `agentRulesJson`, so the agent asks again.
+        #[qinvokable]
+        #[cxx_name = "forgetAgentRule"]
+        fn forget_agent_rule(self: &Safety, rule: &QString) -> bool;
+
         /// Drop tab-scoped answers and take-overs for a closed tab.
         #[qinvokable]
         #[cxx_name = "tabClosed"]
@@ -110,8 +130,8 @@ use std::pin::Pin;
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::{QString, QUrl};
 use ion_safety::{
-    AgentProfile, Choice, Effect, Origin, Outcome, SiteCapability, SiteRequest, TrustLevel,
-    Verdict, What,
+    AgentProfile, Choice, Effect, Origin, Outcome, Rule, SiteCapability, SiteRequest, TrustLevel,
+    Verdict, What, Who,
 };
 use serde_json::json;
 
@@ -275,6 +295,43 @@ impl qobject::Safety {
             })
             .collect();
         QString::from(serde_json::Value::from(list).to_string().as_str())
+    }
+
+    fn activity_json(&self, days: i32) -> QString {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        let since = now.saturating_sub(u64::try_from(days.max(0)).unwrap_or(0) * 86_400);
+        let safety = ion_safety::global();
+        let entries = safety.activity_since(since).unwrap_or_default();
+        let lines = ion_safety::timeline::lines(&entries, &|id| safety.policy().display_name(id));
+        QString::from(serde_json::to_string(&lines).unwrap_or_default().as_str())
+    }
+
+    fn agent_rules_json(&self) -> QString {
+        let safety = ion_safety::global();
+        let list: Vec<_> = safety
+            .policy()
+            .user_rules()
+            .iter()
+            .filter_map(|rule| {
+                let Who::Agent(agent) = &rule.who else {
+                    return None;
+                };
+                Some(json!({
+                    "agent": agent,
+                    "agentName": safety.policy().display_name(agent),
+                    "text": ion_safety::timeline::rule_text(rule)?,
+                    "rule": serde_json::to_string(rule).ok()?,
+                }))
+            })
+            .collect();
+        QString::from(serde_json::Value::from(list).to_string().as_str())
+    }
+
+    fn forget_agent_rule(&self, rule: &QString) -> bool {
+        serde_json::from_str::<Rule>(&rule.to_string())
+            .is_ok_and(|rule| ion_safety::global().forget(&rule))
     }
 
     fn forget_site(&self, url: &QUrl) -> i32 {
