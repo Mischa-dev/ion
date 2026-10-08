@@ -58,8 +58,9 @@ pub struct PrivacyRust;
 
 /// Delete the "Default" profile's files for what `[privacy] clearOnExit`
 /// lists, before the engine opens them: the cookie database for `cookies`
-/// (so no page can see a cookie from before), and the visited-links table
-/// for `history` (QML has no call for it). Call once the application name is
+/// (so no page can see a cookie from before), and for `history` the engine's
+/// own history, favicon and visited-links databases (QML has no call for
+/// them). Call once the application name is
 /// set and before QML loads.
 pub fn clear_profile_files() {
     use ion_config::BrowsingData;
@@ -68,7 +69,13 @@ pub fn clear_profile_files() {
     for data in &config.privacy.clear_on_exit {
         match data {
             BrowsingData::Cookies => files.extend(["Cookies", "Cookies-journal"]),
-            BrowsingData::History => files.push("Visited Links"),
+            BrowsingData::History => files.extend([
+                "Visited Links",
+                "History",
+                "History-journal",
+                "Favicons",
+                "Favicons-journal",
+            ]),
             BrowsingData::Cache => {}
         }
     }
