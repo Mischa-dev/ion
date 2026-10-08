@@ -148,12 +148,15 @@ ApplicationWindow {
     }
 
     // Extensions, then the restored session, then command-line URLs, else the
-    // home page. Runs once the startup cache clear (if any) is done.
+    // home page. Runs once the startup cache clear (if any) is done. Tab views
+    // only exist once `startupFinished` is set at the end, so a tab opened
+    // while waiting loads once, after the session restore.
     property bool startupFinished: false
+    property bool startupRunning: false
     function finishStartup() {
-        if (startupFinished)
+        if (startupRunning)
             return
-        startupFinished = true
+        startupRunning = true
         waitingForCacheClear = false
         // Chrome extensions from config and Ion's extensions folder.
         const extensionManager = window.profile.extensionManager
@@ -176,6 +179,8 @@ ApplicationWindow {
         urls.forEach((arg, i) => openTab(urlBarResolver.resolve(arg), i === 0))
         if (Tabs.count === 0)
             openTab(homeUrl)
+        startupFinished = true
+        sessionSaveTimer.restart()
     }
 
     function focusUrlBar() {
