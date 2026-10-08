@@ -30,6 +30,7 @@ crates/
   ion-sites/              per-site settings ([sites] in config), user scripts and styles
   ion-reader/             reader mode: article extraction and the themed reader page
   ion-safety/             permissions and agent trust: decisions, prompts, activity log
+  ion-agent/              Ion Agent's runtime: tasks, browser tools, model access
   ion-app/                the binary (`ion`)
     build.rs              auto-discovers bridges, C++ shims and QML files
     src/main.rs           startup: QtWebEngine init, app, QML engine

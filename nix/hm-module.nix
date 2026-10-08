@@ -225,6 +225,16 @@ in
           auditRetentionDays = setting types.ints.positive "Days of agent activity log kept.";
         };
 
+        ai = {
+          enable = setting types.bool "Turn on Ion Agent (`@ion` and `!ai` in the address bar). Off by default.";
+          provider = setting (types.enum [
+            "openai"
+          ]) "Model service kind; `openai` is any OpenAI-compatible API.";
+          model = setting types.str "Model id sent to the service.";
+          baseUrl = setting types.str "The service's base URL, up to and including `/v1`.";
+          apiKeyEnv = setting types.str "Environment variable holding the API key; empty sends none.";
+        };
+
         downloads = {
           directory = setting types.str "Download folder; empty uses the system's. `~` means home.";
           folders = mkOption {
