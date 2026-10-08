@@ -149,8 +149,11 @@ WebEngineView {
         const target = request.url.toString()
         // Chromium ignores a User-Agent change on a redirect, so a redirect
         // into a site with another `userAgent` would arrive with the wrong
-        // one. Start it over as a fresh navigation, which gets the header.
+        // one. Start it over as a fresh navigation, which gets the header;
+        // not when it carries a form (a 307/308 after a POST), since a
+        // fresh navigation would turn it into a GET and drop the form.
         if (request.navigationType === WebEngineNavigationRequest.RedirectNavigation
+                && !request.hasFormData
                 && !Sites.sameUserAgent(view.navigationStart, target)) {
             request.reject()
             Qt.callLater(() => view.url = target)
