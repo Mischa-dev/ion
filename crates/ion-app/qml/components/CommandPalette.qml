@@ -9,8 +9,9 @@ import Ion
 //
 // Tabs and history come from the `Tabs` and `History` singletons; `browser`
 // (the main window) provides openTab(url), newTab(), closeTab(i),
-// focusUrlBar(), toggleBookmark(), showImport(), showExtensions(), profile
-// and currentView. Bookmarks come from the `Bookmarks`
+// focusUrlBar(), toggleBookmark(), showImport(), showExtensions(),
+// askAgent(input), startAgentQuestion(), toggleAgentSidebar(), profile and
+// currentView. Bookmarks come from the `Bookmarks`
 // singleton.
 Popup {
     id: root
@@ -58,7 +59,10 @@ Popup {
         const history = pages && !text.startsWith("*") ? History.search(text, Theme.paletteMaxRows) : "[]"
         const bookmarks = text.startsWith("*") ? Bookmarks.search(text.slice(1), 200)
             : pages ? Bookmarks.search(text, Theme.paletteMaxRows) : "[]"
-        results = search.query(field.text, titles, urls, Tabs.currentIndex, history, bookmarks, Tabs.sessionNames())
+        const found = search.query(field.text, titles, urls, Tabs.currentIndex, history, bookmarks, Tabs.sessionNames())
+        // Agent commands only once agents are turned on.
+        const agents = Config.value("ai.enable") === true
+        results = agents ? found : found.filter(item => !(item.action === "run" && agentCommands.includes(item.value)))
         list.currentIndex = results.length > 0 ? 0 : -1
     }
 
@@ -105,6 +109,8 @@ Popup {
             break
         }
     }
+
+    readonly property var agentCommands: ["ask-agent", "summarize-page", "agent-sidebar"]
 
     // Command ids come from `ion_bangs::commands::COMMANDS`.
     function run(id) {
@@ -153,6 +159,9 @@ Popup {
         case "update-filter-lists": Adblock.updateLists(); break
         case "stop-agents": Safety.stopAgents(); break
         case "resume-agents": Safety.resumeAgents(); break
+        case "ask-agent": browser.startAgentQuestion(); break
+        case "summarize-page": browser.askAgent("@ion Summarize this page."); break
+        case "agent-sidebar": browser.toggleAgentSidebar(); break
         case "screenshot": view?.takeScreenshot(false); break
         case "screenshot-page": view?.takeScreenshot(true); break
         case "quit": Qt.quit(); break
