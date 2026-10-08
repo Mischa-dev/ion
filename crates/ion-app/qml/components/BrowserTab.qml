@@ -146,7 +146,8 @@ WebEngineView {
     property string navigationStart: ""
     // Where that chain has got to, after any server redirects.
     property string navigationEnd: ""
-    // Whether that navigation is a reload that hasn't finished loading.
+    // Whether that navigation is to the page the tab is already on (a
+    // reload, or a link to the same URL) and hasn't finished loading.
     property bool reloading: false
 
     // The URL of the history entry the tab is on, or "" before the first
@@ -165,8 +166,8 @@ WebEngineView {
             return
         const target = request.url.toString()
         // A page script's `location.replace` also counts as a redirect, but
-        // the chain it replaces has already committed (unless that chain is
-        // a reload, which is on its own history entry before it commits).
+        // the chain it replaces has already committed (unless that chain went
+        // to the page the tab was on, whose entry matches before it commits).
         // It is a fresh request with its own header, so it starts a chain.
         const redirect = request.navigationType === WebEngineNavigationRequest.RedirectNavigation
         const fromPage = redirect && !view.reloading
@@ -185,6 +186,7 @@ WebEngineView {
         if (!redirect || fromPage) {
             view.navigationStart = target
             view.reloading = request.navigationType === WebEngineNavigationRequest.ReloadNavigation
+                    || (!redirect && target === view.currentHistoryUrl())
         }
         view.navigationEnd = target
         view.settings.javascriptEnabled = Sites.javascriptEnabled(target)
