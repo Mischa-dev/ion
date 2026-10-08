@@ -33,6 +33,7 @@ ToolButton {
                 : chip.waiting ? qsTr("%1 needs you").arg(chip.task.agentName)
                 : chip.takenOver ? qsTr("You're driving")
                 : chip.working && chip.task.acting ? qsTr("%1 is working here").arg(chip.task.agentName)
+                : chip.task.status === "done" ? qsTr("%1 answered").arg(chip.task.agentName)
                 : chip.task.agentName
             color: chip.waiting ? Theme.accent : Theme.text
             font.pixelSize: Theme.fontSize

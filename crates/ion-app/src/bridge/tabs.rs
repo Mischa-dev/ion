@@ -148,6 +148,11 @@ pub mod qobject {
         #[qinvokable]
         fn activate(self: Pin<&mut Tabs>, index: i32);
 
+        /// The row of the tab with id `tab_id`, or -1 once it is closed.
+        #[qinvokable]
+        #[cxx_name = "indexOfTab"]
+        fn index_of_tab(self: &Tabs, tab_id: i32) -> i32;
+
         /// Activate the tab `step` places away, wrapping around.
         #[qinvokable]
         fn cycle(self: Pin<&mut Tabs>, step: i32);
@@ -488,6 +493,13 @@ impl qobject::Tabs {
         if self.as_mut().rust_mut().list.activate(i) {
             self.sync();
         }
+    }
+
+    fn index_of_tab(&self, tab_id: i32) -> i32 {
+        u64::try_from(tab_id)
+            .ok()
+            .and_then(|id| self.list.index_of(id))
+            .map_or(-1, |i| i as i32)
     }
 
     fn cycle(mut self: Pin<&mut Self>, step: i32) {
