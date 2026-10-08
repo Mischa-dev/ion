@@ -110,8 +110,9 @@ pub fn script(sites: &BTreeMap<String, Site>, engine: &str) -> Option<Script> {
   Object.defineProperty(Navigator.prototype, "vendor",
     get(gecko ? "" : apple ? "Apple Computer, Inc." : "Google Inc."));
   Object.defineProperty(Navigator.prototype, "productSub", get(gecko ? "20100101" : "20030107"));
-  const platform = /iPhone|iPad/.test(ua) ? "iPhone" : /Macintosh/.test(ua) ? "MacIntel"
-    : /Windows/.test(ua) ? "Win32" : /Android|Linux/.test(ua) ? "Linux x86_64" : null;
+  const platform = /iPad/.test(ua) ? "iPad" : /iPhone/.test(ua) ? "iPhone"
+    : /Macintosh/.test(ua) ? "MacIntel" : /Windows/.test(ua) ? "Win32"
+    : /Android/.test(ua) ? "Linux armv8l" : /Linux/.test(ua) ? "Linux x86_64" : null;
   if (platform) Object.defineProperty(Navigator.prototype, "platform", get(platform));
   if (!hints && "userAgentData" in Navigator.prototype)
     Object.defineProperty(Navigator.prototype, "userAgentData", get(undefined));
