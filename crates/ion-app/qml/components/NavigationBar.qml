@@ -29,6 +29,17 @@ Rectangle {
         return bar.view ? Agent.latestTask(bar.view.tabId) : -1
     }
 
+    // Ctrl+Enter hands a taken-back tab to its agent again, wherever focus is.
+    Shortcut {
+        sequences: ["Ctrl+Return", "Ctrl+Enter"]
+        enabled: {
+            Agent.revision
+            const json = bar.agentTask >= 0 ? Agent.taskJson(bar.agentTask) : ""
+            return json.length > 0 && JSON.parse(json).takenOver
+        }
+        onActivated: Agent.handBack(bar.agentTask)
+    }
+
     function askAgent(input) {
         if (!bar.view)
             return

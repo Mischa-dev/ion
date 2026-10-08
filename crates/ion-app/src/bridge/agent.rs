@@ -4,11 +4,14 @@
 //! thread; browser tools run in QML, because they read web views:
 //!
 //! 1. `toolRequested(task, call, tool, tab)`: QML looks up the tab's address
-//!    and calls `authorize(task, call, url)`, which asks the safety model.
-//! 2. "allow": QML runs the tool and reports with `toolResult`. "ask": the
-//!    task's JSON carries a prompt; the person's answer goes to `answer`, and
-//!    `toolApproved(task, call)` follows if they allowed it. "deny": the
-//!    task carries on without it.
+//!    and calls `authorize(task, call, url)`, which checks the call and asks
+//!    the safety model.
+//! 2. "allow": QML reads the call with `callJson`, runs it and reports with
+//!    `toolResult`. "ask": the task's JSON carries a prompt; the person's
+//!    answer goes to `answer`, and `toolApproved(task, call)` follows if they
+//!    allowed it. "deny": the task carries on without it. "paused": the
+//!    person has the tab (`takeOver`); `toolRequested` comes again after
+//!    `handBack`.
 //!
 //! Every change emits `taskChanged(task)`; `taskJson` describes a task.
 //! Nothing runs until `[ai] enable = true`.
@@ -47,9 +50,11 @@ pub mod qobject {
         ) -> i32;
 
         /// The task as JSON: `{id, agent, agentName, tab, question, status,
-        /// steps: [{text, status}], answer, error, prompt}`, where `prompt`
-        /// is `{text, choices: [{id, label}]}` while waiting for the person.
-        /// Empty for unknown ids.
+        /// steps: [{text, status}], answer, error, prompt, acting,
+        /// takenOver}`, where `prompt` is `{text, detail, choices: [{id,
+        /// label}]}` while waiting for the person, `acting` says the agent
+        /// has been changing the page, and `takenOver` that the person took
+        /// the tab back. Empty for unknown ids.
         #[qinvokable]
         #[cxx_name = "taskJson"]
         fn task_json(self: &Agent, task: i32) -> QString;
@@ -60,16 +65,41 @@ pub mod qobject {
         fn latest_task(self: &Agent, tab: i32) -> i32;
 
         /// Ask the safety model about the tool call `call` of `task`, whose
-        /// tab now shows `url`: "allow", "ask" or "deny".
+        /// tab now shows `url`: "allow", "ask", "deny", or "paused" while the
+        /// person has taken the tab back (`toolRequested` comes again once
+        /// they hand it back).
         #[qinvokable]
         fn authorize(self: Pin<&mut Agent>, task: i32, call: &QString, url: &QString) -> QString;
+
+        /// What an allowed call does, for the code that runs it: `{tool,
+        /// element, text, url, allowSubmit}`.
+        #[qinvokable]
+        #[cxx_name = "callJson"]
+        fn call_json(self: &Agent, task: i32, call: &QString) -> QString;
+
+        /// The person takes the task's tab back: the agent waits before its
+        /// next step on it until `handBack`.
+        #[qinvokable]
+        #[cxx_name = "takeOver"]
+        fn take_over(self: Pin<&mut Agent>, task: i32);
+
+        #[qinvokable]
+        #[cxx_name = "handBack"]
+        fn hand_back(self: Pin<&mut Agent>, task: i32);
+
+        /// Whether an agent is at work changing the page in `tab`, for the
+        /// ring on its tab icon.
+        #[qinvokable]
+        #[cxx_name = "actingOn"]
+        fn acting_on(self: &Agent, tab: i32) -> bool;
 
         /// The person answered the task's prompt with a choice id.
         #[qinvokable]
         fn answer(self: Pin<&mut Agent>, task: i32, choice: &QString);
 
-        /// A tool finished. `payload` is JSON: `{url, title, text}` for
-        /// read_page, `{tabs: [{title, url}]}` for list_tabs, or
+        /// A tool finished. `payload` is JSON: `{url, title, text,
+        /// elements}` for read_page, `{tabs: [{title, url}]}` for
+        /// list_tabs, `{url, title}` for go_to, `{}` for click and fill, or
         /// `{error}` when `ok` is false.
         #[qinvokable]
         #[cxx_name = "toolResult"]
@@ -130,7 +160,7 @@ use cxx_qt_lib::QString;
 use ion_agent::model::Model;
 use ion_agent::openai::OpenAi;
 use ion_agent::task::Context;
-use ion_agent::tool::{page_result, request_for, tabs_result};
+use ion_agent::tool::{Element, Plan, PlanError, Use, page_result, plan, tabs_result};
 use ion_agent::{Next, Reply, Task, Tool, ToolCall, ToolOutcome, invoke};
 use ion_safety::{Choice, Prompt, Verdict};
 use serde_json::{Value, json};
@@ -146,7 +176,15 @@ struct Running {
     /// The call being run and its tool, between `toolRequested` and
     /// `toolResult`.
     call: Option<(ToolCall, Tool)>,
+    /// The checked call, once `authorize` has read it.
+    plan: Option<Plan>,
     pending: Option<Pending>,
+    /// The call waiting for the person to hand the tab back.
+    paused: Option<String>,
+    /// What the last read of the page numbered.
+    elements: Vec<Element>,
+    /// The agent has been changing the page.
+    acted: bool,
 }
 
 #[derive(Default)]
@@ -189,6 +227,10 @@ fn host_of(url: &str) -> Option<String> {
     ion_safety::Origin::parse(url).and_then(|o| o.host().map(str::to_owned))
 }
 
+fn is_taken_over(tab: u64) -> bool {
+    ion_safety::global().policy().is_taken_over(tab)
+}
+
 impl qobject::Agent {
     fn bump(mut self: Pin<&mut Self>, task: i32) {
         let revision = self.revision.wrapping_add(1);
@@ -218,7 +260,7 @@ impl qobject::Agent {
                 vec![json!({
                     "kind": "agent",
                     "title": ion_safety::global().policy().display_name(id),
-                    "subtitle": "Ask about this page or your tabs",
+                    "subtitle": "Ask about this page or get something done on it",
                     "hint": "Tab",
                     "action": "complete",
                     "value": format!("@{id} "),
@@ -261,12 +303,19 @@ impl qobject::Agent {
                 ask.agent
             ));
         }
+        // Asking from a tab hands it to the agent, even if the person took
+        // it back from an earlier task.
+        ion_safety::global().hand_back(tab_id);
         self.as_mut().rust_mut().tasks.insert(
             id,
             Running {
                 task,
                 call: None,
+                plan: None,
                 pending: None,
+                paused: None,
+                elements: Vec::new(),
+                acted: false,
             },
         );
         self.as_mut().pump(id);
@@ -304,6 +353,7 @@ impl qobject::Agent {
                     let call_id = QString::from(call.id.as_str());
                     if let Some(running) = self.as_mut().rust_mut().tasks.get_mut(&id) {
                         running.call = Some((call, tool));
+                        running.plan = None;
                     }
                     self.as_mut().bump(id);
                     self.as_mut()
@@ -330,6 +380,7 @@ impl qobject::Agent {
         let Some(running) = self.tasks.get(&task) else {
             return QString::default();
         };
+        let over = running.task.status().is_over();
         let mut value = running.task.to_json();
         value["agentName"] = Value::from(
             ion_safety::global()
@@ -344,10 +395,13 @@ impl qobject::Agent {
                     .iter()
                     .map(|(choice, label)| json!({ "id": choice.id(), "label": label }))
                     .collect();
-                json!({ "text": pending.prompt.text, "choices": choices })
+                let detail = running.plan.as_ref().map_or("", |p| p.detail.as_str());
+                json!({ "text": pending.prompt.text, "detail": detail, "choices": choices })
             }
             None => Value::Null,
         };
+        value["acting"] = Value::from(running.acted && !over);
+        value["takenOver"] = Value::from(!over && is_taken_over(running.task.tab));
         QString::from(value.to_string().as_str())
     }
 
@@ -357,6 +411,13 @@ impl qobject::Agent {
             .rev()
             .find(|(_, r)| r.task.tab as i32 == tab)
             .map_or(-1, |(id, _)| *id)
+    }
+
+    fn acting_on(&self, tab: i32) -> bool {
+        self.tasks
+            .values()
+            .any(|r| r.task.tab as i32 == tab && r.acted && !r.task.status().is_over())
+            && !u64::try_from(tab).is_ok_and(is_taken_over)
     }
 
     /// The running call `call` of `task`, if that is what's running.
@@ -376,41 +437,100 @@ impl qobject::Agent {
     fn authorize(mut self: Pin<&mut Self>, task: i32, call: &QString, url: &QString) -> QString {
         let call = call.to_string();
         let url = url.to_string();
-        let Some((_, tool, tab, agent)) = self.current_call(task, &call) else {
+        let Some((c, tool, tab, agent)) = self.current_call(task, &call) else {
             return QString::from("deny");
         };
-        let host = host_of(&url);
-        let outcome = request_for(&agent, tool, tab, &url)
-            .map(|request| ion_safety::global().request_agent(request));
-        let verdict = outcome.as_ref().map_or(Verdict::Deny, |o| o.verdict());
-        match verdict {
+        let elements = self
+            .tasks
+            .get(&task)
+            .map(|r| r.elements.clone())
+            .unwrap_or_default();
+        let planned = Use::parse(tool, &c.arguments)
+            .map_err(PlanError::Mistake)
+            .and_then(|u| plan(&agent, u, tab, &url, &elements));
+        let planned = match planned {
+            Ok(planned) => planned,
+            Err(PlanError::Mistake(error)) => {
+                self.finish_call(task, &call, ToolOutcome::Failed { error });
+                return QString::from("deny");
+            }
+            Err(PlanError::NoAddress) => {
+                let why = "this page has no address an agent can use".to_owned();
+                self.finish_call(task, &call, ToolOutcome::Denied { why });
+                return QString::from("deny");
+            }
+        };
+        let request = planned.request.clone();
+        let step = planned.step.clone();
+        if let Some(running) = self.as_mut().rust_mut().tasks.get_mut(&task) {
+            running.plan = Some(planned);
+            running.acted |= tool.acts();
+        }
+
+        // The person has the tab: wait for them rather than fail.
+        if request.tab.is_some_and(is_taken_over) {
+            if let Some(running) = self.as_mut().rust_mut().tasks.get_mut(&task) {
+                running.paused = Some(call);
+            }
+            self.bump(task);
+            return QString::from("paused");
+        }
+
+        let outcome = ion_safety::global().request_agent(request);
+        match outcome.verdict() {
             Verdict::Allow => {
                 if let Some(running) = self.as_mut().rust_mut().tasks.get_mut(&task) {
-                    running.task.step_started(tool.step(host.as_deref(), false));
+                    running.task.step_started(step);
                 }
                 self.bump(task);
                 QString::from("allow")
             }
             Verdict::Ask => {
-                let prompt = outcome.and_then(|o| o.prompt);
-                if let (Some(prompt), Some(running)) =
-                    (prompt, self.as_mut().rust_mut().tasks.get_mut(&task))
-                {
-                    running.task.step_started(tool.step(host.as_deref(), false));
+                if let (Some(prompt), Some(running)) = (
+                    outcome.prompt,
+                    self.as_mut().rust_mut().tasks.get_mut(&task),
+                ) {
+                    running.task.step_started(step);
                     running.pending = Some(Pending { call, prompt });
                 }
                 self.bump(task);
                 QString::from("ask")
             }
             Verdict::Deny => {
-                let why = outcome.map_or_else(
-                    || "this page has no address an agent can use".to_owned(),
-                    |o| lowercase_first(&o.decision.reason.to_string()),
-                );
+                let why = lowercase_first(&outcome.decision.reason.to_string());
                 self.finish_call(task, &call, ToolOutcome::Denied { why });
                 QString::from("deny")
             }
         }
+    }
+
+    fn call_json(&self, task: i32, call: &QString) -> QString {
+        let call = call.to_string();
+        let Some(running) = self.tasks.get(&task) else {
+            return QString::default();
+        };
+        let (Some((c, tool)), Some(plan)) = (&running.call, &running.plan) else {
+            return QString::default();
+        };
+        if c.id != call {
+            return QString::default();
+        }
+        let (element, text, url) = match &plan.call {
+            Use::Click { element } => (Some(*element), None, None),
+            Use::Fill { element, text } => (Some(*element), Some(text.as_str()), None),
+            Use::GoTo { url } => (None, None, Some(url.as_str())),
+            Use::ReadPage | Use::ListTabs => (None, None, None),
+        };
+        let value = json!({
+            "tool": tool.name(),
+            "element": element,
+            "text": text,
+            "url": url,
+            // A click was approved as a click or as sending the form; the
+            // page script refuses one that would do more than that.
+            "allowSubmit": plan.request.action == ion_safety::Action::Submit,
+        });
+        QString::from(value.to_string().as_str())
     }
 
     fn answer(mut self: Pin<&mut Self>, task: i32, choice: &QString) {
@@ -442,28 +562,44 @@ impl qobject::Agent {
         }
     }
 
-    fn tool_result(self: Pin<&mut Self>, task: i32, call: &QString, ok: bool, payload: &QString) {
+    fn tool_result(
+        mut self: Pin<&mut Self>,
+        task: i32,
+        call: &QString,
+        ok: bool,
+        payload: &QString,
+    ) {
         let call = call.to_string();
-        let Some((_, tool, tab, agent)) = self.current_call(task, &call) else {
+        let Some((_, _, tab, agent)) = self.current_call(task, &call) else {
+            return;
+        };
+        let Some(planned) = self.tasks.get(&task).and_then(|r| r.plan.clone()) else {
             return;
         };
         let payload: Value = serde_json::from_str(&payload.to_string()).unwrap_or(Value::Null);
         let text = |key: &str| payload[key].as_str().unwrap_or_default().to_owned();
+        let mut new_elements = None;
+        let mut logged_url = (planned.request.site.is_some()).then(|| text("url"));
         let outcome = if !ok {
             ToolOutcome::Failed {
                 error: text("error"),
             }
         } else {
-            match tool {
-                Tool::ReadPage => {
+            match &planned.call {
+                Use::ReadPage => {
                     let url = text("url");
-                    let step = tool.step(host_of(&url).as_deref(), true);
+                    let elements: Vec<Element> = payload["elements"]
+                        .as_array()
+                        .map(|list| list.iter().filter_map(Element::from_json).collect())
+                        .unwrap_or_default();
+                    let content = page_result(&url, &text("title"), &text("text"), &elements);
+                    new_elements = Some(elements);
                     ToolOutcome::Done {
-                        content: page_result(&url, &text("title"), &text("text")),
-                        step,
+                        content,
+                        step: planned.done_step(host_of(&url).as_deref()),
                     }
                 }
-                Tool::ListTabs => {
+                Use::ListTabs => {
                     let tabs: Vec<(String, String)> = payload["tabs"]
                         .as_array()
                         .map(|tabs| {
@@ -479,41 +615,106 @@ impl qobject::Agent {
                         .unwrap_or_default();
                     ToolOutcome::Done {
                         content: tabs_result(&tabs),
-                        step: tool.step(None, true),
+                        step: planned.done_step(None),
+                    }
+                }
+                Use::Click { element } => ToolOutcome::Done {
+                    content: format!(
+                        "{} [{element}]. Read the page again to see what changed.",
+                        planned.done_step(None)
+                    ),
+                    step: planned.done_step(None),
+                },
+                Use::Fill { element, .. } => ToolOutcome::Done {
+                    content: format!("{} [{element}].", planned.done_step(None)),
+                    step: planned.done_step(None),
+                },
+                Use::GoTo { url } => {
+                    // A new page: the old numbers mean nothing there.
+                    new_elements = Some(Vec::new());
+                    let landed = text("url");
+                    logged_url = Some(url.clone());
+                    ToolOutcome::Done {
+                        content: format!("Opened {landed}. Use read_page to see what's there."),
+                        step: planned.done_step(None),
                     }
                 }
             }
         };
         ion_safety::global().log_action(ion_safety::ActionRecord {
             agent,
-            action: tool.action(),
-            url: (tool == Tool::ReadPage).then(|| text("url")),
+            action: planned.request.action.clone(),
+            url: logged_url,
             tab: Some(tab),
             task: Some(task.to_string()),
             ok,
-            detail: match tool {
-                Tool::ReadPage => "read the page".to_owned(),
-                Tool::ListTabs => "listed tabs".to_owned(),
-            },
-            sensitive: false,
+            detail: planned.detail.clone(),
+            sensitive: planned.sensitive,
         });
+        if let (Some(elements), Some(running)) =
+            (new_elements, self.as_mut().rust_mut().tasks.get_mut(&task))
+        {
+            running.elements = elements;
+        }
         self.finish_call(task, &call, outcome);
     }
 
     fn finish_call(mut self: Pin<&mut Self>, task: i32, call: &str, outcome: ToolOutcome) {
         if let Some(running) = self.as_mut().rust_mut().tasks.get_mut(&task) {
             running.call = None;
+            running.plan = None;
             running.pending = None;
+            running.paused = None;
             running.task.tool_finished(call, outcome);
         }
         self.pump(task);
+    }
+
+    fn take_over(mut self: Pin<&mut Self>, task: i32) {
+        let Some(tab) = self.tasks.get(&task).map(|r| r.task.tab) else {
+            return;
+        };
+        ion_safety::global().take_over(tab);
+        self.as_mut().bump(task);
+    }
+
+    fn hand_back(mut self: Pin<&mut Self>, task: i32) {
+        let Some(tab) = self.tasks.get(&task).map(|r| r.task.tab) else {
+            return;
+        };
+        ion_safety::global().hand_back(tab);
+        let paused = self
+            .as_mut()
+            .rust_mut()
+            .tasks
+            .get_mut(&task)
+            .and_then(|r| r.paused.take());
+        self.as_mut().bump(task);
+        // Ask again: the page may have changed while the person had it.
+        if let Some(call) = paused {
+            let tool = self
+                .tasks
+                .get(&task)
+                .and_then(|r| r.call.as_ref())
+                .map(|(_, t)| *t);
+            if let Some(tool) = tool {
+                self.tool_requested(
+                    task,
+                    &QString::from(call.as_str()),
+                    &QString::from(tool.name()),
+                    tab as i32,
+                );
+            }
+        }
     }
 
     fn stop(mut self: Pin<&mut Self>, task: i32) {
         if let Some(running) = self.as_mut().rust_mut().tasks.get_mut(&task) {
             running.task.stop();
             running.call = None;
+            running.plan = None;
             running.pending = None;
+            running.paused = None;
         }
         self.bump(task);
     }
