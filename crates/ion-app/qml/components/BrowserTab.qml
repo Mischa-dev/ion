@@ -144,6 +144,8 @@ WebEngineView {
     // Where the current main-frame navigation started; its user agent is
     // the one the whole redirect chain is sent with.
     property string navigationStart: ""
+    // Where that chain has got to, after any server redirects.
+    property string navigationEnd: ""
     // Whether that navigation is a reload that hasn't finished loading.
     property bool reloading: false
 
@@ -162,27 +164,29 @@ WebEngineView {
         if (!request.isMainFrame)
             return
         const target = request.url.toString()
+        // A page script's `location.replace` also counts as a redirect, but
+        // the chain it replaces has already committed (unless that chain is
+        // a reload, which is on its own history entry before it commits).
+        // It is a fresh request with its own header, so it starts a chain.
+        const redirect = request.navigationType === WebEngineNavigationRequest.RedirectNavigation
+        const fromPage = redirect && !view.reloading
+                && view.currentHistoryUrl() === view.navigationEnd
         // Chromium ignores a User-Agent change on a server redirect, so one
         // into a site with another `userAgent` would arrive with the wrong
         // one. Start it over as a fresh navigation, which gets the header;
         // not when it carries a form (a 307/308 after a POST), since a
-        // fresh navigation would turn it into a GET and drop the form. A
-        // page script's `location.replace` also counts as a redirect, but
-        // its page is already in history and its request gets the header,
-        // so restarting would only break the replace. A reload is on its
-        // own history entry before it commits, hence `reloading`.
-        if (request.navigationType === WebEngineNavigationRequest.RedirectNavigation
-                && !request.hasFormData
-                && (view.reloading || view.currentHistoryUrl() !== view.navigationStart)
+        // fresh navigation would turn it into a GET and drop the form.
+        if (redirect && !fromPage && !request.hasFormData
                 && !Sites.sameUserAgent(view.navigationStart, target)) {
             request.reject()
             Qt.callLater(() => view.url = target)
             return
         }
-        if (request.navigationType !== WebEngineNavigationRequest.RedirectNavigation) {
+        if (!redirect || fromPage) {
             view.navigationStart = target
             view.reloading = request.navigationType === WebEngineNavigationRequest.ReloadNavigation
         }
+        view.navigationEnd = target
         view.settings.javascriptEnabled = Sites.javascriptEnabled(target)
     }
 
