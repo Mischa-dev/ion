@@ -21,5 +21,5 @@ pub mod tool;
 
 pub use invoke::Invocation;
 pub use model::{Message, Model, Reply, ToolCall};
-pub use task::{Next, Status, Step, StepStatus, Task, ToolOutcome};
+pub use task::{Exchange, Next, Status, Step, StepStatus, Task, ToolOutcome};
 pub use tool::Tool;

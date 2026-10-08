@@ -49,17 +49,33 @@ pub mod qobject {
             title: &QString,
         ) -> i32;
 
+        /// Ask `question` as a follow-up to `task` once it has answered (or
+        /// failed or stopped), from its tab now showing `url` titled
+        /// `title`. False while it is still working.
+        #[qinvokable]
+        #[cxx_name = "followUp"]
+        fn follow_up(
+            self: Pin<&mut Agent>,
+            task: i32,
+            question: &QString,
+            url: &QString,
+            title: &QString,
+        ) -> bool;
+
         /// The task as JSON: `{id, agent, agentName, tab, question, status,
         /// steps: [{text, status}], answer, error, prompt, acting,
-        /// takenOver}`, where `prompt` is `{text, detail, choices: [{id,
+        /// takenOver, opened, earlier}`, where `prompt` is `{text, detail, choices: [{id,
         /// label}]}` while waiting for the person, `acting` says the agent
-        /// has been changing the page, and `takenOver` that the person took
-        /// the tab back. Empty for unknown ids.
+        /// has been changing the page, `takenOver` that the person took one
+        /// of its tabs back, and `opened` lists the background tabs it
+        /// opened as `[{tab, title}]`, and `earlier` holds the questions
+        /// before this one as `[{question, steps, answer, error, status}]`.
+        /// Empty for unknown ids.
         #[qinvokable]
         #[cxx_name = "taskJson"]
         fn task_json(self: &Agent, task: i32) -> QString;
 
-        /// The newest task started on `tab`, or -1.
+        /// The newest task started on `tab` or working in it, or -1.
         #[qinvokable]
         #[cxx_name = "latestTask"]
         fn latest_task(self: &Agent, tab: i32) -> i32;
@@ -72,23 +88,26 @@ pub mod qobject {
         fn authorize(self: Pin<&mut Agent>, task: i32, call: &QString, url: &QString) -> QString;
 
         /// What an allowed call does, for the code that runs it: `{tool,
-        /// element, text, url, allowSubmit}`.
+        /// element, text, url, after, allowSubmit}`, where `after` is the
+        /// tab a new background tab goes after.
         #[qinvokable]
         #[cxx_name = "callJson"]
         fn call_json(self: &Agent, task: i32, call: &QString) -> QString;
 
-        /// The person takes the task's tab back: the agent waits before its
-        /// next step on it until `handBack`.
+        /// The person takes `tab` (the task's own or one it opened) back:
+        /// the agent waits before its next step there until `handBack`.
         #[qinvokable]
         #[cxx_name = "takeOver"]
-        fn take_over(self: Pin<&mut Agent>, task: i32);
+        fn take_over(self: Pin<&mut Agent>, task: i32, tab: i32);
 
+        /// Hand every tab the person took from `task` back to it.
         #[qinvokable]
         #[cxx_name = "handBack"]
         fn hand_back(self: Pin<&mut Agent>, task: i32);
 
-        /// Whether an agent is at work changing the page in `tab`, for the
-        /// ring on its tab icon.
+        /// Whether an agent is at work in `tab` (changing the page it was
+        /// asked from, or in a background tab it opened), for the ring on
+        /// the tab's icon.
         #[qinvokable]
         #[cxx_name = "actingOn"]
         fn acting_on(self: &Agent, tab: i32) -> bool;
@@ -99,7 +118,8 @@ pub mod qobject {
 
         /// A tool finished. `payload` is JSON: `{url, title, text,
         /// elements}` for read_page, `{tabs: [{title, url}]}` for
-        /// list_tabs, `{url, title}` for go_to, `{}` for click and fill, or
+        /// list_tabs, `{url, title}` for go_to, `{tabId, url, title}` for
+        /// open_tab, `{}` for click and fill, or
         /// `{error}` when `ok` is false.
         #[qinvokable]
         #[cxx_name = "toolResult"]
@@ -160,7 +180,9 @@ use cxx_qt_lib::QString;
 use ion_agent::model::Model;
 use ion_agent::openai::OpenAi;
 use ion_agent::task::Context;
-use ion_agent::tool::{Element, Plan, PlanError, Use, page_result, plan, tabs_result};
+use ion_agent::tool::{
+    Element, Plan, PlanError, Use, page_result, plan, tab_argument, tabs_result,
+};
 use ion_agent::{Next, Reply, Task, Tool, ToolCall, ToolOutcome, invoke};
 use ion_safety::{Choice, Prompt, Verdict};
 use serde_json::{Value, json};
@@ -176,15 +198,26 @@ struct Running {
     /// The call being run and its tool, between `toolRequested` and
     /// `toolResult`.
     call: Option<(ToolCall, Tool)>,
+    /// The tab that call works on: the task's own or one it opened.
+    target: u64,
     /// The checked call, once `authorize` has read it.
     plan: Option<Plan>,
     pending: Option<Pending>,
     /// The call waiting for the person to hand the tab back.
     paused: Option<String>,
-    /// What the last read of the page numbered.
-    elements: Vec<Element>,
+    /// What the last read of each tab's page numbered.
+    elements: BTreeMap<u64, Vec<Element>>,
+    /// Background tabs the task opened, oldest first, with their titles.
+    opened: Vec<(u64, String)>,
     /// The agent has been changing the page.
     acted: bool,
+}
+
+impl Running {
+    /// The tab the task was asked from, then the tabs it opened.
+    fn tabs(&self) -> impl Iterator<Item = u64> + '_ {
+        std::iter::once(self.task.tab).chain(self.opened.iter().map(|t| t.0))
+    }
 }
 
 #[derive(Default)]
@@ -198,29 +231,79 @@ fn enabled() -> bool {
     ion_config::global().config().ai.enable
 }
 
-/// The model the config names, with its key from the environment.
-fn configured_model() -> Result<Arc<dyn Model>, String> {
-    let ai = ion_config::global().config().ai.clone();
+/// Agents that can be asked from the address bar, as (id, name): Ion
+/// Agent, then each `[agents.<id>]` with a model of its own.
+fn askable() -> Vec<(String, String)> {
+    let config = ion_config::global().config();
+    let safety = ion_safety::global();
+    let mut agents = vec![(
+        invoke::DEFAULT_AGENT.to_owned(),
+        safety.policy().display_name(invoke::DEFAULT_AGENT),
+    )];
+    for (id, profile) in &config.agents.profiles {
+        if !profile.model.trim().is_empty()
+            && id != invoke::DEFAULT_AGENT
+            && ion_safety::policy::is_valid_id(id)
+        {
+            agents.push((id.clone(), safety.policy().display_name(id)));
+        }
+    }
+    agents
+}
+
+/// The model `agent` runs on, with its key from the environment: its own
+/// `[agents.<id>]` model, or `[ai]` for Ion Agent.
+fn configured_model(agent: &str) -> Result<Arc<dyn Model>, String> {
+    let config = ion_config::global().config();
+    let ai = config.ai.clone();
     if ai.provider != "openai" {
         return Err(format!(
             "Ion Agent can't use the {:?} provider yet. Set ai.provider to \"openai\".",
             ai.provider
         ));
     }
-    let key = if ai.api_key_env.trim().is_empty() {
+    let own = config
+        .agents
+        .profiles
+        .get(agent)
+        .filter(|p| !p.model.trim().is_empty());
+    let (model, base_url, key_env) = match own {
+        Some(p) => (
+            p.model.trim().to_owned(),
+            if p.base_url.trim().is_empty() {
+                ai.base_url.clone()
+            } else {
+                p.base_url.trim().to_owned()
+            },
+            p.api_key_env
+                .clone()
+                .unwrap_or_else(|| ai.api_key_env.clone()),
+        ),
+        None if agent == invoke::DEFAULT_AGENT => (
+            ai.model.clone(),
+            ai.base_url.clone(),
+            ai.api_key_env.clone(),
+        ),
+        None => {
+            return Err(format!(
+                "There's no agent called @{agent}. Give [agents.{agent}] a model in Ion's config to ask it."
+            ));
+        }
+    };
+    let key = if key_env.trim().is_empty() {
         None
     } else {
-        match std::env::var(ai.api_key_env.trim()) {
+        match std::env::var(key_env.trim()) {
             Ok(key) if !key.trim().is_empty() => Some(key),
             _ => {
                 return Err(format!(
-                    "No API key: set {} in Ion's environment, or set ai.apiKeyEnv to \"\" for a local model.",
-                    ai.api_key_env.trim()
+                    "No API key: set {} in Ion's environment, or set its apiKeyEnv to \"\" for a local model.",
+                    key_env.trim()
                 ));
             }
         }
     };
-    Ok(Arc::new(OpenAi::new(&ai.base_url, &ai.model, key)))
+    Ok(Arc::new(OpenAi::new(&base_url, &model, key)))
 }
 
 fn host_of(url: &str) -> Option<String> {
@@ -255,19 +338,20 @@ impl qobject::Agent {
                 "value": input,
             })]
         } else if let Some(prefix) = invoke::agent_prefix(&input) {
-            let id = invoke::DEFAULT_AGENT;
-            if id.starts_with(prefix) {
-                vec![json!({
-                    "kind": "agent",
-                    "title": ion_safety::global().policy().display_name(id),
-                    "subtitle": "Ask about this page or get something done on it",
-                    "hint": "Tab",
-                    "action": "complete",
-                    "value": format!("@{id} "),
-                })]
-            } else {
-                Vec::new()
-            }
+            askable()
+                .into_iter()
+                .filter(|(id, _)| id.starts_with(prefix))
+                .map(|(id, name)| {
+                    json!({
+                        "kind": "agent",
+                        "title": name,
+                        "subtitle": format!("@{id} · ask about this page or get something done on it"),
+                        "hint": "Tab",
+                        "action": "complete",
+                        "value": format!("@{id} "),
+                    })
+                })
+                .collect()
         } else {
             Vec::new()
         };
@@ -296,13 +380,16 @@ impl qobject::Agent {
             title: title.to_string(),
             url: url.to_string(),
         };
-        let mut task = Task::new(id as u64, &ask.agent, tab_id, &ask.question, &context);
-        if ask.agent != invoke::DEFAULT_AGENT {
-            task.model_failed(format!(
-                "Only Ion Agent can be asked from the address bar so far, not @{}.",
-                ask.agent
-            ));
-        }
+        let name = ion_safety::global().policy().display_name(&ask.agent);
+        let instructions = ion_config::global()
+            .config()
+            .agents
+            .profiles
+            .get(&ask.agent)
+            .map(|p| p.instructions.clone())
+            .unwrap_or_default();
+        let task = Task::new(id as u64, &ask.agent, tab_id, &ask.question, &context)
+            .with_persona(&name, &instructions);
         // Asking from a tab hands it to the agent, even if the person took
         // it back from an earlier task.
         ion_safety::global().hand_back(tab_id);
@@ -311,15 +398,53 @@ impl qobject::Agent {
             Running {
                 task,
                 call: None,
+                target: tab_id,
                 plan: None,
                 pending: None,
                 paused: None,
-                elements: Vec::new(),
+                elements: BTreeMap::new(),
+                opened: Vec::new(),
                 acted: false,
             },
         );
         self.as_mut().pump(id);
         id
+    }
+
+    fn follow_up(
+        mut self: Pin<&mut Self>,
+        task: i32,
+        question: &QString,
+        url: &QString,
+        title: &QString,
+    ) -> bool {
+        let question = question.to_string();
+        let question = question.trim();
+        if question.is_empty() || !enabled() {
+            return false;
+        }
+        let context = Context {
+            title: title.to_string(),
+            url: url.to_string(),
+        };
+        let mut tabs = None;
+        if let Some(running) = self.as_mut().rust_mut().tasks.get_mut(&task) {
+            if running.task.follow_up(question, &context) {
+                tabs = Some(running.tabs().collect::<Vec<u64>>());
+            }
+        }
+        let Some(tabs) = tabs else {
+            return false;
+        };
+        // Asking again hands the agent its tabs again, like asking first.
+        {
+            let mut safety = ion_safety::global();
+            for tab in tabs {
+                safety.hand_back(tab);
+            }
+        }
+        self.pump(task);
+        true
     }
 
     /// Move `id` along until it waits on something.
@@ -331,7 +456,12 @@ impl qobject::Agent {
             };
             match next {
                 Next::Model(messages) => {
-                    match configured_model() {
+                    let agent = self
+                        .tasks
+                        .get(&id)
+                        .map(|r| r.task.agent.clone())
+                        .unwrap_or_default();
+                    match configured_model(&agent) {
                         Ok(model) => {
                             let thread = self.qt_thread();
                             std::thread::spawn(move || {
@@ -349,15 +479,45 @@ impl qobject::Agent {
                     break;
                 }
                 Next::Tool(call, tool) => {
-                    let tab = self.tasks.get(&id).map_or(-1, |r| r.task.tab as i32);
-                    let call_id = QString::from(call.id.as_str());
+                    let mut requested = None;
                     if let Some(running) = self.as_mut().rust_mut().tasks.get_mut(&id) {
-                        running.call = Some((call, tool));
-                        running.plan = None;
+                        // Agents work on the tab they were asked from and
+                        // the tabs they opened, nothing else.
+                        let home = running.task.tab;
+                        let target = match tab_argument(tool, &call.arguments) {
+                            Ok(None) => Ok(home),
+                            Ok(Some(tab))
+                                if tab == home || running.opened.iter().any(|t| t.0 == tab) =>
+                            {
+                                Ok(tab)
+                            }
+                            Ok(Some(tab)) => Err(format!(
+                                "tab {tab} isn't one you opened; use the person's tab or open_tab"
+                            )),
+                            Err(error) => Err(error),
+                        };
+                        match target {
+                            Ok(target) => {
+                                requested = Some((QString::from(call.id.as_str()), target));
+                                running.call = Some((call, tool));
+                                running.target = target;
+                                running.plan = None;
+                            }
+                            Err(error) => running
+                                .task
+                                .tool_finished(&call.id, ToolOutcome::Failed { error }),
+                        }
                     }
+                    let Some((call_id, target)) = requested else {
+                        continue;
+                    };
                     self.as_mut().bump(id);
-                    self.as_mut()
-                        .tool_requested(id, &call_id, &QString::from(tool.name()), tab);
+                    self.as_mut().tool_requested(
+                        id,
+                        &call_id,
+                        &QString::from(tool.name()),
+                        target as i32,
+                    );
                     return;
                 }
                 Next::Idle | Next::Finished => break,
@@ -400,38 +560,46 @@ impl qobject::Agent {
             }
             None => Value::Null,
         };
-        value["acting"] = Value::from(running.acted && !over);
-        value["takenOver"] = Value::from(!over && is_taken_over(running.task.tab));
+        value["acting"] = Value::from((running.acted || !running.opened.is_empty()) && !over);
+        value["takenOver"] = Value::from(!over && running.tabs().any(is_taken_over));
+        value["opened"] = Value::from(
+            running
+                .opened
+                .iter()
+                .map(|t| json!({ "tab": t.0, "title": t.1 }))
+                .collect::<Vec<_>>(),
+        );
         QString::from(value.to_string().as_str())
     }
 
     fn latest_task(&self, tab: i32) -> i32 {
+        let Ok(tab) = u64::try_from(tab) else {
+            return -1;
+        };
         self.tasks
             .iter()
             .rev()
-            .find(|(_, r)| r.task.tab as i32 == tab)
+            .find(|(_, r)| r.tabs().any(|t| t == tab))
             .map_or(-1, |(id, _)| *id)
     }
 
     fn acting_on(&self, tab: i32) -> bool {
-        self.tasks
-            .values()
-            .any(|r| r.task.tab as i32 == tab && r.acted && !r.task.status().is_over())
-            && !u64::try_from(tab).is_ok_and(is_taken_over)
+        let Ok(tab) = u64::try_from(tab) else {
+            return false;
+        };
+        !is_taken_over(tab)
+            && self.tasks.values().any(|r| {
+                !r.task.status().is_over()
+                    && ((r.task.tab == tab && r.acted) || r.opened.iter().any(|t| t.0 == tab))
+            })
     }
 
-    /// The running call `call` of `task`, if that is what's running.
+    /// The running call `call` of `task`, if that is what's running, with
+    /// the tab it works on.
     fn current_call(&self, task: i32, call: &str) -> Option<(ToolCall, Tool, u64, String)> {
         let running = self.tasks.get(&task)?;
         let (c, tool) = running.call.as_ref()?;
-        (c.id == call).then(|| {
-            (
-                c.clone(),
-                *tool,
-                running.task.tab,
-                running.task.agent.clone(),
-            )
-        })
+        (c.id == call).then(|| (c.clone(), *tool, running.target, running.task.agent.clone()))
     }
 
     fn authorize(mut self: Pin<&mut Self>, task: i32, call: &QString, url: &QString) -> QString {
@@ -443,7 +611,7 @@ impl qobject::Agent {
         let elements = self
             .tasks
             .get(&task)
-            .map(|r| r.elements.clone())
+            .and_then(|r| r.elements.get(&tab).cloned())
             .unwrap_or_default();
         let planned = Use::parse(tool, &c.arguments)
             .map_err(PlanError::Mistake)
@@ -518,7 +686,7 @@ impl qobject::Agent {
         let (element, text, url) = match &plan.call {
             Use::Click { element } => (Some(*element), None, None),
             Use::Fill { element, text } => (Some(*element), Some(text.as_str()), None),
-            Use::GoTo { url } => (None, None, Some(url.as_str())),
+            Use::GoTo { url } | Use::OpenTab { url } => (None, None, Some(url.as_str())),
             Use::ReadPage | Use::ListTabs => (None, None, None),
         };
         let value = json!({
@@ -526,6 +694,9 @@ impl qobject::Agent {
             "element": element,
             "text": text,
             "url": url,
+            // New background tabs go after the task's other tabs, so they
+            // sit together in the strip.
+            "after": running.opened.last().map_or(running.task.tab, |t| t.0),
             // A click was approved as a click or as sending the form; the
             // page script refuses one that would do more than that.
             "allowSubmit": plan.request.action == ion_safety::Action::Submit,
@@ -579,6 +750,7 @@ impl qobject::Agent {
         let payload: Value = serde_json::from_str(&payload.to_string()).unwrap_or(Value::Null);
         let text = |key: &str| payload[key].as_str().unwrap_or_default().to_owned();
         let mut new_elements = None;
+        let mut opened_tab = None;
         let mut logged_url = (planned.request.site.is_some()).then(|| text("url"));
         let outcome = if !ok {
             ToolOutcome::Failed {
@@ -592,7 +764,10 @@ impl qobject::Agent {
                         .as_array()
                         .map(|list| list.iter().filter_map(Element::from_json).collect())
                         .unwrap_or_default();
-                    let content = page_result(&url, &text("title"), &text("text"), &elements);
+                    let mut content = page_result(&url, &text("title"), &text("text"), &elements);
+                    if self.tasks.get(&task).is_some_and(|r| r.task.tab != tab) {
+                        content = format!("Tab {tab}:\n{content}");
+                    }
                     new_elements = Some(elements);
                     ToolOutcome::Done {
                         content,
@@ -639,6 +814,25 @@ impl qobject::Agent {
                         step: planned.done_step(None),
                     }
                 }
+                Use::OpenTab { url } => {
+                    logged_url = Some(url.clone());
+                    match payload["tabId"].as_u64() {
+                        Some(new_tab) => {
+                            opened_tab = Some((new_tab, text("title")));
+                            ToolOutcome::Done {
+                                content: format!(
+                                    "Opened tab {new_tab}: {}. Pass \"tab\": {new_tab} to \
+                                     read_page, click, fill and go_to to work there.",
+                                    text("url")
+                                ),
+                                step: planned.done_step(None),
+                            }
+                        }
+                        None => ToolOutcome::Failed {
+                            error: "the tab didn't open".to_owned(),
+                        },
+                    }
+                }
             }
         };
         ion_safety::global().log_action(ion_safety::ActionRecord {
@@ -651,10 +845,13 @@ impl qobject::Agent {
             detail: planned.detail.clone(),
             sensitive: planned.sensitive,
         });
-        if let (Some(elements), Some(running)) =
-            (new_elements, self.as_mut().rust_mut().tasks.get_mut(&task))
-        {
-            running.elements = elements;
+        if let Some(running) = self.as_mut().rust_mut().tasks.get_mut(&task) {
+            if let Some(elements) = new_elements {
+                running.elements.insert(tab, elements);
+            }
+            if let Some(opened) = opened_tab {
+                running.opened.push(opened);
+            }
         }
         self.finish_call(task, &call, outcome);
     }
@@ -670,19 +867,32 @@ impl qobject::Agent {
         self.pump(task);
     }
 
-    fn take_over(mut self: Pin<&mut Self>, task: i32) {
-        let Some(tab) = self.tasks.get(&task).map(|r| r.task.tab) else {
+    fn take_over(mut self: Pin<&mut Self>, task: i32, tab: i32) {
+        let Ok(tab) = u64::try_from(tab) else {
             return;
         };
-        ion_safety::global().take_over(tab);
-        self.as_mut().bump(task);
+        let owns = self
+            .tasks
+            .get(&task)
+            .is_some_and(|r| r.tabs().any(|t| t == tab));
+        if owns {
+            ion_safety::global().take_over(tab);
+            self.as_mut().bump(task);
+        }
     }
 
     fn hand_back(mut self: Pin<&mut Self>, task: i32) {
-        let Some(tab) = self.tasks.get(&task).map(|r| r.task.tab) else {
+        let Some(running) = self.tasks.get(&task) else {
             return;
         };
-        ion_safety::global().hand_back(tab);
+        let tabs: Vec<u64> = running.tabs().collect();
+        let target = running.target;
+        {
+            let mut safety = ion_safety::global();
+            for tab in tabs {
+                safety.hand_back(tab);
+            }
+        }
         let paused = self
             .as_mut()
             .rust_mut()
@@ -702,7 +912,7 @@ impl qobject::Agent {
                     task,
                     &QString::from(call.as_str()),
                     &QString::from(tool.name()),
-                    tab as i32,
+                    target as i32,
                 );
             }
         }
