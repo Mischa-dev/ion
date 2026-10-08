@@ -139,9 +139,26 @@ WebEngineView {
 
     // Per-site JavaScript switch from `[sites]` in config, applied as each
     // page starts loading.
+    // Where the current main-frame navigation started; its user agent is
+    // the one the whole redirect chain is sent with.
+    property string navigationStart: ""
+
     onNavigationRequested: request => {
-        if (request.isMainFrame)
-            view.settings.javascriptEnabled = Sites.javascriptEnabled(request.url.toString())
+        if (!request.isMainFrame)
+            return
+        const target = request.url.toString()
+        // Chromium ignores a User-Agent change on a redirect, so a redirect
+        // into a site with another `userAgent` would arrive with the wrong
+        // one. Start it over as a fresh navigation, which gets the header.
+        if (request.navigationType === WebEngineNavigationRequest.RedirectNavigation
+                && !Sites.sameUserAgent(view.navigationStart, target)) {
+            request.reject()
+            Qt.callLater(() => view.url = target)
+            return
+        }
+        if (request.navigationType !== WebEngineNavigationRequest.RedirectNavigation)
+            view.navigationStart = target
+        view.settings.javascriptEnabled = Sites.javascriptEnabled(target)
     }
 
     Connections {

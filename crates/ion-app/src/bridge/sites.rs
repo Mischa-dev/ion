@@ -44,6 +44,11 @@ pub mod qobject {
         /// Tell Ion the engine's default user agent (the profile's
         /// `httpUserAgent` before any override), which the `"chrome"` preset
         /// is made from. Call before `scripts()`.
+        /// Whether pages at `a` and `b` are sent the same user agent.
+        #[qinvokable]
+        #[cxx_name = "sameUserAgent"]
+        fn same_user_agent(self: &Sites, a: &QString, b: &QString) -> bool;
+
         #[qinvokable]
         #[cxx_name = "setEngineUserAgent"]
         fn set_engine_user_agent(self: &Sites, user_agent: &QString);
@@ -103,6 +108,10 @@ pub fn user_agent_for(url: &str) -> Option<String> {
 }
 
 impl qobject::Sites {
+    fn same_user_agent(&self, a: &QString, b: &QString) -> bool {
+        user_agent_for(&a.to_string()) == user_agent_for(&b.to_string())
+    }
+
     fn set_engine_user_agent(&self, user_agent: &QString) {
         let _ = ENGINE_USER_AGENT.set(user_agent.to_string());
     }
