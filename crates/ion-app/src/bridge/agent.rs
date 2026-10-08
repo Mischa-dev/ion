@@ -231,29 +231,79 @@ fn enabled() -> bool {
     ion_config::global().config().ai.enable
 }
 
-/// The model the config names, with its key from the environment.
-fn configured_model() -> Result<Arc<dyn Model>, String> {
-    let ai = ion_config::global().config().ai.clone();
+/// Agents that can be asked from the address bar, as (id, name): Ion
+/// Agent, then each `[agents.<id>]` with a model of its own.
+fn askable() -> Vec<(String, String)> {
+    let config = ion_config::global().config();
+    let safety = ion_safety::global();
+    let mut agents = vec![(
+        invoke::DEFAULT_AGENT.to_owned(),
+        safety.policy().display_name(invoke::DEFAULT_AGENT),
+    )];
+    for (id, profile) in &config.agents.profiles {
+        if !profile.model.trim().is_empty()
+            && id != invoke::DEFAULT_AGENT
+            && ion_safety::policy::is_valid_id(id)
+        {
+            agents.push((id.clone(), safety.policy().display_name(id)));
+        }
+    }
+    agents
+}
+
+/// The model `agent` runs on, with its key from the environment: its own
+/// `[agents.<id>]` model, or `[ai]` for Ion Agent.
+fn configured_model(agent: &str) -> Result<Arc<dyn Model>, String> {
+    let config = ion_config::global().config();
+    let ai = config.ai.clone();
     if ai.provider != "openai" {
         return Err(format!(
             "Ion Agent can't use the {:?} provider yet. Set ai.provider to \"openai\".",
             ai.provider
         ));
     }
-    let key = if ai.api_key_env.trim().is_empty() {
+    let own = config
+        .agents
+        .profiles
+        .get(agent)
+        .filter(|p| !p.model.trim().is_empty());
+    let (model, base_url, key_env) = match own {
+        Some(p) => (
+            p.model.trim().to_owned(),
+            if p.base_url.trim().is_empty() {
+                ai.base_url.clone()
+            } else {
+                p.base_url.trim().to_owned()
+            },
+            p.api_key_env
+                .clone()
+                .unwrap_or_else(|| ai.api_key_env.clone()),
+        ),
+        None if agent == invoke::DEFAULT_AGENT => (
+            ai.model.clone(),
+            ai.base_url.clone(),
+            ai.api_key_env.clone(),
+        ),
+        None => {
+            return Err(format!(
+                "There's no agent called @{agent}. Give [agents.{agent}] a model in Ion's config to ask it."
+            ));
+        }
+    };
+    let key = if key_env.trim().is_empty() {
         None
     } else {
-        match std::env::var(ai.api_key_env.trim()) {
+        match std::env::var(key_env.trim()) {
             Ok(key) if !key.trim().is_empty() => Some(key),
             _ => {
                 return Err(format!(
-                    "No API key: set {} in Ion's environment, or set ai.apiKeyEnv to \"\" for a local model.",
-                    ai.api_key_env.trim()
+                    "No API key: set {} in Ion's environment, or set its apiKeyEnv to \"\" for a local model.",
+                    key_env.trim()
                 ));
             }
         }
     };
-    Ok(Arc::new(OpenAi::new(&ai.base_url, &ai.model, key)))
+    Ok(Arc::new(OpenAi::new(&base_url, &model, key)))
 }
 
 fn host_of(url: &str) -> Option<String> {
@@ -288,19 +338,20 @@ impl qobject::Agent {
                 "value": input,
             })]
         } else if let Some(prefix) = invoke::agent_prefix(&input) {
-            let id = invoke::DEFAULT_AGENT;
-            if id.starts_with(prefix) {
-                vec![json!({
-                    "kind": "agent",
-                    "title": ion_safety::global().policy().display_name(id),
-                    "subtitle": "Ask about this page or get something done on it",
-                    "hint": "Tab",
-                    "action": "complete",
-                    "value": format!("@{id} "),
-                })]
-            } else {
-                Vec::new()
-            }
+            askable()
+                .into_iter()
+                .filter(|(id, _)| id.starts_with(prefix))
+                .map(|(id, name)| {
+                    json!({
+                        "kind": "agent",
+                        "title": name,
+                        "subtitle": format!("@{id} · ask about this page or get something done on it"),
+                        "hint": "Tab",
+                        "action": "complete",
+                        "value": format!("@{id} "),
+                    })
+                })
+                .collect()
         } else {
             Vec::new()
         };
@@ -329,13 +380,16 @@ impl qobject::Agent {
             title: title.to_string(),
             url: url.to_string(),
         };
-        let mut task = Task::new(id as u64, &ask.agent, tab_id, &ask.question, &context);
-        if ask.agent != invoke::DEFAULT_AGENT {
-            task.model_failed(format!(
-                "Only Ion Agent can be asked from the address bar so far, not @{}.",
-                ask.agent
-            ));
-        }
+        let name = ion_safety::global().policy().display_name(&ask.agent);
+        let instructions = ion_config::global()
+            .config()
+            .agents
+            .profiles
+            .get(&ask.agent)
+            .map(|p| p.instructions.clone())
+            .unwrap_or_default();
+        let task = Task::new(id as u64, &ask.agent, tab_id, &ask.question, &context)
+            .with_persona(&name, &instructions);
         // Asking from a tab hands it to the agent, even if the person took
         // it back from an earlier task.
         ion_safety::global().hand_back(tab_id);
@@ -402,7 +456,12 @@ impl qobject::Agent {
             };
             match next {
                 Next::Model(messages) => {
-                    match configured_model() {
+                    let agent = self
+                        .tasks
+                        .get(&id)
+                        .map(|r| r.task.agent.clone())
+                        .unwrap_or_default();
+                    match configured_model(&agent) {
                         Ok(model) => {
                             let thread = self.qt_thread();
                             std::thread::spawn(move || {

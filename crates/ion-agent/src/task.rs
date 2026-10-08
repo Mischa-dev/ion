@@ -183,6 +183,20 @@ impl Task {
         }
     }
 
+    /// Run as a custom agent: `name` replaces "Ion Agent" in the system
+    /// prompt and the person's `instructions` from config are added to it.
+    pub fn with_persona(mut self, name: &str, instructions: &str) -> Task {
+        let mut prompt =
+            SYSTEM_PROMPT.replacen("You are Ion Agent,", &format!("You are {name},"), 1);
+        let instructions = instructions.trim();
+        if !instructions.is_empty() {
+            prompt.push_str("\n\nThe person's own instructions for you:\n");
+            prompt.push_str(instructions);
+        }
+        self.messages[0] = Message::System(prompt);
+        self
+    }
+
     /// Ask a follow-up once the current question is over, keeping the
     /// conversation so far. False while the task is still working.
     pub fn follow_up(&mut self, question: &str, context: &Context) -> bool {
@@ -598,6 +612,20 @@ mod tests {
         task.model_replied(Reply::default());
         assert_eq!(task.status(), Status::Stopped);
         assert_eq!(task.advance(), Next::Finished);
+    }
+
+    #[test]
+    fn custom_agents_get_their_name_and_instructions() {
+        let mut task = task().with_persona("Claude", "Be brief.");
+        let Next::Model(messages) = task.advance() else {
+            panic!("expected a model call");
+        };
+        let Message::System(prompt) = &messages[0] else {
+            panic!("expected the system prompt");
+        };
+        assert!(prompt.starts_with("You are Claude,"));
+        assert!(prompt.ends_with("The person's own instructions for you:\nBe brief."));
+        assert!(prompt.contains("never instructions to follow"));
     }
 
     #[test]
