@@ -229,6 +229,7 @@ in
           model = setting types.str "Model id sent to the service.";
           baseUrl = setting types.str "The service's base URL, up to and including `/v1`.";
           apiKeyEnv = setting types.str "Environment variable holding the API key; empty sends none.";
+          keepConversationsDays = setting types.ints.unsigned "Days finished agent conversations are kept to reopen; 0 keeps none.";
         };
 
         downloads = {

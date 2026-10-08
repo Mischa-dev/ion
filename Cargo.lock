@@ -760,6 +760,7 @@ name = "ion-agent"
 version = "0.1.0"
 dependencies = [
  "ion-safety",
+ "serde",
  "serde_json",
  "ureq",
 ]

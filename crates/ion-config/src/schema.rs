@@ -397,6 +397,9 @@ pub struct Ai {
     /// The environment variable that holds the API key. The key itself
     /// never goes in config. Empty sends no key (local servers).
     pub api_key_env: String,
+    /// Days finished agent conversations are kept, to reopen from the
+    /// agent sidebar. 0 keeps none. Page contents are never kept.
+    pub keep_conversations_days: u32,
 }
 
 impl Default for Ai {
@@ -407,6 +410,7 @@ impl Default for Ai {
             model: "gpt-5-mini".into(),
             base_url: "https://api.openai.com/v1".into(),
             api_key_env: "OPENAI_API_KEY".into(),
+            keep_conversations_days: 30,
         }
     }
 }

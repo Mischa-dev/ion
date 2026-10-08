@@ -6,12 +6,14 @@
 //!   is told how that went. Nothing here blocks or spawns threads.
 //! - [`tool::Tool`] lists the browser tools agents may call, each mapped to
 //!   the [`ion_safety::Action`] the safety model decides on.
+//! - [`history::History`] keeps finished conversations across restarts.
 //! - [`openai::OpenAi`] talks to any OpenAI-compatible chat completions API.
 //!
 //! Every tool call goes through `ion-safety` first ([`tool::plan`]);
 //! page content reaches the model only inside marked blocks the system
 //! prompt tells it to treat as data (docs/SAFETY.md §5).
 
+pub mod history;
 pub mod invoke;
 pub mod markdown;
 pub mod model;
