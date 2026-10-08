@@ -94,6 +94,13 @@ vim = false                  # j/k scroll, gg/G, d/u, H/L back/forward,
 globalPrivacyControl = true  # Sec-GPC header and navigator.globalPrivacyControl
 blockThirdPartyCookies = true
 
+[ai]                         # Ion Agent: @ion or !ai in the address bar
+enable = false               # off until you turn it on
+provider = "openai"          # any OpenAI-compatible chat completions API
+model = "gpt-5-mini"
+baseUrl = "https://api.openai.com/v1"   # e.g. http://127.0.0.1:11434/v1 for Ollama
+apiKeyEnv = "OPENAI_API_KEY" # the key is read from this variable, never from config
+
 [sites."example.com"]        # per-site settings; a host covers its subdomains,
 javascript = true            # "*" covers every site, the most specific wins
                              # (CSS for a site goes in [theme.sites] above)

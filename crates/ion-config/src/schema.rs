@@ -39,6 +39,7 @@ pub struct Config {
     pub extensions: Vec<String>,
     pub agents: Agents,
     pub safety: Safety,
+    pub ai: Ai,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -364,6 +365,37 @@ impl Default for Safety {
     }
 }
 
+/// `[ai]`: Ion Agent and the model it runs on. Off by default while agents
+/// are new: with `enable = false` there is no agent UI and nothing starts.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Ai {
+    /// Turn on Ion Agent: `@ion …` and `!ai …` in the address bar.
+    pub enable: bool,
+    /// Which kind of model service: `"openai"` is any OpenAI-compatible
+    /// chat completions API (OpenAI, OpenRouter, Ollama, llama.cpp).
+    pub provider: String,
+    /// The model id sent to the service.
+    pub model: String,
+    /// The service's base URL, up to and including `/v1`.
+    pub base_url: String,
+    /// The environment variable that holds the API key. The key itself
+    /// never goes in config. Empty sends no key (local servers).
+    pub api_key_env: String,
+}
+
+impl Default for Ai {
+    fn default() -> Self {
+        Self {
+            enable: false,
+            provider: "openai".into(),
+            model: "gpt-5-mini".into(),
+            base_url: "https://api.openai.com/v1".into(),
+            api_key_env: "OPENAI_API_KEY".into(),
+        }
+    }
+}
+
 /// Where downloads are saved.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -453,6 +485,12 @@ impl Config {
         }
         if self.agents.profiles.contains_key("mcp") {
             problems.push("agents.mcp is Ion's MCP server settings, not an agent".into());
+        }
+        if self.ai.provider != "openai" {
+            problems.push(format!(
+                "ai.provider {:?} isn't supported yet; use \"openai\" (any OpenAI-compatible API)",
+                self.ai.provider
+            ));
         }
         if self.safety.audit_retention_days == 0 {
             problems.push("safety.auditRetentionDays must be at least 1".into());
@@ -654,6 +692,31 @@ mod tests {
                 Some(effect.as_str())
             );
         }
+    }
+
+    #[test]
+    fn ai_is_off_until_turned_on() {
+        let config = Config::default();
+        assert!(!config.ai.enable);
+        assert!(config.check().is_empty());
+
+        let config: Config = toml::from_str(
+            r#"
+            [ai]
+            enable = true
+            model = "qwen3:8b"
+            baseUrl = "http://127.0.0.1:11434/v1"
+            apiKeyEnv = ""
+            "#,
+        )
+        .unwrap();
+        assert!(config.ai.enable);
+        assert_eq!(config.ai.provider, "openai");
+        assert_eq!(config.ai.model, "qwen3:8b");
+        assert_eq!(config.ai.api_key_env, "");
+
+        let config: Config = toml::from_str("[ai]\nprovider = \"chatgpt\"").unwrap();
+        assert_eq!(config.check().len(), 1);
     }
 
     #[test]
