@@ -87,6 +87,7 @@ QtObject {
 
     // The agent sidebar beside the page.
     readonly property int agentSidebarWidth: 380
+    readonly property int agentSidebarMinWidth: 280
 
     // Command palette
     readonly property int paletteWidth: 640

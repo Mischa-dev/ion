@@ -61,7 +61,9 @@ Rectangle {
     }
 
     visible: shown
-    implicitWidth: Theme.agentSidebarWidth
+    // Dragging the left edge resizes it, up to most of the window.
+    property real chosenWidth: Theme.agentSidebarWidth
+    implicitWidth: chosenWidth
     color: Theme.surface
 
     // Hairline between the page and the sidebar.
@@ -143,6 +145,29 @@ Rectangle {
                 // Ion Agent unless another is named.
                 sidebar.ask(/^(@\S+|!ai)\s/.test(input) ? input : "@ion " + input)
             }
+        }
+    }
+
+    MouseArea {
+        id: resizer
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        width: Theme.spacing
+        cursorShape: Qt.SizeHorCursor
+        property real startX: 0
+        property real startWidth: 0
+        onPressed: mouse => {
+            startX = mapToItem(null, mouse.x, 0).x
+            startWidth = sidebar.chosenWidth
+        }
+        onPositionChanged: mouse => {
+            if (!pressed)
+                return
+            const most = sidebar.parent ? sidebar.parent.width * 0.6 : startWidth
+            const x = mapToItem(null, mouse.x, 0).x
+            sidebar.chosenWidth = Math.max(Theme.agentSidebarMinWidth,
+                Math.min(most, startWidth + startX - x))
         }
     }
 }

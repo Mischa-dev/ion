@@ -155,6 +155,20 @@ pub fn options<'a>(
         active: false,
     });
 
+    // Agents stay off until the person turns them on (docs/CONFIG.md).
+    let agents = config.ai.enable;
+    options.push(SettingOption {
+        title: if agents {
+            "Turn off Ion Agent"
+        } else {
+            "Turn on Ion Agent"
+        }
+        .into(),
+        keywords: "settings ai assistant agents @ion",
+        changes: vec![("ai.enable", SettingValue::Flag(!agents))],
+        active: false,
+    });
+
     let third_party = config.privacy.block_third_party_cookies;
     options.push(SettingOption {
         title: if third_party {
@@ -247,6 +261,16 @@ mod tests {
             on.changes,
             [("ui.animations.enable", SettingValue::Flag(true))]
         );
+    }
+
+    #[test]
+    fn agents_are_offered_on_while_off() {
+        let mut config = Config::default();
+        let on = options(&config, []);
+        let on = on.iter().find(|o| o.title == "Turn on Ion Agent").unwrap();
+        assert_eq!(on.changes, [("ai.enable", SettingValue::Flag(true))]);
+        config.ai.enable = true;
+        assert!(titles(&options(&config, [])).contains(&"Turn off Ion Agent"));
     }
 
     #[test]
