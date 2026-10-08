@@ -121,6 +121,16 @@ pub enum Next {
     Finished,
 }
 
+/// An earlier question of a task and how it went, for the conversation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Exchange {
+    pub question: String,
+    pub steps: Vec<Step>,
+    pub answer: String,
+    pub error: String,
+    pub status: Status,
+}
+
 /// What the person was looking at when they asked.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Context {
@@ -145,16 +155,13 @@ pub struct Task {
     answer: String,
     error: String,
     turns: u32,
+    /// Earlier questions, oldest first; the current one is in the fields above.
+    earlier: Vec<Exchange>,
 }
 
 impl Task {
     pub fn new(id: u64, agent: &str, tab: u64, question: &str, context: &Context) -> Task {
-        let where_ = untrusted(
-            "context",
-            "current tab",
-            &format!("Title: {}\nAddress: {}", context.title.trim(), context.url),
-        );
-        let user = format!("{question}\n\nThe person is asking from this tab:\n{where_}");
+        let user = asking(question, context);
         Task {
             id,
             agent: agent.to_owned(),
@@ -172,7 +179,62 @@ impl Task {
             answer: String::new(),
             error: String::new(),
             turns: 0,
+            earlier: Vec::new(),
         }
+    }
+
+    /// Ask a follow-up once the current question is over, keeping the
+    /// conversation so far. False while the task is still working.
+    pub fn follow_up(&mut self, question: &str, context: &Context) -> bool {
+        if !self.status.is_over() {
+            return false;
+        }
+        // A stop or failure can leave tool calls unanswered, which models
+        // refuse to continue from.
+        let answered: Vec<&str> = self
+            .messages
+            .iter()
+            .filter_map(|m| match m {
+                Message::Tool { call_id, .. } => Some(call_id.as_str()),
+                _ => None,
+            })
+            .collect();
+        let unanswered: Vec<String> = self
+            .messages
+            .iter()
+            .filter_map(|m| match m {
+                Message::Assistant { calls, .. } => Some(calls),
+                _ => None,
+            })
+            .flatten()
+            .map(|c| c.id.clone())
+            .filter(|id| !answered.contains(&id.as_str()))
+            .collect();
+        for call_id in unanswered {
+            self.messages.push(Message::Tool {
+                call_id,
+                content: "Not run: the person stopped this.".to_owned(),
+            });
+        }
+        self.earlier.push(Exchange {
+            question: std::mem::replace(&mut self.question, question.to_owned()),
+            steps: std::mem::take(&mut self.steps),
+            answer: std::mem::take(&mut self.answer),
+            error: std::mem::take(&mut self.error),
+            status: self.status,
+        });
+        self.messages.push(Message::User(asking(question, context)));
+        self.pending.clear();
+        self.running = None;
+        self.waiting_on_model = false;
+        self.turns = 0;
+        self.status = Status::Thinking;
+        true
+    }
+
+    /// Earlier questions of this task, oldest first.
+    pub fn earlier(&self) -> &[Exchange] {
+        &self.earlier
     }
 
     pub fn status(&self) -> Status {
@@ -313,10 +375,25 @@ impl Task {
 
     /// The task as JSON for the UI.
     pub fn to_json(&self) -> Value {
-        let steps: Vec<Value> = self
-            .steps
+        let steps_json = |steps: &[Step]| -> Vec<Value> {
+            steps
+                .iter()
+                .map(|s| json!({ "text": s.text, "status": s.status.id() }))
+                .collect()
+        };
+        let steps = steps_json(&self.steps);
+        let earlier: Vec<Value> = self
+            .earlier
             .iter()
-            .map(|s| json!({ "text": s.text, "status": s.status.id() }))
+            .map(|e| {
+                json!({
+                    "question": e.question,
+                    "steps": steps_json(&e.steps),
+                    "answer": e.answer,
+                    "error": e.error,
+                    "status": e.status.id(),
+                })
+            })
             .collect();
         json!({
             "id": self.id,
@@ -327,8 +404,19 @@ impl Task {
             "steps": steps,
             "answer": self.answer,
             "error": self.error,
+            "earlier": earlier,
         })
     }
+}
+
+/// The person's message: the question, then where they are asking from.
+fn asking(question: &str, context: &Context) -> String {
+    let where_ = untrusted(
+        "context",
+        "current tab",
+        &format!("Title: {}\nAddress: {}", context.title.trim(), context.url),
+    );
+    format!("{question}\n\nThe person is asking from this tab:\n{where_}")
 }
 
 #[cfg(test)]
@@ -510,6 +598,54 @@ mod tests {
         task.model_replied(Reply::default());
         assert_eq!(task.status(), Status::Stopped);
         assert_eq!(task.advance(), Next::Finished);
+    }
+
+    #[test]
+    fn follow_ups_keep_the_conversation() {
+        let mut task = task();
+        assert!(!task.follow_up("and then?", &Context::default()));
+        task.advance();
+        task.model_replied(Reply {
+            text: "An example.".into(),
+            calls: vec![],
+        });
+        assert!(task.follow_up("who made it?", &Context::default()));
+        assert_eq!(task.status(), Status::Thinking);
+        assert_eq!(task.question, "who made it?");
+        assert_eq!(task.answer(), "");
+        assert_eq!(task.earlier()[0].answer, "An example.");
+        let Next::Model(messages) = task.advance() else {
+            panic!("expected a model call");
+        };
+        assert!(matches!(&messages[2], Message::Assistant { text, .. } if text == "An example."));
+        assert!(matches!(&messages[3], Message::User(u) if u.starts_with("who made it?")));
+        let json = task.to_json();
+        assert_eq!(json["earlier"][0]["question"], "what is this?");
+        assert_eq!(json["question"], "who made it?");
+    }
+
+    #[test]
+    fn follow_ups_after_a_stop_close_open_calls() {
+        let mut task = task();
+        task.advance();
+        task.model_replied(Reply {
+            text: String::new(),
+            calls: vec![call("c1", "read_page"), call("c2", "list_tabs")],
+        });
+        task.advance();
+        task.stop();
+        assert!(task.follow_up("try again", &Context::default()));
+        let Next::Model(messages) = task.advance() else {
+            panic!("expected a model call");
+        };
+        for id in ["c1", "c2"] {
+            assert!(
+                messages
+                    .iter()
+                    .any(|m| matches!(m, Message::Tool { call_id, .. } if call_id == id))
+            );
+        }
+        assert_eq!(task.earlier()[0].status, Status::Stopped);
     }
 
     #[test]

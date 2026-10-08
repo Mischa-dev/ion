@@ -94,6 +94,9 @@ Rectangle {
             AgentCard {
                 id: agentCard
                 tabId: bar.view ? bar.view.tabId : -1
+                pageUrl: bar.view ? bar.view.url.toString() : ""
+                pageTitle: bar.view ? bar.view.title : ""
+                maxBodyHeight: Math.max(160, bar.Window.height * 0.6)
                 y: urlBar.height + Theme.spacing
                 width: Math.min(urlBar.width, Theme.paletteWidth)
                 onFinished: if (bar.view && !urlBar.activeFocus) bar.view.forceActiveFocus()

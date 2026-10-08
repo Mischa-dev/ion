@@ -49,13 +49,28 @@ pub mod qobject {
             title: &QString,
         ) -> i32;
 
+        /// Ask `question` as a follow-up to `task` once it has answered (or
+        /// failed or stopped), from its tab now showing `url` titled
+        /// `title`. False while it is still working.
+        #[qinvokable]
+        #[cxx_name = "followUp"]
+        fn follow_up(
+            self: Pin<&mut Agent>,
+            task: i32,
+            question: &QString,
+            url: &QString,
+            title: &QString,
+        ) -> bool;
+
         /// The task as JSON: `{id, agent, agentName, tab, question, status,
         /// steps: [{text, status}], answer, error, prompt, acting,
-        /// takenOver, opened}`, where `prompt` is `{text, detail, choices: [{id,
+        /// takenOver, opened, earlier}`, where `prompt` is `{text, detail, choices: [{id,
         /// label}]}` while waiting for the person, `acting` says the agent
         /// has been changing the page, `takenOver` that the person took one
         /// of its tabs back, and `opened` lists the background tabs it
-        /// opened as `[{tab, title}]`. Empty for unknown ids.
+        /// opened as `[{tab, title}]`, and `earlier` holds the questions
+        /// before this one as `[{question, steps, answer, error, status}]`.
+        /// Empty for unknown ids.
         #[qinvokable]
         #[cxx_name = "taskJson"]
         fn task_json(self: &Agent, task: i32) -> QString;
@@ -340,6 +355,42 @@ impl qobject::Agent {
         );
         self.as_mut().pump(id);
         id
+    }
+
+    fn follow_up(
+        mut self: Pin<&mut Self>,
+        task: i32,
+        question: &QString,
+        url: &QString,
+        title: &QString,
+    ) -> bool {
+        let question = question.to_string();
+        let question = question.trim();
+        if question.is_empty() || !enabled() {
+            return false;
+        }
+        let context = Context {
+            title: title.to_string(),
+            url: url.to_string(),
+        };
+        let mut tabs = None;
+        if let Some(running) = self.as_mut().rust_mut().tasks.get_mut(&task) {
+            if running.task.follow_up(question, &context) {
+                tabs = Some(running.tabs().collect::<Vec<u64>>());
+            }
+        }
+        let Some(tabs) = tabs else {
+            return false;
+        };
+        // Asking again hands the agent its tabs again, like asking first.
+        {
+            let mut safety = ion_safety::global();
+            for tab in tabs {
+                safety.hand_back(tab);
+            }
+        }
+        self.pump(task);
+        true
     }
 
     /// Move `id` along until it waits on something.
