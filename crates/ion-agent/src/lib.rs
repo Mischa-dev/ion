@@ -8,7 +8,7 @@
 //!   the [`ion_safety::Action`] the safety model decides on.
 //! - [`openai::OpenAi`] talks to any OpenAI-compatible chat completions API.
 //!
-//! Every tool call goes through `ion-safety` first ([`tool::request_for`]);
+//! Every tool call goes through `ion-safety` first ([`tool::plan`]);
 //! page content reaches the model only inside marked blocks the system
 //! prompt tells it to treat as data (docs/SAFETY.md §5).
 

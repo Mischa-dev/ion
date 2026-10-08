@@ -2,7 +2,8 @@ import QtQuick
 import Ion
 
 // A tab's favicon, or a small spinning arc while its page loads. Collapses to
-// nothing for tabs with neither (new tabs, sites without an icon).
+// nothing for tabs with neither (new tabs, sites without an icon). While an
+// agent changes the tab's page, the agent's ring turns around the icon.
 Item {
     id: root
 
@@ -11,8 +12,12 @@ Item {
 
     readonly property bool loading: view?.loading ?? false
     readonly property bool hasIcon: favicon.status === Image.Ready && favicon.implicitWidth > 0
+    readonly property bool agentActing: {
+        Agent.revision
+        return view ? Agent.actingOn(view.tabId) : false
+    }
 
-    implicitWidth: loading || hasIcon ? Theme.iconSize : 0
+    implicitWidth: loading || hasIcon || agentActing ? Theme.iconSize : 0
     implicitHeight: Theme.iconSize
 
     Image {
@@ -80,5 +85,12 @@ Item {
             loops: Animation.Infinite
             duration: Theme.spinnerMs
         }
+    }
+
+    AgentRing {
+        anchors.centerIn: parent
+        visible: root.agentActing
+        working: true
+        size: Theme.iconSize + 6
     }
 }
