@@ -17,6 +17,8 @@ WebEngineView {
     signal newTabRequested(var request)
     // Emitted when Ion's own UI (context menu) wants `target` opened in a new tab.
     signal openInNewTab(url target)
+    // The page's menu asked an agent about the selection (`@ion …`).
+    signal askAgent(string input)
 
     // False for tabs a page opened (window.open), whose blank document the
     // page fills in itself; those must not be covered by the new-tab page.
@@ -125,6 +127,7 @@ WebEngineView {
         view: view
         omnibox: tabOmnibox
         onOpenInNewTab: target => view.openInNewTab(target)
+        onAskAgent: input => view.askAgent(input)
     }
     Omnibox {
         id: tabOmnibox

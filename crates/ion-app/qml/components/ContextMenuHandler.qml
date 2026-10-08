@@ -15,6 +15,9 @@ Menu {
 
     // Asks the window to open `target` in a new tab.
     signal openInNewTab(url target)
+    // Asks the window to put a question to an agent (`@ion …`); the page's
+    // selection goes along with it.
+    signal askAgent(string input)
 
     // Copied from the request, which the engine may reuse once handled.
     property string selectedText
@@ -28,13 +31,18 @@ Menu {
             menu.takeItem(0).destroy()
 
         const hasSelection = request.selectedText.length > 0
-        const ids = Basics.contextMenuItems(
+        const ids = Array.from(Basics.contextMenuItems(
             request.linkUrl.toString().length > 0,
             request.mediaType,
             Number(request.mediaFlags),
             request.isContentEditable,
             Number(request.editFlags),
-            hasSelection)
+            hasSelection))
+        // With agents on, selected text can be explained right away.
+        if (hasSelection && Config.value("ai.enable") === true) {
+            const at = ids.indexOf("searchSelection")
+            ids.splice(at >= 0 ? at + 1 : ids.length, 0, "explainSelection")
+        }
         for (const id of ids) {
             if (id === "-")
                 menu.addItem(separatorComponent.createObject(menu))
@@ -75,6 +83,7 @@ Menu {
                 ? qsTr("Search for “%1”").arg(preview)
                 : qsTr("Go to %1").arg(preview)
         }
+        case "explainSelection": return qsTr("Explain with Ion Agent")
         case "savePage": return qsTr("Save Page As…")
         case "screenshot": return qsTr("Take Screenshot")
         case "viewSource": return qsTr("View Page Source")
@@ -122,6 +131,7 @@ Menu {
                 menu.openInNewTab(target)
             break
         }
+        case "explainSelection": menu.askAgent("@ion Explain this."); break
         case "savePage": v.triggerWebAction(WebEngineView.SavePage); break
         case "screenshot": v.takeScreenshot(false); break
         case "viewSource": v.triggerWebAction(WebEngineView.ViewSource); break

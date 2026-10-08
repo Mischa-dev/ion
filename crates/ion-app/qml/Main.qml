@@ -424,6 +424,7 @@ ApplicationWindow {
                         request.openIn(tab)
                     }
                     onOpenInNewTab: target => window.openTab(target, false)
+                    onAskAgent: input => window.askAgent(input)
                 }
             }
         }
@@ -434,6 +435,7 @@ ApplicationWindow {
             Layout.preferredWidth: implicitWidth
             view: window.currentView
             onAsk: input => navBar.askAgent(input)
+            onActivityRequested: agentActivity.show()
             onFinished: window.currentView?.forceActiveFocus()
         }
     }
@@ -493,24 +495,37 @@ ApplicationWindow {
         onActivated: Safety.stopAgents()
     }
 
-    // Ask an agent: the address bar, ready with "@ion ".
+    // Agents, from shortcuts, the palette and the page's menu.
+    function askAgent(input) {
+        navBar.askAgent(input)
+    }
+    // The address bar, ready with "@ion ".
+    function startAgentQuestion() {
+        navBar.urlBar.forceActiveFocus()
+        navBar.urlBar.text = "@ion "
+        navBar.urlBar.cursorPosition = navBar.urlBar.text.length
+    }
+    function showAgentActivity() {
+        agentActivity.show()
+    }
+    function toggleAgentSidebar() {
+        agentSidebar.toggle(window.currentView ? Agent.latestTask(window.currentView.tabId) : -1)
+    }
+
     Shortcut {
         sequence: { Config.revision; return Config.value("shortcuts.askAgent") || "Ctrl+E" }
         enabled: { Config.revision; return Config.value("ai.enable") === true }
-        onActivated: {
-            navBar.urlBar.forceActiveFocus()
-            navBar.urlBar.text = "@ion "
-            navBar.urlBar.cursorPosition = navBar.urlBar.text.length
-        }
+        onActivated: window.startAgentQuestion()
     }
 
     // The agent sidebar, with the current tab's latest conversation.
     Shortcut {
         sequence: { Config.revision; return Config.value("shortcuts.agentSidebar") || "Ctrl+Shift+E" }
         enabled: { Config.revision; return Config.value("ai.enable") === true }
-        onActivated: agentSidebar.toggle(window.currentView ? Agent.latestTask(window.currentView.tabId) : -1)
+        onActivated: window.toggleAgentSidebar()
     }
 
     AgentsStoppedNotice {}
+    AgentActivity { id: agentActivity }
     AgentTools { views: views }
 }
