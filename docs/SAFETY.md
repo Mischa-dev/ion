@@ -216,6 +216,12 @@ append-only log, as are site permission answers and any rule change.
 
 - Remembered rules: `<data dir>/safety/rules.json`, written atomically. Session
   and tab rules live in memory only.
+- Agent conversations: `<data dir>/agent/conversations.json`, private to the
+  user, so the agent sidebar can reopen them. Only questions, step lines and
+  answers are kept, never page contents, tool results or selections; a
+  reopened conversation continues from those alone. Kept for
+  `ai.keepConversationsDays` (30 **(default)**, 0 keeps none), at most 200,
+  and each can be forgotten from the sidebar.
 - Config, in TOML or Nix:
 
 ```toml

@@ -104,6 +104,8 @@ provider = "openai"          # any OpenAI-compatible chat completions API
 model = "gpt-5-mini"
 baseUrl = "https://api.openai.com/v1"   # e.g. http://127.0.0.1:11434/v1 for Ollama
 apiKeyEnv = "OPENAI_API_KEY" # the key is read from this variable, never from config
+keepConversationsDays = 30   # reopen finished conversations from the agent
+                             # sidebar; 0 keeps none, pages are never kept
 
 [agents.claude]              # your own agent, asked with @claude (needs ai.enable)
 name = "Claude"

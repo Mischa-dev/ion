@@ -11,6 +11,7 @@ use std::collections::VecDeque;
 
 use serde_json::{Value, json};
 
+use crate::history::{SavedExchange, SavedStep};
 use crate::model::{Message, Reply, ToolCall};
 use crate::tool::{Tool, untrusted};
 
@@ -67,6 +68,16 @@ impl Status {
     pub fn is_over(self) -> bool {
         matches!(self, Status::Done | Status::Failed | Status::Stopped)
     }
+
+    /// The status `id` names; unknown or unfinished ones read as stopped,
+    /// since nothing saved is still running.
+    fn saved(id: &str) -> Status {
+        match id {
+            "done" => Status::Done,
+            "failed" => Status::Failed,
+            _ => Status::Stopped,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,6 +90,14 @@ pub enum StepStatus {
 }
 
 impl StepStatus {
+    fn saved(id: &str) -> StepStatus {
+        match id {
+            "done" => StepStatus::Done,
+            "denied" => StepStatus::Denied,
+            _ => StepStatus::Failed,
+        }
+    }
+
     pub fn id(self) -> &'static str {
         match self {
             StepStatus::Running => "running",
@@ -252,6 +271,93 @@ impl Task {
         self.turns = 0;
         self.status = Status::Thinking;
         true
+    }
+
+    /// Carry on a saved conversation (see [`crate::history`]) as task `id`
+    /// on `tab`. The model gets the questions and answers only; the pages
+    /// they were about are not kept. `None` without exchanges.
+    pub fn reopen(id: u64, agent: &str, tab: u64, exchanges: &[SavedExchange]) -> Option<Task> {
+        let (last, before) = exchanges.split_last()?;
+        let mut messages = vec![Message::System(SYSTEM_PROMPT.to_owned())];
+        for exchange in exchanges {
+            messages.push(Message::User(exchange.question.clone()));
+            let text = if exchange.answer.trim().is_empty() {
+                "(No answer: this question was stopped or failed.)".to_owned()
+            } else {
+                exchange.answer.clone()
+            };
+            messages.push(Message::Assistant {
+                text,
+                calls: Vec::new(),
+            });
+        }
+        let restore = |e: &SavedExchange| Exchange {
+            question: e.question.clone(),
+            steps: e
+                .steps
+                .iter()
+                .map(|s| Step {
+                    text: s.text.clone(),
+                    status: StepStatus::saved(&s.status),
+                })
+                .collect(),
+            answer: e.answer.clone(),
+            error: e.error.clone(),
+            status: Status::saved(&e.status),
+        };
+        let current = restore(last);
+        Some(Task {
+            id,
+            agent: agent.to_owned(),
+            tab,
+            question: current.question,
+            messages,
+            steps: current.steps,
+            pending: VecDeque::new(),
+            running: None,
+            waiting_on_model: false,
+            status: current.status,
+            answer: current.answer,
+            error: current.error,
+            turns: 0,
+            earlier: before.iter().map(restore).collect(),
+            draft: String::new(),
+        })
+    }
+
+    /// The finished questions of this task, oldest first, for
+    /// [`crate::history`]: the current one only once it is over.
+    pub fn saved_exchanges(&self) -> Vec<SavedExchange> {
+        let save = |question: &str, steps: &[Step], answer: &str, error: &str, status: Status| {
+            SavedExchange {
+                question: question.to_owned(),
+                steps: steps
+                    .iter()
+                    .map(|s| SavedStep {
+                        text: s.text.clone(),
+                        status: s.status.id().to_owned(),
+                    })
+                    .collect(),
+                answer: answer.to_owned(),
+                error: error.to_owned(),
+                status: status.id().to_owned(),
+            }
+        };
+        let mut saved: Vec<SavedExchange> = self
+            .earlier
+            .iter()
+            .map(|e| save(&e.question, &e.steps, &e.answer, &e.error, e.status))
+            .collect();
+        if self.status.is_over() {
+            saved.push(save(
+                &self.question,
+                &self.steps,
+                &self.answer,
+                &self.error,
+                self.status,
+            ));
+        }
+        saved
     }
 
     /// Earlier questions of this task, oldest first.
@@ -752,5 +858,61 @@ mod tests {
             "The model service refused the API key."
         );
         assert_eq!(task.to_json()["status"], "failed");
+    }
+
+    #[test]
+    fn a_saved_conversation_carries_on_without_page_contents() {
+        let mut task = task();
+        task.advance();
+        task.model_replied(Reply {
+            text: String::new(),
+            calls: vec![call("c1", "read_page")],
+        });
+        task.advance();
+        task.step_started("Reading example.com".into());
+        task.tool_finished(
+            "c1",
+            ToolOutcome::Done {
+                content: "<page>secret page text</page>".into(),
+                step: "Read example.com".into(),
+            },
+        );
+        task.advance();
+        task.model_replied(Reply {
+            text: "An example page.".into(),
+            calls: vec![],
+        });
+        let saved = task.saved_exchanges();
+        assert_eq!(saved.len(), 1);
+        assert_eq!(saved[0].answer, "An example page.");
+        assert_eq!(saved[0].steps[0].text, "Read example.com");
+        assert_eq!(saved[0].status, "done");
+
+        let mut reopened = Task::reopen(9, "ion", 3, &saved).unwrap();
+        assert_eq!(reopened.status(), Status::Done);
+        assert_eq!(reopened.answer(), "An example page.");
+        assert_eq!(reopened.steps()[0].status, StepStatus::Done);
+        assert!(reopened.follow_up("and who made it?", &Context::default()));
+        let Next::Model(messages) = reopened.advance() else {
+            panic!("expected a model call");
+        };
+        assert_eq!(messages.len(), 4);
+        assert_eq!(messages[1], Message::User("what is this?".into()));
+        assert!(
+            matches!(&messages[2], Message::Assistant { text, calls } if text == "An example page." && calls.is_empty())
+        );
+        assert!(matches!(&messages[3], Message::User(q) if q.starts_with("and who made it?")));
+        assert!(!format!("{messages:?}").contains("secret page text"));
+        assert_eq!(reopened.earlier().len(), 1);
+    }
+
+    #[test]
+    fn only_finished_questions_are_saved() {
+        let mut task = task();
+        assert!(task.saved_exchanges().is_empty());
+        task.advance();
+        task.stop();
+        assert_eq!(task.saved_exchanges()[0].status, "stopped");
+        assert!(Task::reopen(1, "ion", 1, &[]).is_none());
     }
 }

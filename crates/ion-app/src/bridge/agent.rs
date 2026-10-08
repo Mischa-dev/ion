@@ -14,7 +14,9 @@
 //!    `handBack`.
 //!
 //! Every change emits `taskChanged(task)`; `taskJson` describes a task.
-//! Nothing runs until `[ai] enable = true`.
+//! Finished conversations are kept for `ai.keepConversationsDays`
+//! (`ion_agent::history`): `conversationsJson` lists them and `reopen`
+//! carries one on. Nothing runs until `[ai] enable = true`.
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -142,9 +144,32 @@ pub mod qobject {
         #[cxx_name = "stopAll"]
         fn stop_all(self: Pin<&mut Agent>);
 
-        /// Forget a finished task.
+        /// Forget a finished task. Its conversation stays saved.
         #[qinvokable]
         fn dismiss(self: Pin<&mut Agent>, task: i32);
+
+        /// Saved conversations, newest first, as JSON: `[{key, agent, agentName,
+        /// question, last, site, updated, count, open}]`, where `question`
+        /// is the first one, `last` the newest, `updated` Unix seconds and
+        /// `open` says a task is showing it now.
+        #[qinvokable]
+        #[cxx_name = "conversationsJson"]
+        fn conversations_json(self: &Agent) -> QString;
+
+        /// Carry on the saved conversation `key` from `tab`: the task id
+        /// showing it (an open one if there is one), or -1.
+        #[qinvokable]
+        fn reopen(self: Pin<&mut Agent>, key: &QString, tab: i32) -> i32;
+
+        /// Forget the saved conversation `key`.
+        #[qinvokable]
+        #[cxx_name = "forgetConversation"]
+        fn forget_conversation(self: Pin<&mut Agent>, key: &QString);
+
+        /// Forget every saved conversation.
+        #[qinvokable]
+        #[cxx_name = "forgetConversations"]
+        fn forget_conversations(self: Pin<&mut Agent>);
 
         /// An answer's Markdown as the small HTML subset `Text` renders:
         /// paragraphs, lists, `code` and **bold**.
@@ -176,11 +201,12 @@ pub mod qobject {
 
 use std::collections::BTreeMap;
 use std::pin::Pin;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use std::time::{Duration, Instant, SystemTime};
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
+use ion_agent::history::{Conversation, History};
 use ion_agent::model::Model;
 use ion_agent::openai::OpenAi;
 use ion_agent::task::Context;
@@ -215,9 +241,34 @@ struct Running {
     opened: Vec<(u64, String)>,
     /// The agent has been changing the page.
     acted: bool,
+    /// Its saved conversation's key, and how many exchanges are saved.
+    key: String,
+    saved: usize,
+    started: u64,
+    /// The page the first question was asked from.
+    asked_from: (String, String),
 }
 
 impl Running {
+    fn new(task: Task, key: String, started: u64, asked_from: (String, String)) -> Running {
+        let saved = task.saved_exchanges().len();
+        Running {
+            target: task.tab,
+            task,
+            call: None,
+            plan: None,
+            pending: None,
+            paused: None,
+            elements: BTreeMap::new(),
+            opened: Vec::new(),
+            acted: false,
+            key,
+            saved,
+            started,
+            asked_from,
+        }
+    }
+
     /// The tab the task was asked from, then the tabs it opened.
     fn tabs(&self) -> impl Iterator<Item = u64> + '_ {
         std::iter::once(self.task.tab).chain(self.opened.iter().map(|t| t.0))
@@ -233,6 +284,37 @@ pub struct AgentRust {
 
 fn enabled() -> bool {
     ion_config::global().config().ai.enable
+}
+
+fn now() -> u64 {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
+
+/// Saved conversations, opened on first use and kept in step with config.
+fn history() -> MutexGuard<'static, History> {
+    static HISTORY: OnceLock<Mutex<History>> = OnceLock::new();
+    let days = ion_config::global().config().ai.keep_conversations_days;
+    let mut history = HISTORY
+        .get_or_init(|| {
+            let history = match ion_session::paths::data_dir() {
+                Some(dir) => History::open(dir.join("agent/conversations.json"), days, now()),
+                None => History::in_memory(days),
+            };
+            Mutex::new(history)
+        })
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    history.set_keep_days(days, now());
+    history
+}
+
+/// The site part of `url` for lists: "github.com".
+fn site_of(url: &str) -> String {
+    host_of(url)
+        .map(|h| h.strip_prefix("www.").unwrap_or(&h).to_owned())
+        .unwrap_or_default()
 }
 
 /// Agents that can be asked from the address bar, as (id, name): Ion
@@ -320,10 +402,39 @@ fn is_taken_over(tab: u64) -> bool {
 
 impl qobject::Agent {
     fn bump(mut self: Pin<&mut Self>, task: i32) {
+        self.as_mut().save(task);
         let revision = self.revision.wrapping_add(1);
         self.as_mut().rust_mut().revision = revision;
         self.as_mut().revision_changed();
         self.task_changed(task);
+    }
+
+    /// Save `task`'s conversation once a question is over, if anything in
+    /// it got an answer.
+    fn save(mut self: Pin<&mut Self>, task: i32) {
+        let mut this = self.as_mut().rust_mut();
+        let Some(running) = this.tasks.get_mut(&task) else {
+            return;
+        };
+        let exchanges = running.task.saved_exchanges();
+        if exchanges.len() == running.saved {
+            return;
+        }
+        running.saved = exchanges.len();
+        if exchanges.iter().all(|e| e.answer.trim().is_empty()) {
+            return;
+        }
+        let now = now();
+        let conversation = Conversation {
+            key: running.key.clone(),
+            agent: running.task.agent.clone(),
+            started: running.started,
+            updated: now,
+            url: running.asked_from.0.clone(),
+            title: running.asked_from.1.clone(),
+            exchanges,
+        };
+        history().put(conversation, now);
     }
 
     fn suggest(&self, input: &QString) -> QString {
@@ -399,20 +510,10 @@ impl qobject::Agent {
         // Asking from a tab hands it to the agent, even if the person took
         // it back from an earlier task.
         ion_safety::global().hand_back(tab_id);
-        self.as_mut().rust_mut().tasks.insert(
-            id,
-            Running {
-                task,
-                call: None,
-                target: tab_id,
-                plan: None,
-                pending: None,
-                paused: None,
-                elements: BTreeMap::new(),
-                opened: Vec::new(),
-                acted: false,
-            },
-        );
+        let started = now();
+        let key = format!("{started}-{id}");
+        let running = Running::new(task, key, started, (context.url, context.title));
+        self.as_mut().rust_mut().tasks.insert(id, running);
         self.as_mut().pump(id);
         id
     }
@@ -969,6 +1070,83 @@ impl qobject::Agent {
 
     fn answer_html(&self, markdown: &QString) -> QString {
         QString::from(ion_agent::markdown::to_html(&markdown.to_string()).as_str())
+    }
+
+    fn conversations_json(&self) -> QString {
+        let open: Vec<&str> = self.tasks.values().map(|r| r.key.as_str()).collect();
+        let rows: Vec<Value> = {
+            let safety = ion_safety::global();
+            history()
+                .list()
+                .iter()
+                .map(|c| {
+                    let first = c.exchanges.first().map_or("", |e| e.question.as_str());
+                    let last = c.exchanges.last().map_or("", |e| e.question.as_str());
+                    json!({
+                        "key": c.key,
+                        "agent": c.agent,
+                        "agentName": safety.policy().display_name(&c.agent),
+                        "question": first,
+                        "last": last,
+                        "site": site_of(&c.url),
+                        "updated": c.updated,
+                        "count": c.exchanges.len(),
+                        "open": open.contains(&c.key.as_str()),
+                    })
+                })
+                .collect()
+        };
+        QString::from(Value::from(rows).to_string().as_str())
+    }
+
+    fn reopen(mut self: Pin<&mut Self>, key: &QString, tab: i32) -> i32 {
+        let key = key.to_string();
+        if let Some((id, _)) = self.tasks.iter().find(|(_, r)| r.key == key) {
+            return *id;
+        }
+        let Ok(tab) = u64::try_from(tab) else {
+            return -1;
+        };
+        if !enabled() {
+            return -1;
+        }
+        let Some(saved) = history().get(&key).cloned() else {
+            return -1;
+        };
+        let id = self.next_id + 1;
+        let name = ion_safety::global().policy().display_name(&saved.agent);
+        let instructions = ion_config::global()
+            .config()
+            .agents
+            .profiles
+            .get(&saved.agent)
+            .map(|p| p.instructions.clone())
+            .unwrap_or_default();
+        let Some(task) = Task::reopen(id as u64, &saved.agent, tab, &saved.exchanges) else {
+            return -1;
+        };
+        let task = task.with_persona(&name, &instructions);
+        self.as_mut().rust_mut().next_id = id;
+        let running = Running::new(task, saved.key, saved.started, (saved.url, saved.title));
+        self.as_mut().rust_mut().tasks.insert(id, running);
+        self.bump(id);
+        id
+    }
+
+    fn forget_conversation(mut self: Pin<&mut Self>, key: &QString) {
+        history().forget(&key.to_string());
+        // An open task keeps showing it, but isn't saved again unless asked
+        // something new.
+        let revision = self.revision.wrapping_add(1);
+        self.as_mut().rust_mut().revision = revision;
+        self.revision_changed();
+    }
+
+    fn forget_conversations(mut self: Pin<&mut Self>) {
+        history().forget_all();
+        let revision = self.revision.wrapping_add(1);
+        self.as_mut().rust_mut().revision = revision;
+        self.revision_changed();
     }
 
     fn dismiss(mut self: Pin<&mut Self>, task: i32) {
