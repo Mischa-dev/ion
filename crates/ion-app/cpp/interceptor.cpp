@@ -23,6 +23,11 @@ QString requestFirstPartyUrl(const QWebEngineUrlRequestInfo &info)
     return info.firstPartyUrl().toString(QUrl::FullyEncoded);
 }
 
+QString requestInitiator(const QWebEngineUrlRequestInfo &info)
+{
+    return info.initiator().toString(QUrl::FullyEncoded);
+}
+
 QString requestMethod(const QWebEngineUrlRequestInfo &info)
 {
     return QString::fromLatin1(info.requestMethod());

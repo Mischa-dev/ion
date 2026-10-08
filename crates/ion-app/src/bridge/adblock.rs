@@ -35,6 +35,9 @@ pub mod qobject {
         fn request_url(info: &QWebEngineUrlRequestInfo) -> QString;
         #[cxx_name = "requestFirstPartyUrl"]
         fn request_first_party_url(info: &QWebEngineUrlRequestInfo) -> QString;
+        /// The origin of the frame that made the request, or "" / "null".
+        #[cxx_name = "requestInitiator"]
+        fn request_initiator(info: &QWebEngineUrlRequestInfo) -> QString;
         #[cxx_name = "requestMethod"]
         fn request_method(info: &QWebEngineUrlRequestInfo) -> QString;
         #[cxx_name = "requestResourceType"]
@@ -499,12 +502,18 @@ impl qobject::Adblock {
         }
         if !blocked {
             // A navigation is for the page it loads; anything else is for
-            // the page that asked for it.
+            // the frame that asked for it, so an iframe's requests match the
+            // `navigator.userAgent` its own page script reports.
             let navigation = matches!(resource, ResourceType::MainFrame | ResourceType::SubFrame);
-            let page = if navigation || first_party.is_empty() {
+            let initiator = qobject::request_initiator(&info).to_string();
+            let page = if navigation {
                 &url
-            } else {
+            } else if !initiator.is_empty() && initiator != "null" {
+                &initiator
+            } else if !first_party.is_empty() {
                 &first_party
+            } else {
+                &url
             };
             if let Some(agent) = super::sites::user_agent_for(page) {
                 qobject::set_request_header(
