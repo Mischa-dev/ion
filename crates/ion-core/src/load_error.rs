@@ -100,9 +100,13 @@ pub fn describe(domain: ErrorDomain, code: i32, url: &str, message: &str) -> Opt
             format!("{site} took too long to respond"),
             "The site may be busy or down. Try again in a moment.",
         ),
-        CONNECTION_CLOSED | CONNECTION_RESET | ADDRESS_UNREACHABLE => page(
+        CONNECTION_CLOSED | CONNECTION_RESET => page(
             format!("The connection to {site} was lost"),
             "Try again. If it keeps happening, check your connection.",
+        ),
+        ADDRESS_UNREACHABLE => page(
+            format!("Can't reach {site}"),
+            "There's no route to it from this network. Check your connection, VPN or firewall.",
         ),
         UNSAFE_PORT => page(
             format!("Ion won't connect to {site} on that port"),
@@ -162,6 +166,10 @@ mod tests {
         assert_eq!(
             title(ErrorDomain::Http, -312, url).as_deref(),
             Some("Ion won't connect to example.com on that port")
+        );
+        assert_eq!(
+            title(ErrorDomain::Connection, -109, url).as_deref(),
+            Some("Can't reach example.com")
         );
         assert_eq!(
             title(ErrorDomain::Certificate, -202, url).as_deref(),
