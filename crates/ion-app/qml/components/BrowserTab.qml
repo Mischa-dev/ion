@@ -89,6 +89,8 @@ WebEngineView {
         if (info.status === WebEngineView.LoadSucceededStatus
                 || info.status === WebEngineView.LoadFailedStatus)
             zoomFactor = Zoom.factorFor(url)
+        if (info.status !== WebEngineView.LoadStartedStatus)
+            reloading = false
     }
     onNewWindowRequested: request => view.newTabRequested(request)
 
@@ -142,6 +144,8 @@ WebEngineView {
     // Where the current main-frame navigation started; its user agent is
     // the one the whole redirect chain is sent with.
     property string navigationStart: ""
+    // Whether that navigation is a reload that hasn't finished loading.
+    property bool reloading: false
 
     // The URL of the history entry the tab is on, or "" before the first
     // page commits.
@@ -165,17 +169,20 @@ WebEngineView {
         // fresh navigation would turn it into a GET and drop the form. A
         // page script's `location.replace` also counts as a redirect, but
         // its page is already in history and its request gets the header,
-        // so restarting would only break the replace.
+        // so restarting would only break the replace. A reload is on its
+        // own history entry before it commits, hence `reloading`.
         if (request.navigationType === WebEngineNavigationRequest.RedirectNavigation
                 && !request.hasFormData
-                && view.currentHistoryUrl() !== view.navigationStart
+                && (view.reloading || view.currentHistoryUrl() !== view.navigationStart)
                 && !Sites.sameUserAgent(view.navigationStart, target)) {
             request.reject()
             Qt.callLater(() => view.url = target)
             return
         }
-        if (request.navigationType !== WebEngineNavigationRequest.RedirectNavigation)
+        if (request.navigationType !== WebEngineNavigationRequest.RedirectNavigation) {
             view.navigationStart = target
+            view.reloading = request.navigationType === WebEngineNavigationRequest.ReloadNavigation
+        }
         view.settings.javascriptEnabled = Sites.javascriptEnabled(target)
     }
 
