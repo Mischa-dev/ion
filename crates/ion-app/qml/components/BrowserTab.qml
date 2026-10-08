@@ -91,8 +91,16 @@ WebEngineView {
         if (info.status === WebEngineView.LoadSucceededStatus
                 || info.status === WebEngineView.LoadFailedStatus)
             zoomFactor = Zoom.factorFor(url)
-        if (info.status !== WebEngineView.LoadStartedStatus)
+        // Once a load ends (or is stopped), the redirect chain is over and
+        // the tab is on whatever entry committed.
+        if (info.status !== WebEngineView.LoadStartedStatus) {
             reloading = false
+            const committed = currentHistoryUrl()
+            if (committed !== "") {
+                navigationStart = committed
+                navigationEnd = committed
+            }
+        }
     }
     onNewWindowRequested: request => view.newTabRequested(request)
 
