@@ -76,6 +76,15 @@ WebEngineView {
         const darken = Theme.engine.darkenPage(url.toString())
         if (settings.forceDarkMode !== darken)
             settings.forceDarkMode = darken
+        // A page's own `history.pushState`/`replaceState` moves the tab to a
+        // new entry without a load; the next redirect chain starts there.
+        Qt.callLater(() => {
+            const committed = view.currentHistoryUrl()
+            if (committed !== "" && committed === view.url.toString()) {
+                view.navigationStart = committed
+                view.navigationEnd = committed
+            }
+        })
     }
 
     // Creating a tab resets the scheme QtWebEngine hands to pages, so restore
