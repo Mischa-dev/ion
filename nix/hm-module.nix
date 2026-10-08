@@ -187,6 +187,13 @@ in
         privacy = {
           globalPrivacyControl = setting types.bool "Send the Global Privacy Control signal to sites.";
           blockThirdPartyCookies = setting types.bool "Refuse cookies from sites other than the one in the address bar.";
+          clearOnExit = setting (types.listOf (
+            types.enum [
+              "cookies"
+              "cache"
+              "history"
+            ]
+          )) "Browsing data deleted when Ion quits.";
         };
 
         sites = mkOption {
@@ -194,6 +201,7 @@ in
             types.submodule {
               options = {
                 javascript = setting types.bool "Run JavaScript on the site.";
+                userAgent = setting types.str "User agent: `chrome`, `firefox`, `safari`, `default` or a full string.";
               };
             }
           );

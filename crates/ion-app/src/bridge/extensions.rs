@@ -3,7 +3,9 @@
 //! extensions folder.
 //!
 //! QML loads `paths()` through the profile's `extensionManager` at startup;
-//! the extension list and enable switches come straight from that manager.
+//! the extension list and enable switches come straight from that manager,
+//! and the ones switched off are remembered here (`extensions.json` in the
+//! data directory).
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -31,6 +33,17 @@ pub mod qobject {
         #[qinvokable]
         fn problems(self: &Extensions) -> QStringList;
 
+        /// Whether the person switched the extension in folder `path` off.
+        #[qinvokable]
+        #[cxx_name = "isDisabled"]
+        fn is_disabled(self: &Extensions, path: &QString) -> bool;
+
+        /// Remember that the extension in folder `path` is switched off (or
+        /// back on), across restarts.
+        #[qinvokable]
+        #[cxx_name = "setDisabled"]
+        fn set_disabled(self: Pin<&mut Extensions>, path: &QString, disabled: bool);
+
         /// Create the extensions folder if needed. False if it can't be.
         #[qinvokable]
         #[cxx_name = "ensureFolder"]
@@ -43,17 +56,26 @@ use std::path::PathBuf;
 
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::{QString, QStringList};
-use ion_platform::extensions::{self, Found};
+use ion_platform::extensions::{self, Disabled, Found};
 
 pub struct ExtensionsRust {
     folder: QString,
     dir: Option<PathBuf>,
     problems: Vec<String>,
+    /// `extensions.json` in the data directory.
+    state_file: Option<PathBuf>,
+    disabled: Disabled,
 }
 
 impl Default for ExtensionsRust {
     fn default() -> Self {
-        let dir = ion_session::paths::data_dir().map(|d| d.join("extensions"));
+        let data = ion_session::paths::data_dir();
+        let dir = data.as_ref().map(|d| d.join("extensions"));
+        let state_file = data.map(|d| d.join("extensions.json"));
+        let disabled = state_file
+            .as_deref()
+            .map(Disabled::load)
+            .unwrap_or_default();
         let folder = dir
             .as_ref()
             .map(|d| QString::from(d.to_string_lossy().as_ref()))
@@ -62,6 +84,8 @@ impl Default for ExtensionsRust {
             folder,
             dir,
             problems: Vec::new(),
+            state_file,
+            disabled,
         }
     }
 }
@@ -92,6 +116,23 @@ impl qobject::Extensions {
             .iter()
             .map(|p| QString::from(p.as_str()))
             .collect()
+    }
+
+    fn is_disabled(&self, path: &QString) -> bool {
+        self.disabled.contains(&path.to_string())
+    }
+
+    fn set_disabled(mut self: Pin<&mut Self>, path: &QString, disabled: bool) {
+        let changed = self
+            .as_mut()
+            .rust_mut()
+            .disabled
+            .set(&path.to_string(), disabled);
+        if let (true, Some(file)) = (changed, self.state_file.as_deref()) {
+            if let Err(err) = self.disabled.save(file) {
+                eprintln!("ion: could not save {}: {err}", file.display());
+            }
+        }
     }
 
     fn ensure_folder(&self) -> bool {

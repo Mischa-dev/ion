@@ -58,6 +58,9 @@ pub struct Privacy {
     pub global_privacy_control: bool,
     /// Refuse cookies set by sites other than the one in the address bar.
     pub block_third_party_cookies: bool,
+    /// Browsing data deleted when Ion quits (and, in case quitting was cut
+    /// short, when it next starts).
+    pub clear_on_exit: Vec<BrowsingData>,
 }
 
 impl Default for Privacy {
@@ -65,6 +68,29 @@ impl Default for Privacy {
         Self {
             global_privacy_control: true,
             block_third_party_cookies: true,
+            clear_on_exit: Vec::new(),
+        }
+    }
+}
+
+/// A kind of browsing data Ion can delete.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BrowsingData {
+    /// Cookies and site sign-ins.
+    Cookies,
+    /// The HTTP cache.
+    Cache,
+    /// Pages visited (open tabs and saved sessions stay).
+    History,
+}
+
+impl BrowsingData {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Cookies => "cookies",
+            Self::Cache => "cache",
+            Self::History => "history",
         }
     }
 }
@@ -76,6 +102,10 @@ pub struct Site {
     /// Run JavaScript on the site.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub javascript: Option<bool>,
+    /// User agent for the site: `"chrome"`, `"firefox"`, `"safari"`,
+    /// `"default"` (the engine's own) or a full user-agent string.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_agent: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -557,9 +587,11 @@ mod tests {
 
             [privacy]
             blockThirdPartyCookies = false
+            clearOnExit = ["cookies", "history"]
 
             [sites."example.com"]
             javascript = false
+            userAgent = "firefox"
             "#,
         )
         .unwrap();
@@ -575,6 +607,14 @@ mod tests {
         assert_eq!(config.general, General::default());
         assert_eq!(config.sites["example.com"].javascript, Some(false));
         assert!(!config.privacy.block_third_party_cookies);
+        assert_eq!(
+            config.privacy.clear_on_exit,
+            [BrowsingData::Cookies, BrowsingData::History]
+        );
+        assert_eq!(
+            config.sites["example.com"].user_agent.as_deref(),
+            Some("firefox")
+        );
         assert!(config.privacy.global_privacy_control);
     }
 

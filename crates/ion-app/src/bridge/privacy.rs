@@ -7,6 +7,13 @@
 
 #[cxx_qt::bridge]
 pub mod qobject {
+    unsafe extern "C++" {
+        include!("cxx-qt-lib/qstringlist.h");
+        type QStringList = cxx_qt_lib::QStringList;
+        include!("cxx-qt-lib/qstring.h");
+        type QString = cxx_qt_lib::QString;
+    }
+
     #[namespace = "ion"]
     unsafe extern "C++" {
         include!("ion-app/cpp/privacy.h");
@@ -16,6 +23,9 @@ pub mod qobject {
 
         #[cxx_name = "deleteAllCookies"]
         unsafe fn delete_all_cookies(profile: *mut QObject) -> bool;
+
+        #[cxx_name = "profileStoragePath"]
+        fn profile_storage_path(storage_name: &QString) -> QString;
     }
 
     extern "RustQt" {
@@ -30,6 +40,12 @@ pub mod qobject {
         #[qinvokable]
         unsafe fn apply(self: &Privacy, profile: *mut QObject) -> bool;
 
+        /// What `[privacy] clearOnExit` asks to delete: some of `cookies`,
+        /// `cache` and `history`.
+        #[qinvokable]
+        #[cxx_name = "clearOnExit"]
+        fn clear_on_exit(self: &Privacy) -> QStringList;
+
         /// Delete every cookie in `profile`, signing out of all sites.
         #[qinvokable]
         #[cxx_name = "clearCookies"]
@@ -40,7 +56,54 @@ pub mod qobject {
 #[derive(Default)]
 pub struct PrivacyRust;
 
+/// Delete the "Default" profile's files for what `[privacy] clearOnExit`
+/// lists, before the engine opens them: the cookie database for `cookies`
+/// (so no page can see a cookie from before), and for `history` the engine's
+/// own history, favicon and visited-links databases (QML has no call for
+/// them). Call once the application name is
+/// set and before QML loads.
+pub fn clear_profile_files() {
+    use ion_config::BrowsingData;
+    let config = ion_config::global().config();
+    let mut files = Vec::new();
+    for data in &config.privacy.clear_on_exit {
+        match data {
+            BrowsingData::Cookies => files.extend(["Cookies", "Cookies-journal"]),
+            BrowsingData::History => files.extend([
+                "Visited Links",
+                "History",
+                "History-journal",
+                "Favicons",
+                "Favicons-journal",
+            ]),
+            BrowsingData::Cache => {}
+        }
+    }
+    if files.is_empty() {
+        return;
+    }
+    let dir = qobject::profile_storage_path(&cxx_qt_lib::QString::from("Default")).to_string();
+    for name in files {
+        let file = std::path::Path::new(&dir).join(name);
+        if let Err(err) = std::fs::remove_file(&file) {
+            if err.kind() != std::io::ErrorKind::NotFound {
+                eprintln!("ion: could not delete {}: {err}", file.display());
+            }
+        }
+    }
+}
+
 impl qobject::Privacy {
+    fn clear_on_exit(&self) -> cxx_qt_lib::QStringList {
+        let config = ion_config::global().config();
+        config
+            .privacy
+            .clear_on_exit
+            .iter()
+            .map(|data| cxx_qt_lib::QString::from(data.as_str()))
+            .collect()
+    }
+
     /// # Safety
     /// `profile` must be null or a live QObject.
     unsafe fn apply(&self, profile: *mut qobject::QObject) -> bool {

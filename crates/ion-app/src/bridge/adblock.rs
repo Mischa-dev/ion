@@ -35,6 +35,9 @@ pub mod qobject {
         fn request_url(info: &QWebEngineUrlRequestInfo) -> QString;
         #[cxx_name = "requestFirstPartyUrl"]
         fn request_first_party_url(info: &QWebEngineUrlRequestInfo) -> QString;
+        /// The origin of the frame that made the request, or "" / "null".
+        #[cxx_name = "requestInitiator"]
+        fn request_initiator(info: &QWebEngineUrlRequestInfo) -> QString;
         #[cxx_name = "requestMethod"]
         fn request_method(info: &QWebEngineUrlRequestInfo) -> QString;
         #[cxx_name = "requestResourceType"]
@@ -151,6 +154,21 @@ use ion_adblock::{
 
 /// How often the worker checks whether lists went stale while Ion runs.
 const RECHECK_EVERY: Duration = Duration::from_secs(60 * 60);
+/// User-Agent client hint headers: the three Chromium always sends and the
+/// ones a site can ask for with `Accept-CH`.
+const CLIENT_HINTS: &[&str] = &[
+    "Sec-CH-UA",
+    "Sec-CH-UA-Mobile",
+    "Sec-CH-UA-Platform",
+    "Sec-CH-UA-Arch",
+    "Sec-CH-UA-Bitness",
+    "Sec-CH-UA-Form-Factors",
+    "Sec-CH-UA-Full-Version",
+    "Sec-CH-UA-Full-Version-List",
+    "Sec-CH-UA-Model",
+    "Sec-CH-UA-Platform-Version",
+    "Sec-CH-UA-WoW64",
+];
 
 /// Held by a worker from downloading lists until its result is queued for the
 /// UI thread. Workers never interleave writing lists with compiling them, so
@@ -481,6 +499,41 @@ impl qobject::Adblock {
                 &QString::from("Sec-GPC"),
                 &QString::from("1"),
             );
+        }
+        if !blocked {
+            // A navigation is for the page it loads; anything else is for
+            // the frame that asked for it, so an iframe's requests match the
+            // `navigator.userAgent` its own page script reports.
+            let navigation = matches!(resource, ResourceType::MainFrame | ResourceType::SubFrame);
+            let initiator = qobject::request_initiator(&info).to_string();
+            let page = if navigation {
+                &url
+            } else if !initiator.is_empty() && initiator != "null" {
+                &initiator
+            } else if !first_party.is_empty() {
+                &first_party
+            } else {
+                &url
+            };
+            if let Some(agent) = super::sites::user_agent_for(page) {
+                qobject::set_request_header(
+                    info.as_mut(),
+                    &QString::from("User-Agent"),
+                    &QString::from(agent.as_str()),
+                );
+                // Only the "chrome" preset matches the engine's client hints;
+                // blank them for anything else (Firefox and Safari send none).
+                if !ion_sites::agent::keeps_client_hints(&agent, super::sites::engine_user_agent())
+                {
+                    for name in CLIENT_HINTS {
+                        qobject::set_request_header(
+                            info.as_mut(),
+                            &QString::from(*name),
+                            &QString::default(),
+                        );
+                    }
+                }
+            }
         }
         match verdict {
             Verdict::Allow => {}
