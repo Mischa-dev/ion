@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtWebEngine
 import Ion
 
 // Back / forward / reload and the URL bar for the current tab.
@@ -9,6 +10,7 @@ Rectangle {
 
     property var view   // BrowserTab of the current tab, may be null
     property DownloadsPanel downloads   // may be null
+    property AgentSidebar agentSidebar   // may be null
     property alias urlBar: urlBar
 
     signal bookmarkToggled()
@@ -41,10 +43,30 @@ Rectangle {
     }
 
     function askAgent(input) {
-        if (!bar.view)
+        const view = bar.view
+        if (!view)
             return
-        const id = Agent.start(input, bar.view.tabId, bar.view.url.toString(), bar.view.title)
-        if (id >= 0)
+        // What the person selected on the page goes along: "explain this".
+        const selected = "window.getSelection ? String(window.getSelection()).slice(0, 8000) : ''"
+        view.runJavaScript(selected, WebEngineScript.ApplicationWorld, selection => {
+            const id = Agent.start(input, view.tabId, view.url.toString(), view.title, selection || "")
+            if (id < 0 || bar.view !== view)
+                return
+            // With the sidebar open, the conversation goes there.
+            if (bar.agentSidebar && bar.agentSidebar.shown)
+                bar.agentSidebar.show(id)
+            else
+                agentCard.openFor(id)
+        })
+    }
+
+    // Where a task shows: the sidebar once it is a conversation, else the card.
+    function showTask(id) {
+        const json = Agent.taskJson(id)
+        const conversation = json.length > 0 && JSON.parse(json).earlier.length > 0
+        if (bar.agentSidebar && (bar.agentSidebar.shown || conversation))
+            bar.agentSidebar.show(id)
+        else
             agentCard.openFor(id)
     }
 
@@ -100,12 +122,17 @@ Rectangle {
                 y: urlBar.height + Theme.spacing
                 width: Math.min(urlBar.width, Theme.paletteWidth)
                 onFinished: if (bar.view && !urlBar.activeFocus) bar.view.forceActiveFocus()
+                onMoveToSide: task => {
+                    if (bar.agentSidebar)
+                        bar.agentSidebar.show(task)
+                }
             }
         }
         AgentChip {
             visible: bar.agentTask >= 0 && !agentCard.opened
+                && !(bar.agentSidebar && bar.agentSidebar.shown && bar.agentSidebar.taskId === bar.agentTask)
             taskId: bar.agentTask
-            onClicked: agentCard.openFor(bar.agentTask)
+            onClicked: bar.showTask(bar.agentTask)
         }
         IconButton {
             readonly property bool reading: bar.view?.reader.active ?? false

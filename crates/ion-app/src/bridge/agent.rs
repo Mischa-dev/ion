@@ -38,8 +38,9 @@ pub mod qobject {
         fn suggest(self: &Agent, input: &QString) -> QString;
 
         /// Start the task `input` asks for (`@ion …` or `!ai …`) on the tab
-        /// `tab`, now showing `url` titled `title`. Returns the task id, or
-        /// -1 when `input` isn't for an agent or agents are off.
+        /// `tab`, now showing `url` titled `title` with `selection` selected.
+        /// Returns the task id, or -1 when `input` isn't for an agent or
+        /// agents are off.
         #[qinvokable]
         fn start(
             self: Pin<&mut Agent>,
@@ -47,6 +48,7 @@ pub mod qobject {
             tab: i32,
             url: &QString,
             title: &QString,
+            selection: &QString,
         ) -> i32;
 
         /// Ask `question` as a follow-up to `task` once it has answered (or
@@ -63,9 +65,10 @@ pub mod qobject {
         ) -> bool;
 
         /// The task as JSON: `{id, agent, agentName, tab, question, status,
-        /// steps: [{text, status}], answer, error, prompt, acting,
+        /// steps: [{text, status}], answer, draft, error, prompt, acting,
         /// takenOver, opened, earlier}`, where `prompt` is `{text, detail, choices: [{id,
-        /// label}]}` while waiting for the person, `acting` says the agent
+        /// label}]}` while waiting for the person, `draft` is the answer
+        /// as far as the model has written it, `acting` says the agent
         /// has been changing the page, `takenOver` that the person took one
         /// of its tabs back, and `opened` lists the background tabs it
         /// opened as `[{tab, title}]`, and `earlier` holds the questions
@@ -174,6 +177,7 @@ pub mod qobject {
 use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
@@ -364,6 +368,7 @@ impl qobject::Agent {
         tab: i32,
         url: &QString,
         title: &QString,
+        selection: &QString,
     ) -> i32 {
         let Some(ask) = invoke::parse(&input.to_string()) else {
             return -1;
@@ -379,6 +384,7 @@ impl qobject::Agent {
         let context = Context {
             title: title.to_string(),
             url: url.to_string(),
+            selection: selection.to_string(),
         };
         let name = ion_safety::global().policy().display_name(&ask.agent);
         let instructions = ion_config::global()
@@ -426,6 +432,7 @@ impl qobject::Agent {
         let context = Context {
             title: title.to_string(),
             url: url.to_string(),
+            selection: String::new(),
         };
         let mut tabs = None;
         if let Some(running) = self.as_mut().rust_mut().tasks.get_mut(&task) {
@@ -465,7 +472,19 @@ impl qobject::Agent {
                         Ok(model) => {
                             let thread = self.qt_thread();
                             std::thread::spawn(move || {
-                                let reply = model.reply(&messages, &Tool::ALL);
+                                // Show the answer as it is written, a few
+                                // times a second rather than per token.
+                                let mut unsent = String::new();
+                                let mut last = Instant::now();
+                                let mut show = |piece: &str| {
+                                    unsent.push_str(piece);
+                                    if last.elapsed() >= Duration::from_millis(60) {
+                                        let text = std::mem::take(&mut unsent);
+                                        let _ = thread.queue(move |obj| obj.model_text(id, text));
+                                        last = Instant::now();
+                                    }
+                                };
+                                let reply = model.reply_streaming(&messages, &Tool::ALL, &mut show);
                                 let _ = thread.queue(move |obj| obj.model_done(id, reply));
                             });
                         }
@@ -524,6 +543,13 @@ impl qobject::Agent {
             }
         }
         self.bump(id);
+    }
+
+    fn model_text(mut self: Pin<&mut Self>, id: i32, text: String) {
+        if let Some(running) = self.as_mut().rust_mut().tasks.get_mut(&id) {
+            running.task.model_text(&text);
+            self.bump(id);
+        }
     }
 
     fn model_done(mut self: Pin<&mut Self>, id: i32, reply: Result<Reply, String>) {
