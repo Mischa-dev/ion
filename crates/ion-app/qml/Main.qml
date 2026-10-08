@@ -416,6 +416,17 @@ ApplicationWindow {
         onActivated: Safety.stopAgents()
     }
 
+    // Ask an agent: the address bar, ready with "@ion ".
+    Shortcut {
+        sequence: { Config.revision; return Config.value("shortcuts.askAgent") || "Ctrl+E" }
+        enabled: { Config.revision; return Config.value("ai.enable") === true }
+        onActivated: {
+            navBar.urlBar.forceActiveFocus()
+            navBar.urlBar.text = "@ion "
+            navBar.urlBar.cursorPosition = navBar.urlBar.text.length
+        }
+    }
+
     AgentsStoppedNotice {}
     AgentTools { views: views }
 }

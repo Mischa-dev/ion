@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtWebEngine
 import Ion
 
 // Back / forward / reload and the URL bar for the current tab.
@@ -41,11 +42,16 @@ Rectangle {
     }
 
     function askAgent(input) {
-        if (!bar.view)
+        const view = bar.view
+        if (!view)
             return
-        const id = Agent.start(input, bar.view.tabId, bar.view.url.toString(), bar.view.title)
-        if (id >= 0)
-            agentCard.openFor(id)
+        // What the person selected on the page goes along: "explain this".
+        const selected = "window.getSelection ? String(window.getSelection()).slice(0, 8000) : ''"
+        view.runJavaScript(selected, WebEngineScript.ApplicationWorld, selection => {
+            const id = Agent.start(input, view.tabId, view.url.toString(), view.title, selection || "")
+            if (id >= 0 && bar.view === view)
+                agentCard.openFor(id)
+        })
     }
 
     color: Theme.surface
