@@ -114,8 +114,8 @@ pub fn script(sites: &BTreeMap<String, Site>, engine: &str) -> Option<Script> {
     : /Macintosh/.test(ua) ? "MacIntel" : /Windows/.test(ua) ? "Win32"
     : /Android/.test(ua) ? "Linux armv8l" : /Linux/.test(ua) ? "Linux x86_64" : null;
   if (platform) Object.defineProperty(Navigator.prototype, "platform", get(platform));
-  if (!hints && "userAgentData" in Navigator.prototype)
-    Object.defineProperty(Navigator.prototype, "userAgentData", get(undefined));
+  // Gone, not undefined, so `"userAgentData" in navigator` checks agree too.
+  if (!hints) delete Navigator.prototype.userAgentData;
 }})();
 "#
     );
