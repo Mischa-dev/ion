@@ -143,17 +143,32 @@ WebEngineView {
     // the one the whole redirect chain is sent with.
     property string navigationStart: ""
 
+    // The URL of the history entry the tab is on, or "" before the first
+    // page commits.
+    function currentHistoryUrl() {
+        const items = view.history.items
+        const current = view.history.backItems.rowCount()
+        if (current < 0 || current >= items.rowCount())
+            return ""
+        // Role 256 (Qt::UserRole) is WebEngineHistoryModel's UrlRole.
+        return String(items.data(items.index(current, 0), 256))
+    }
+
     onNavigationRequested: request => {
         if (!request.isMainFrame)
             return
         const target = request.url.toString()
-        // Chromium ignores a User-Agent change on a redirect, so a redirect
+        // Chromium ignores a User-Agent change on a server redirect, so one
         // into a site with another `userAgent` would arrive with the wrong
         // one. Start it over as a fresh navigation, which gets the header;
         // not when it carries a form (a 307/308 after a POST), since a
-        // fresh navigation would turn it into a GET and drop the form.
+        // fresh navigation would turn it into a GET and drop the form. A
+        // page script's `location.replace` also counts as a redirect, but
+        // its page is already in history and its request gets the header,
+        // so restarting would only break the replace.
         if (request.navigationType === WebEngineNavigationRequest.RedirectNavigation
                 && !request.hasFormData
+                && view.currentHistoryUrl() !== view.navigationStart
                 && !Sites.sameUserAgent(view.navigationStart, target)) {
             request.reject()
             Qt.callLater(() => view.url = target)
