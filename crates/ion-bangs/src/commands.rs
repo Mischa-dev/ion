@@ -155,6 +155,30 @@ pub const COMMANDS: &[Command] = &[
     ),
     command("resume-agents", "Resume agents", "ai start safety", ""),
     command(
+        "ask-agent",
+        "Ask Ion Agent",
+        "ai assistant chat question @ion",
+        "Ctrl+E",
+    ),
+    command(
+        "summarize-page",
+        "Summarize page with Ion Agent",
+        "ai assistant tldr summary explain",
+        "",
+    ),
+    command(
+        "agent-activity",
+        "Agent activity",
+        "ai log history permissions safety allowed take back",
+        "",
+    ),
+    command(
+        "agent-sidebar",
+        "Show or hide agent sidebar",
+        "ai assistant chat conversation panel",
+        "Ctrl+Shift+E",
+    ),
+    command(
         "screenshot",
         "Take screenshot",
         "capture image copy visible",

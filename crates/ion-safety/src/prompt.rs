@@ -65,7 +65,7 @@ pub struct Prompt {
 }
 
 /// How a page is named in prompts.
-fn site_name(site: Option<&Origin>) -> String {
+pub(crate) fn site_name(site: Option<&Origin>) -> String {
     match site {
         Some(o) => match o.display_host() {
             Some(host) => host.to_owned(),
@@ -76,7 +76,7 @@ fn site_name(site: Option<&Origin>) -> String {
     }
 }
 
-fn agent_phrase(action: &Action, site: &str) -> String {
+pub(crate) fn agent_phrase(action: &Action, site: &str) -> String {
     match action {
         Action::ReadPage => format!("read {site}"),
         Action::ListTabs => "see your open tabs".to_owned(),
