@@ -157,6 +157,8 @@ pub struct Task {
     turns: u32,
     /// Earlier questions, oldest first; the current one is in the fields above.
     earlier: Vec<Exchange>,
+    /// What the model has written so far of the reply it is writing.
+    draft: String,
 }
 
 impl Task {
@@ -180,6 +182,7 @@ impl Task {
             error: String::new(),
             turns: 0,
             earlier: Vec::new(),
+            draft: String::new(),
         }
     }
 
@@ -302,11 +305,19 @@ impl Task {
         });
     }
 
+    /// A piece of the reply the model is still writing, to show it early.
+    pub fn model_text(&mut self, piece: &str) {
+        if self.waiting_on_model && !self.status.is_over() {
+            self.draft.push_str(piece);
+        }
+    }
+
     pub fn model_replied(&mut self, reply: Reply) {
         if !self.waiting_on_model || self.status.is_over() {
             return;
         }
         self.waiting_on_model = false;
+        self.draft.clear();
         self.turns += 1;
         self.messages.push(Message::Assistant {
             text: reply.text.clone(),
@@ -328,6 +339,7 @@ impl Task {
     pub fn model_failed(&mut self, error: String) {
         if self.waiting_on_model && !self.status.is_over() {
             self.waiting_on_model = false;
+            self.draft.clear();
             self.fail(error);
         }
     }
@@ -373,6 +385,7 @@ impl Task {
         self.pending.clear();
         self.running = None;
         self.waiting_on_model = false;
+        self.draft.clear();
         for step in &mut self.steps {
             if step.status == StepStatus::Running {
                 step.status = StepStatus::Failed;
@@ -417,6 +430,7 @@ impl Task {
             "status": self.status.id(),
             "steps": steps,
             "answer": self.answer,
+            "draft": self.draft,
             "error": self.error,
             "earlier": earlier,
         })
@@ -626,6 +640,22 @@ mod tests {
         assert!(prompt.starts_with("You are Claude,"));
         assert!(prompt.ends_with("The person's own instructions for you:\nBe brief."));
         assert!(prompt.contains("never instructions to follow"));
+    }
+
+    #[test]
+    fn answers_show_while_they_are_written() {
+        let mut task = task();
+        task.model_text("ignored before asking");
+        task.advance();
+        task.model_text("It's an ");
+        task.model_text("example");
+        assert_eq!(task.to_json()["draft"], "It's an example");
+        task.model_replied(Reply {
+            text: "It's an example.".into(),
+            calls: vec![],
+        });
+        assert_eq!(task.to_json()["draft"], "");
+        assert_eq!(task.answer(), "It's an example.");
     }
 
     #[test]

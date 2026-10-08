@@ -28,6 +28,8 @@ Popup {
     readonly property bool working: task !== null
         && (task.status === "thinking" || task.status === "working")
     readonly property var prompt: task ? task.prompt : null
+    // Waiting on the model with nothing written yet.
+    readonly property bool thinking: task !== null && task.status === "thinking" && task.draft.length === 0
     // The agent has been changing the page, and whether the person took the
     // tab back from it.
     readonly property bool acting: task !== null && task.acting
@@ -234,7 +236,7 @@ Popup {
                     // The log: what it did, in a few words each.
                     ColumnLayout {
                         Layout.fillWidth: true
-                        visible: steps.count > 0 || (card.task !== null && card.task.status === "thinking")
+                        visible: steps.count > 0 || card.thinking
                         spacing: Theme.spacing / 2
 
                         Repeater {
@@ -274,7 +276,7 @@ Popup {
                         }
                         // Between steps, while the model decides what's next.
                         RowLayout {
-                            visible: card.task !== null && card.task.status === "thinking"
+                            visible: card.thinking
                             spacing: Theme.spacing * 2
                             // The header's ring already turns; one moving thing is enough.
                             Item {
@@ -400,8 +402,11 @@ Popup {
                     TextEdit {
                         Layout.fillWidth: true
                         // RichText always holds an HTML skeleton, so check the answer.
-                        visible: card.task !== null && card.task.answer.length > 0
-                        text: card.task ? Agent.answerHtml(card.task.answer) : ""
+                        // While the model writes, its draft shows here.
+                        readonly property string markdown: !card.task ? ""
+                            : card.task.answer.length > 0 ? card.task.answer : card.task.draft
+                        visible: markdown.length > 0
+                        text: Agent.answerHtml(markdown)
                         textFormat: TextEdit.RichText
                         readOnly: true
                         selectByMouse: true
