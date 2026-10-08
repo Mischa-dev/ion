@@ -5,6 +5,7 @@
 //! `ion-app` (QML + the cxx-qt bridge); everything that decides *what* happens
 //! lives here or in a sibling `ion-*` crate.
 
+pub mod load_error;
 pub mod navigation;
 
 /// Human-facing application name.

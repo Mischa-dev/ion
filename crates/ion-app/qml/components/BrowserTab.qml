@@ -76,6 +76,7 @@ WebEngineView {
         const darken = Theme.engine.darkenPage(url.toString())
         if (settings.forceDarkMode !== darken)
             settings.forceDarkMode = darken
+        loadError.leftFor(url)
         // A page's own `history.pushState`/`replaceState` moves the tab to a
         // new entry without a load; the next redirect chain starts there.
         Qt.callLater(() => {
@@ -91,6 +92,12 @@ WebEngineView {
     // Ion's when this tab's first load starts. Later loads don't reset it.
     property bool pageSchemeRestored: false
     onLoadingChanged: info => {
+        // Ion's own error page covers Chromium's until something replaces it;
+        // a load that only starts, or is stopped, leaves Chromium's in place.
+        if (info.status === WebEngineView.LoadFailedStatus)
+            loadError.showFor(info)
+        else if (info.status === WebEngineView.LoadSucceededStatus)
+            loadError.visible = false
         if (!pageSchemeRestored && info.status === WebEngineView.LoadStartedStatus) {
             pageSchemeRestored = true
             Theme.engine.applyPageScheme()
@@ -217,5 +224,15 @@ WebEngineView {
         function onPageSchemeChanged() {
             view.applyPageTheme()
         }
+    }
+
+    // Failed loads show LoadErrorPage, in Ion's colors, over Chromium's error
+    // page. That page stays enabled underneath because it makes the failed
+    // address the current entry, so the URL bar, title, Reload and Back treat
+    // it like any other page.
+    LoadErrorPage {
+        id: loadError
+        anchors.fill: parent
+        onRetry: view.reload()
     }
 }

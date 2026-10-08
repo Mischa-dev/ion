@@ -60,6 +60,10 @@ QtObject {
 
     // Typography
     readonly property int fontSize: 13
+    // Headings on Ion's own pages, such as the error page.
+    readonly property int titleFontSize: 22
+    // Widest a column of running text gets on Ion's own pages.
+    readonly property int readableWidth: 520
     // The smallest text shrinks to when fitting a tight space, such as a
     // workspace icon in the collapsed sidebar.
     readonly property int fontSizeMin: 8
