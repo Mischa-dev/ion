@@ -64,6 +64,11 @@ QtObject {
             return el && el.isConnected ? el : null;
         };
         const ionResult = value => JSON.stringify(value);
+        // Where the element is in the viewport, for the highlight.
+        const ionBox = el => {
+            const r = el.getBoundingClientRect();
+            return { x: r.left, y: r.top, width: r.width, height: r.height };
+        };
     `
 
     readonly property string readPageScript: "(function () {" + helpers + `
@@ -123,8 +128,9 @@ QtObject {
             if (el.disabled) return ionResult({ error: 'element [' + id + '] is disabled' });
             if (ionSubmits(el) && !allowSubmit)
                 return ionResult({ error: 'that would send the form now; read the page again' });
+            const box = ionBox(el);
             el.click();
-            return ionResult({});
+            return ionResult({ box: box });
         })(` + id + ", " + (allowSubmit ? "true" : "false") + ")"
     }
 
@@ -157,7 +163,7 @@ QtObject {
             }
             el.dispatchEvent(new Event('input', { bubbles: true }));
             el.dispatchEvent(new Event('change', { bubbles: true }));
-            return ionResult({});
+            return ionResult({ box: ionBox(el) });
         })(` + id + ", " + JSON.stringify(text) + ")"
     }
 
@@ -185,6 +191,21 @@ QtObject {
         }
     }
 
+    // Outlines `box` (viewport CSS pixels) on `view` for a moment.
+    property Component highlighter: AgentHighlight {}
+    function highlight(view, box) {
+        if (!box || box.width <= 0 || box.height <= 0)
+            return
+        const zoom = view.zoomFactor
+        const pad = 3
+        const x = box.x * zoom - pad, y = box.y * zoom - pad
+        const w = box.width * zoom + pad * 2, h = box.height * zoom + pad * 2
+        // Nothing to show for an element scrolled out of view.
+        if (x + w < 0 || y + h < 0 || x > view.width || y > view.height)
+            return
+        highlighter.createObject(view, { x: x, y: y, width: w, height: h })
+    }
+
     function afterSettling(view, minWait, done) {
         settler.createObject(tools, { view: view, minWait: minWait, done: done })
     }
@@ -203,11 +224,18 @@ QtObject {
             view.runJavaScript(script, WebEngineScript.ApplicationWorld, result => {
                 let out = null
                 try { out = JSON.parse(result) } catch (e) {}
-                if (!out)
+                if (!out) {
                     fail(qsTr("the page didn't answer"))
-                else if (out.error)
+                    return
+                }
+                if (out.error) {
                     fail(out.error)
-                else if (settle)
+                    return
+                }
+                // The box is for the person's eyes, not the model's.
+                highlight(view, out.box)
+                delete out.box
+                if (settle)
                     afterSettling(view, 400, () => ok(out))
                 else
                     ok(out)
