@@ -189,7 +189,7 @@ WebEngineView {
         if (!redirect || fromPage) {
             view.navigationStart = target
             view.reloading = request.navigationType === WebEngineNavigationRequest.ReloadNavigation
-                    || (!redirect && target === view.currentHistoryUrl())
+                    || target === view.currentHistoryUrl()
         }
         view.navigationEnd = target
         view.settings.javascriptEnabled = Sites.javascriptEnabled(target)
