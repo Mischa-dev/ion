@@ -207,8 +207,10 @@ append-only log, as are site permission answers and any rule change.
 - The log directory and files are private to the user (0700/0600 on Unix).
 - Retention: 30 days **(default)**, configurable with
   `safety.auditRetentionDays`; old files are pruned at startup.
-- The activity timeline UI (later) reads this log; screenshots for replay will
-  be kept separately and shorter.
+- The Agent activity view (palette, or the clock in the agent sidebar)
+  reads this log: what agents did and what you answered in the last 7 days,
+  and the remembered agent rules, each with Take back. Screenshots for
+  replay will be kept separately and shorter.
 
 ## 7. Storage and config
 

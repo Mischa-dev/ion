@@ -24,6 +24,8 @@ Rectangle {
     signal ask(string input)
     // Closed, so the page can take focus back.
     signal finished()
+    // The person wants to see what agents did and may do.
+    signal activityRequested()
 
     // Show `task` here, letting go of a finished one it replaces.
     function show(task) {
@@ -104,6 +106,13 @@ Rectangle {
                 color: Theme.text
                 font.pixelSize: Theme.fontSize
                 font.bold: true
+            }
+            IconButton {
+                implicitWidth: Theme.urlBarHeight - Theme.spacing
+                implicitHeight: implicitWidth
+                glyph: "◷"
+                tip: qsTr("Agent activity")
+                onClicked: sidebar.activityRequested()
             }
             IconButton {
                 implicitWidth: Theme.urlBarHeight - Theme.spacing
