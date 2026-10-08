@@ -79,9 +79,10 @@ Rectangle {
         Button {
             id: retryButton
             text: qsTr("Try again")
-            // Clicking leaves keyboard focus with the page, which Ctrl+R also
-            // retries; a focused button would keep it after the overlay hides.
-            focusPolicy: Qt.TabFocus
+            // Never takes keyboard focus: a hidden item keeps it, so typing
+            // would vanish after the retried page loads. Keyboard users
+            // retry with Reload (Ctrl+R), which does the same.
+            focusPolicy: Qt.NoFocus
             implicitHeight: Theme.urlBarHeight
             leftPadding: Theme.spacing * 3
             rightPadding: Theme.spacing * 3
@@ -98,8 +99,6 @@ Rectangle {
                 radius: Theme.radius
                 color: Theme.accent
                 opacity: retryButton.down ? 0.85 : retryButton.hovered ? 0.92 : 1
-                border.width: retryButton.visualFocus ? Theme.hairline * 2 : 0
-                border.color: Theme.text
             }
         }
     }
