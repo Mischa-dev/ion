@@ -14,6 +14,7 @@ bool attachUrlRequestInterceptor(QObject *profile, QWebEngineUrlRequestIntercept
 
 QString requestUrl(const QWebEngineUrlRequestInfo &info);
 QString requestFirstPartyUrl(const QWebEngineUrlRequestInfo &info);
+QString requestInitiator(const QWebEngineUrlRequestInfo &info);
 QString requestMethod(const QWebEngineUrlRequestInfo &info);
 int requestResourceType(const QWebEngineUrlRequestInfo &info);
 void blockRequest(QWebEngineUrlRequestInfo &info);

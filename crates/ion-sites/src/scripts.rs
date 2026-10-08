@@ -196,10 +196,16 @@ pub fn keyboard_mode() -> Script {
     }
 }
 
-/// Ion's own scripts for `config` (privacy signals, per-site CSS) followed by
-/// the files in `dir`.
-pub fn all_scripts(config: &Config, dir: Option<&Path>) -> (Vec<Script>, Vec<String>) {
+/// Ion's own scripts for `config` (privacy signals, per-site user agents,
+/// keyboard mode) followed by the files in `dir`. `engine_user_agent` is the
+/// engine's default user agent, which the `"chrome"` preset is made from.
+pub fn all_scripts(
+    config: &Config,
+    engine_user_agent: &str,
+    dir: Option<&Path>,
+) -> (Vec<Script>, Vec<String>) {
     let mut scripts = Vec::new();
+    scripts.extend(crate::agent::script(&config.sites, engine_user_agent));
     if config.privacy.global_privacy_control {
         scripts.push(global_privacy_control());
     }
@@ -223,7 +229,11 @@ mod tests {
     fn global_privacy_control_follows_config() {
         let mut config = Config::default();
         let names = |c: &Config| -> Vec<String> {
-            all_scripts(c, None).0.into_iter().map(|s| s.name).collect()
+            all_scripts(c, "", None)
+                .0
+                .into_iter()
+                .map(|s| s.name)
+                .collect()
         };
         assert_eq!(names(&config), ["ion-global-privacy-control"]);
         config.privacy.global_privacy_control = false;

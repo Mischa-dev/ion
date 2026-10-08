@@ -1,6 +1,8 @@
 //! `Sites` QML singleton: per-site settings from `[sites]` in config, and the
-//! user scripts Ion injects into pages (per-site CSS plus the files in
-//! `<config dir>/userscripts/`), all from `ion_sites`.
+//! user scripts Ion injects into pages (privacy signal, per-site user agents,
+//! keyboard mode and the files in `<config dir>/userscripts/`), all from
+//! `ion_sites`. The request interceptor in `adblock.rs` asks
+//! [`user_agent_for`] for each request's header.
 //!
 //! QML installs `scripts()` on the profile and re-installs it when the config
 //! changes or `revision` does (`reload()`, after editing files in the
@@ -39,6 +41,18 @@ pub mod qobject {
         #[qinvokable]
         fn reload(self: Pin<&mut Sites>);
 
+        /// Tell Ion the engine's default user agent (the profile's
+        /// `httpUserAgent` before any override), which the `"chrome"` preset
+        /// is made from. Call before `scripts()`.
+        /// Whether pages at `a` and `b` are sent the same user agent.
+        #[qinvokable]
+        #[cxx_name = "sameUserAgent"]
+        fn same_user_agent(self: &Sites, a: &QString, b: &QString) -> bool;
+
+        #[qinvokable]
+        #[cxx_name = "setEngineUserAgent"]
+        fn set_engine_user_agent(self: &Sites, user_agent: &QString);
+
         /// Create the userscripts folder if needed. False if it can't be.
         #[qinvokable]
         #[cxx_name = "ensureDirectory"]
@@ -48,6 +62,7 @@ pub mod qobject {
 
 use core::pin::Pin;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::{QList, QMap, QMapPair_QString_QVariant, QString, QVariant};
@@ -75,7 +90,32 @@ impl Default for SitesRust {
     }
 }
 
+static ENGINE_USER_AGENT: OnceLock<String> = OnceLock::new();
+
+/// The engine's default user agent, once QML has reported it.
+pub fn engine_user_agent() -> &'static str {
+    ENGINE_USER_AGENT.get().map_or("", String::as_str)
+}
+
+/// The user agent to send for requests made by pages at `url`, when
+/// `[sites]` overrides it.
+pub fn user_agent_for(url: &str) -> Option<String> {
+    let config = ion_config::global().config();
+    if config.sites.values().all(|site| site.user_agent.is_none()) {
+        return None;
+    }
+    ion_sites::agent::for_url(&config.sites, url, engine_user_agent())
+}
+
 impl qobject::Sites {
+    fn same_user_agent(&self, a: &QString, b: &QString) -> bool {
+        user_agent_for(&a.to_string()) == user_agent_for(&b.to_string())
+    }
+
+    fn set_engine_user_agent(&self, user_agent: &QString) {
+        let _ = ENGINE_USER_AGENT.set(user_agent.to_string());
+    }
+
     fn javascript_enabled(&self, url: &QString) -> bool {
         let config = ion_config::global().config();
         ion_sites::javascript_enabled(&config.sites, &url.to_string())
@@ -83,7 +123,8 @@ impl qobject::Sites {
 
     fn scripts(&self) -> QVariant {
         let config = ion_config::global().config();
-        let (scripts, warnings) = ion_sites::all_scripts(&config, self.dir.as_deref());
+        let (scripts, warnings) =
+            ion_sites::all_scripts(&config, engine_user_agent(), self.dir.as_deref());
         for warning in warnings {
             eprintln!("ion: userscripts: {warning}");
         }
