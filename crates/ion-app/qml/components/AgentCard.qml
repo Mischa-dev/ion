@@ -13,6 +13,8 @@ Popup {
 
     // The `Agent` task shown, or -1.
     property int taskId: -1
+    // The tab the person is looking at, which Take over takes back.
+    property int tabId: -1
     readonly property var task: {
         Agent.revision
         const json = taskId >= 0 ? Agent.taskJson(taskId) : ""
@@ -129,7 +131,7 @@ Popup {
                     visible: card.working && card.acting && !card.takenOver
                     implicitHeight: Theme.urlBarHeight - Theme.spacing
                     text: qsTr("Take over")
-                    onClicked: Agent.takeOver(card.taskId)
+                    onClicked: Agent.takeOver(card.taskId, card.tabId)
                 }
                 DialogButton {
                     visible: card.working
@@ -200,6 +202,28 @@ Popup {
                         text: qsTr("Thinking")
                         color: Theme.textMuted
                         font.pixelSize: Theme.fontSize - 1
+                    }
+                }
+            }
+
+            // The background tabs it opened, one click away.
+            Flow {
+                Layout.fillWidth: true
+                visible: card.task !== null && card.task.opened.length > 0
+                spacing: Theme.spacing
+
+                Repeater {
+                    model: card.task ? card.task.opened : []
+                    delegate: DialogButton {
+                        required property var modelData
+                        readonly property string title: modelData.title.length > 0 ? modelData.title : qsTr("Tab")
+                        implicitHeight: Theme.urlBarHeight - Theme.spacing
+                        text: title.length > 32 ? title.slice(0, 31) + "…" : title
+                        onClicked: {
+                            const index = Tabs.indexOfTab(modelData.tab)
+                            if (index >= 0)
+                                Tabs.activate(index)
+                        }
                     }
                 }
             }

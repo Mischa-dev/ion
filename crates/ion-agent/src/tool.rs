@@ -21,15 +21,18 @@ pub enum Tool {
     Fill,
     /// Open an address in the task's tab.
     GoTo,
+    /// Open an address in a new background tab the agent works in.
+    OpenTab,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 5] = [
+    pub const ALL: [Tool; 6] = [
         Tool::ReadPage,
         Tool::ListTabs,
         Tool::Click,
         Tool::Fill,
         Tool::GoTo,
+        Tool::OpenTab,
     ];
 
     /// The name the model calls it by.
@@ -40,6 +43,7 @@ impl Tool {
             Tool::Click => "click",
             Tool::Fill => "fill",
             Tool::GoTo => "go_to",
+            Tool::OpenTab => "open_tab",
         }
     }
 
@@ -63,7 +67,12 @@ impl Tool {
                 "Set the value of a text field or choose an option of a dropdown, by its number \
                  from the last read_page. Doesn't submit anything."
             }
-            Tool::GoTo => "Open a web address (http or https) in the person's tab.",
+            Tool::GoTo => "Open a web address (http or https) in the tab.",
+            Tool::OpenTab => {
+                "Open a web address (http or https) in a new background tab, without taking \
+                 the person away from their page. Returns the new tab's number; pass it as \
+                 `tab` to read_page, click, fill and go_to to work there."
+            }
         }
     }
 
@@ -73,7 +82,8 @@ impl Tool {
             "type": "integer",
             "description": "The element's number from read_page, without brackets."
         });
-        let (properties, required) = match self {
+        let url = json!({ "type": "string", "description": "An http or https address." });
+        let (mut properties, required) = match self {
             Tool::ReadPage | Tool::ListTabs => (json!({}), json!([])),
             Tool::Click => (json!({ "element": element }), json!(["element"])),
             Tool::Fill => (
@@ -86,11 +96,14 @@ impl Tool {
                 }),
                 json!(["element", "text"]),
             ),
-            Tool::GoTo => (
-                json!({ "url": { "type": "string", "description": "An http or https address." } }),
-                json!(["url"]),
-            ),
+            Tool::GoTo | Tool::OpenTab => (json!({ "url": url }), json!(["url"])),
         };
+        if self.takes_tab() {
+            properties["tab"] = json!({
+                "type": "integer",
+                "description": "A tab you opened with open_tab. Leave out for the person's tab."
+            });
+        }
         json!({
             "type": "object",
             "properties": properties,
@@ -99,10 +112,15 @@ impl Tool {
         })
     }
 
-    /// Whether the tool changes the page (and so shows the agent at work in
-    /// the tab, and pauses while the person has taken the tab back).
+    /// Whether the tool changes the page in the tab it works on (and so
+    /// shows the agent at work there).
     pub fn acts(self) -> bool {
         matches!(self, Tool::Click | Tool::Fill | Tool::GoTo)
+    }
+
+    /// Whether the tool works on one tab, which the model may name.
+    pub fn takes_tab(self) -> bool {
+        matches!(self, Tool::ReadPage | Tool::Click | Tool::Fill | Tool::GoTo)
     }
 }
 
@@ -178,6 +196,7 @@ pub enum Use {
     Click { element: u32 },
     Fill { element: u32, text: String },
     GoTo { url: String },
+    OpenTab { url: String },
 }
 
 impl Use {
@@ -215,16 +234,12 @@ impl Use {
                     .ok_or_else(|| "give the text to fill in".to_owned())?
                     .to_owned(),
             },
-            Tool::GoTo => {
-                let url = args["url"].as_str().unwrap_or_default().trim();
-                let scheme_ok = url.starts_with("https://") || url.starts_with("http://");
-                if !scheme_ok || Origin::parse(url).is_none() {
-                    return Err("give a full http or https address".to_owned());
-                }
-                Use::GoTo {
-                    url: url.to_owned(),
-                }
-            }
+            Tool::GoTo => Use::GoTo {
+                url: web_address(&args)?,
+            },
+            Tool::OpenTab => Use::OpenTab {
+                url: web_address(&args)?,
+            },
         })
     }
 
@@ -235,6 +250,7 @@ impl Use {
             Use::Click { .. } => Tool::Click,
             Use::Fill { .. } => Tool::Fill,
             Use::GoTo { .. } => Tool::GoTo,
+            Use::OpenTab { .. } => Tool::OpenTab,
         }
     }
 
@@ -245,6 +261,32 @@ impl Use {
             _ => None,
         }
     }
+}
+
+/// The tab a call names with its `tab` argument, if any. Only tools that
+/// work on one tab take it.
+pub fn tab_argument(tool: Tool, arguments: &str) -> Result<Option<u64>, String> {
+    if !tool.takes_tab() {
+        return Ok(None);
+    }
+    let args: Value = serde_json::from_str(arguments).unwrap_or(Value::Null);
+    match &args["tab"] {
+        Value::Null => Ok(None),
+        value => value
+            .as_u64()
+            .or_else(|| value.as_str()?.trim().parse().ok())
+            .map(Some)
+            .ok_or_else(|| "give the tab's number from open_tab".to_owned()),
+    }
+}
+
+fn web_address(args: &Value) -> Result<String, String> {
+    let url = args["url"].as_str().unwrap_or_default().trim();
+    let scheme_ok = url.starts_with("https://") || url.starts_with("http://");
+    if !scheme_ok || Origin::parse(url).is_none() {
+        return Err("give a full http or https address".to_owned());
+    }
+    Ok(url.to_owned())
 }
 
 /// A checked call, ready to ask the safety model about.
@@ -272,6 +314,7 @@ impl Plan {
             Use::Click { .. } => format!("Clicked {}", self.element_name()),
             Use::Fill { .. } => format!("Filled in {}", self.element_name()),
             Use::GoTo { url } => format!("Opened {}", host_or(url)),
+            Use::OpenTab { url } => format!("Opened {} in a background tab", host_or(url)),
         }
     }
 
@@ -297,8 +340,8 @@ pub enum PlanError {
     NoAddress,
 }
 
-/// Check `call` for `agent` on the task's tab `tab`, now showing `url`,
-/// whose last read found `elements`.
+/// Check `call` for `agent` on the tab `tab` it works on, now showing
+/// `url`, whose last read found `elements`.
 pub fn plan(
     agent: &str,
     call: Use,
@@ -380,12 +423,18 @@ pub fn plan(
             format!("Open {to}"),
             false,
         ),
+        (Use::OpenTab { url: to }, _) => (
+            Action::OpenTab,
+            format!("Opening {} in a background tab", host_or(to)),
+            format!("Open {to} in a background tab"),
+            false,
+        ),
         (Use::Click { .. } | Use::Fill { .. }, None) => unreachable!("checked above"),
     };
     // Going somewhere is decided on the destination; everything else on the
     // page the tab shows.
     let site_url = match &call {
-        Use::GoTo { url: to } => to.as_str(),
+        Use::GoTo { url: to } | Use::OpenTab { url: to } => to.as_str(),
         _ => url,
     };
     let site = if action.needs_site() {
@@ -590,6 +639,34 @@ mod tests {
         assert_eq!(go.request.site, Origin::parse("https://lwn.net"));
         assert_eq!(go.request.tab, Some(7));
         assert_eq!(go.step, "Opening lwn.net");
+    }
+
+    #[test]
+    fn background_tabs_are_opened_on_the_destination() {
+        let open = plan_for(Tool::OpenTab, r#"{"url": "https://lwn.net/"}"#).unwrap();
+        assert_eq!(open.request.action, Action::OpenTab);
+        assert_eq!(open.request.site, Origin::parse("https://lwn.net"));
+        assert_eq!(open.request.tab, None);
+        assert_eq!(open.step, "Opening lwn.net in a background tab");
+        assert_eq!(open.done_step(None), "Opened lwn.net in a background tab");
+    }
+
+    #[test]
+    fn tools_that_work_on_a_tab_take_its_number() {
+        assert_eq!(tab_argument(Tool::Click, r#"{"element": 1}"#), Ok(None));
+        assert_eq!(
+            tab_argument(Tool::Click, r#"{"element": 1, "tab": 12}"#),
+            Ok(Some(12))
+        );
+        assert_eq!(
+            tab_argument(Tool::ReadPage, r#"{"tab": "12"}"#),
+            Ok(Some(12))
+        );
+        assert!(tab_argument(Tool::ReadPage, r#"{"tab": "mine"}"#).is_err());
+        // Tools that don't work on one tab ignore it.
+        assert_eq!(tab_argument(Tool::OpenTab, r#"{"tab": 3}"#), Ok(None));
+        assert!(Tool::Fill.parameters()["properties"]["tab"].is_object());
+        assert!(Tool::ListTabs.parameters()["properties"]["tab"].is_null());
     }
 
     #[test]

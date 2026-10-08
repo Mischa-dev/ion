@@ -93,6 +93,7 @@ Rectangle {
 
             AgentCard {
                 id: agentCard
+                tabId: bar.view ? bar.view.tabId : -1
                 y: urlBar.height + Theme.spacing
                 width: Math.min(urlBar.width, Theme.paletteWidth)
                 onFinished: if (bar.view && !urlBar.activeFocus) bar.view.forceActiveFocus()
