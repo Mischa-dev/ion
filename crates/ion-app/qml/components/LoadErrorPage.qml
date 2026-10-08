@@ -3,7 +3,7 @@ import QtQuick.Controls
 import Ion
 
 // Ion's own page for a load that failed (no connection, unknown site, bad
-// certificate), in place of Chromium's. The text comes from `LoadErrors`.
+// certificate), drawn over Chromium's. The text comes from `LoadErrors`.
 Rectangle {
     id: root
 
@@ -25,13 +25,6 @@ Rectangle {
         detail = lines[1]
         pageUrl = info.url.toString()
         visible = true
-        if (parent.activeFocus)
-            takeFocus()
-    }
-
-    // Moves keyboard focus here, off the page underneath.
-    function takeFocus() {
-        retryButton.forceActiveFocus()
     }
 
     // Above the page content and the new-tab page, below find and prompts.
@@ -46,9 +39,6 @@ Rectangle {
         hoverEnabled: true
         onWheel: wheel => wheel.accepted = true
     }
-    // Keys the button doesn't use stop here rather than reach the page.
-    Keys.onPressed: event => event.accepted = true
-    Keys.onReleased: event => event.accepted = true
 
     Column {
         anchors.centerIn: parent
@@ -82,6 +72,9 @@ Rectangle {
         Button {
             id: retryButton
             text: qsTr("Try again")
+            // Clicking leaves keyboard focus with the page, which Ctrl+R also
+            // retries; a focused button would keep it after the overlay hides.
+            focusPolicy: Qt.TabFocus
             implicitHeight: Theme.urlBarHeight
             leftPadding: Theme.spacing * 3
             rightPadding: Theme.spacing * 3
