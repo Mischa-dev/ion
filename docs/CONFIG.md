@@ -95,6 +95,8 @@ vim = false                  # j/k scroll, gg/G, d/u, H/L back/forward,
 [privacy]
 globalPrivacyControl = true  # Sec-GPC header and navigator.globalPrivacyControl
 blockThirdPartyCookies = true
+clearOnExit = []             # any of "cookies", "cache", "history" (the cache
+                             # is cleared as Ion next starts)
 
 [ai]                         # Ion Agent: @ion or !ai in the address bar
 enable = false               # off until you turn it on
@@ -116,6 +118,9 @@ trust = "ask"                # see docs/SAFETY.md
 [sites."example.com"]        # per-site settings; a host covers its subdomains,
 javascript = true            # "*" covers every site, the most specific wins
                              # (CSS for a site goes in [theme.sites] above)
+# userAgent = "chrome"       # "chrome" (the engine's, minus "QtWebEngine"),
+                             # "firefox", "safari", "default" or a full string;
+                             # values other than "chrome" also blank client hints
 ```
 
 ## User scripts and styles
@@ -141,8 +146,8 @@ extensions folder (`~/.local/share/ion/extensions/` on Linux,
 `~/Library/Application Support/Ion/extensions/` on macOS) and from the
 `extensions` list, at startup. QtWebEngine runs Manifest V3 only; older
 extensions are listed as skipped, with the reason, in the Extensions dialog
-(palette: "Extensions"). The dialog switches each one on or off until Ion
-restarts and opens an extension's popup in a tab. With the Nix module,
+(palette: "Extensions"). The dialog switches each one on or off (Ion
+remembers which are off) and opens an extension's popup in a tab. With the Nix module,
 `programs.ion.extensions` takes paths or packages that build an unpacked
 extension.
 

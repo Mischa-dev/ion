@@ -76,12 +76,28 @@ WebEngineView {
         const darken = Theme.engine.darkenPage(url.toString())
         if (settings.forceDarkMode !== darken)
             settings.forceDarkMode = darken
+        loadError.leftFor(url)
+        // A page's own `history.pushState`/`replaceState` moves the tab to a
+        // new entry without a load; the next redirect chain starts there.
+        Qt.callLater(() => {
+            const committed = view.currentHistoryUrl()
+            if (committed !== "" && committed === view.url.toString()) {
+                view.navigationStart = committed
+                view.navigationEnd = committed
+            }
+        })
     }
 
     // Creating a tab resets the scheme QtWebEngine hands to pages, so restore
     // Ion's when this tab's first load starts. Later loads don't reset it.
     property bool pageSchemeRestored: false
     onLoadingChanged: info => {
+        // Ion's own error page covers Chromium's until something replaces it;
+        // a load that only starts, or is stopped, leaves Chromium's in place.
+        if (info.status === WebEngineView.LoadFailedStatus)
+            loadError.showFor(info)
+        else if (info.status === WebEngineView.LoadSucceededStatus)
+            loadError.visible = false
         if (!pageSchemeRestored && info.status === WebEngineView.LoadStartedStatus) {
             pageSchemeRestored = true
             Theme.engine.applyPageScheme()
@@ -91,6 +107,16 @@ WebEngineView {
         if (info.status === WebEngineView.LoadSucceededStatus
                 || info.status === WebEngineView.LoadFailedStatus)
             zoomFactor = Zoom.factorFor(url)
+        // Once a load ends (or is stopped), the redirect chain is over and
+        // the tab is on whatever entry committed.
+        if (info.status !== WebEngineView.LoadStartedStatus) {
+            reloading = false
+            const committed = currentHistoryUrl()
+            if (committed !== "") {
+                navigationStart = committed
+                navigationEnd = committed
+            }
+        }
     }
     onNewWindowRequested: request => view.newTabRequested(request)
 
@@ -142,9 +168,55 @@ WebEngineView {
 
     // Per-site JavaScript switch from `[sites]` in config, applied as each
     // page starts loading.
+    // Where the current main-frame navigation started; its user agent is
+    // the one the whole redirect chain is sent with.
+    property string navigationStart: ""
+    // Where that chain has got to, after any server redirects.
+    property string navigationEnd: ""
+    // Whether that navigation is to the page the tab is already on (a
+    // reload, or a link to the same URL) and hasn't finished loading.
+    property bool reloading: false
+
+    // The URL of the history entry the tab is on, or "" before the first
+    // page commits.
+    function currentHistoryUrl() {
+        const items = view.history.items
+        const current = view.history.backItems.rowCount()
+        if (current < 0 || current >= items.rowCount())
+            return ""
+        // Role 256 (Qt::UserRole) is WebEngineHistoryModel's UrlRole.
+        return String(items.data(items.index(current, 0), 256))
+    }
+
     onNavigationRequested: request => {
-        if (request.isMainFrame)
-            view.settings.javascriptEnabled = Sites.javascriptEnabled(request.url.toString())
+        if (!request.isMainFrame)
+            return
+        const target = request.url.toString()
+        // A page script's `location.replace` also counts as a redirect, but
+        // the chain it replaces has already committed (unless that chain went
+        // to the page the tab was on, whose entry matches before it commits).
+        // It is a fresh request with its own header, so it starts a chain.
+        const redirect = request.navigationType === WebEngineNavigationRequest.RedirectNavigation
+        const fromPage = redirect && !view.reloading
+                && view.currentHistoryUrl() === view.navigationEnd
+        // Chromium ignores a User-Agent change on a server redirect, so one
+        // into a site with another `userAgent` would arrive with the wrong
+        // one. Start it over as a fresh navigation, which gets the header;
+        // not when it carries a form (a 307/308 after a POST), since a
+        // fresh navigation would turn it into a GET and drop the form.
+        if (redirect && !fromPage && !request.hasFormData
+                && !Sites.sameUserAgent(view.navigationStart, target)) {
+            request.reject()
+            Qt.callLater(() => view.url = target)
+            return
+        }
+        if (!redirect || fromPage) {
+            view.navigationStart = target
+            view.reloading = request.navigationType === WebEngineNavigationRequest.ReloadNavigation
+                    || target === view.currentHistoryUrl()
+        }
+        view.navigationEnd = target
+        view.settings.javascriptEnabled = Sites.javascriptEnabled(target)
     }
 
     Connections {
@@ -152,5 +224,15 @@ WebEngineView {
         function onPageSchemeChanged() {
             view.applyPageTheme()
         }
+    }
+
+    // Failed loads show LoadErrorPage, in Ion's colors, over Chromium's error
+    // page. That page stays enabled underneath because it makes the failed
+    // address the current entry, so the URL bar, title, Reload and Back treat
+    // it like any other page.
+    LoadErrorPage {
+        id: loadError
+        anchors.fill: parent
+        onRetry: view.reload()
     }
 }

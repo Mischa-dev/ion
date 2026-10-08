@@ -154,6 +154,7 @@ Popup {
                         checked: row.modelData.isEnabled
                         onToggled: {
                             root.browser.profile.extensionManager.setExtensionEnabled(row.modelData, checked)
+                            Extensions.setDisabled(row.modelData.path.toString(), !checked)
                             root.refresh()
                         }
                     }

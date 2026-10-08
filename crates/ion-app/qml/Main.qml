@@ -120,6 +120,69 @@ ApplicationWindow {
             currentView.forceActiveFocus()
     }
 
+    // Delete what `[privacy] clearOnExit` lists, one asynchronous profile
+    // operation at a time, as Qt asks. At quit: cookies and history. At
+    // start: history and the cache (the cookie database is already gone,
+    // deleted in main.rs before the engine opened it). Returns whether a
+    // cache clear started; pages wait for profile.clearHttpCacheCompleted.
+    function clearOnExit(atStart) {
+        const items = Privacy.clearOnExit()
+        if (items.includes("cookies") && !atStart)
+            Privacy.clearCookies(window.profile)
+        if (items.includes("history")) {
+            History.clear()
+            History.save()
+        }
+        if (!atStart || !items.includes("cache"))
+            return false
+        window.profile.clearHttpCache()
+        return true
+    }
+
+    // Set while startup waits for clearOnExit's cache clear to finish. No
+    // timeout: Qt forbids navigating the profile before the clear completes.
+    property bool waitingForCacheClear: false
+    Connections {
+        target: window.waitingForCacheClear ? window.profile : null
+        function onClearHttpCacheCompleted() { window.finishStartup() }
+    }
+
+    // Extensions, then the restored session, then command-line URLs, else the
+    // home page. Runs once the startup cache clear (if any) is done. Tab views
+    // only exist once `startupFinished` is set at the end, so a tab opened
+    // while waiting loads once, after the session restore.
+    property bool startupFinished: false
+    property bool startupRunning: false
+    function finishStartup() {
+        if (startupRunning)
+            return
+        startupRunning = true
+        waitingForCacheClear = false
+        // Chrome extensions from config and Ion's extensions folder.
+        const extensionManager = window.profile.extensionManager
+        if (extensionManager) {
+            extensionPaths = Extensions.paths()
+            extensionPaths.forEach(path => extensionManager.loadExtension(path))
+        }
+        if (Config.value("general.restoreSession")) {
+            // Restoring replaces every tab; keep any opened while waiting
+            // (Ctrl+T, a URL handed over by a second launch).
+            const early = []
+            for (let i = 0; i < Tabs.count; i++)
+                early.push(Tabs.urlAt(i))
+            if (Tabs.restoreLastSession())
+                early.forEach((target, i) => openTab(target, i === 0))
+        }
+        // URLs on the command line (`ion %U` from the desktop file) open as new
+        // tabs after the restored ones; the first one becomes current.
+        const urls = Qt.application.arguments.slice(1).filter(arg => !arg.startsWith("-"))
+        urls.forEach((arg, i) => openTab(urlBarResolver.resolve(arg), i === 0))
+        if (Tabs.count === 0)
+            openTab(homeUrl)
+        startupFinished = true
+        sessionSaveTimer.restart()
+    }
+
     function focusUrlBar() {
         navBar.urlBar.forceActiveFocus()
         navBar.urlBar.selectAll()
@@ -129,29 +192,22 @@ ApplicationWindow {
         profile = profilePrototype.instance()
         Adblock.attach(window.profile)
         Privacy.apply(window.profile)
-        // Chrome extensions from config and Ion's extensions folder.
-        const extensionManager = window.profile.extensionManager
-        if (extensionManager) {
-            extensionPaths = Extensions.paths()
-            extensionPaths.forEach(path => extensionManager.loadExtension(path))
-        }
-        if (Config.value("general.restoreSession"))
-            Tabs.restoreLastSession()
-        // URLs on the command line (`ion %U` from the desktop file) open as new
-        // tabs after the restored ones; the first one becomes current.
-        const urls = Qt.application.arguments.slice(1).filter(arg => !arg.startsWith("-"))
-        urls.forEach((arg, i) => openTab(urlBarResolver.resolve(arg), i === 0))
-        if (Tabs.count === 0)
-            openTab(homeUrl)
+        // Again at start, in case the last quit was cut short; the rest of
+        // startup waits for it.
+        if (clearOnExit(true))
+            waitingForCacheClear = true
+        else
+            finishStartup()
     }
 
-    // Extensions load switched off; turn on each one that loaded cleanly.
-    // Switching one off in the Extensions dialog lasts until Ion restarts.
+    // Extensions load switched off; turn on each one that loaded cleanly,
+    // unless it was switched off in the Extensions dialog.
     Connections {
         target: window.profile?.extensionManager ?? null
         ignoreUnknownSignals: true
         function onLoadFinished(extension) {
-            if (extension.isLoaded && !extension.isEnabled && extension.error.length === 0)
+            if (extension.isLoaded && !extension.isEnabled && extension.error.length === 0
+                    && !Extensions.isDisabled(extension.path.toString()))
                 window.profile.extensionManager.setExtensionEnabled(extension, true)
         }
     }
@@ -187,7 +243,12 @@ ApplicationWindow {
     }
     Connections {
         target: Tabs
-        function onSessionChanged() { sessionSaveTimer.restart() }
+        // Not before startup restores the saved session, or it would be
+        // overwritten by tabs opened while waiting.
+        function onSessionChanged() {
+            if (window.startupFinished)
+                sessionSaveTimer.restart()
+        }
     }
     Connections {
         target: History
@@ -201,8 +262,12 @@ ApplicationWindow {
     Connections {
         target: Qt.application
         function onAboutToQuit() {
-            Tabs.saveSession()
+            // Before startup restores it, the tab list would overwrite the
+            // saved session.
+            if (window.startupFinished)
+                Tabs.saveSession()
             History.save()
+            window.clearOnExit(false)
         }
     }
 
@@ -292,7 +357,9 @@ ApplicationWindow {
 
             Repeater {
                 id: views
-                model: Tabs
+                // No page loads before startup's cache clear is done; tabs
+                // opened meanwhile get their views then.
+                model: window.startupFinished ? Tabs : null
 
                 onItemAdded: window.viewsRevision++
                 onItemRemoved: window.viewsRevision++
