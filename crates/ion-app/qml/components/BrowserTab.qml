@@ -74,16 +74,18 @@ WebEngineView {
         const darken = Theme.engine.darkenPage(url.toString())
         if (settings.forceDarkMode !== darken)
             settings.forceDarkMode = darken
+        loadError.leftFor(url)
     }
 
     // Creating a tab resets the scheme QtWebEngine hands to pages, so restore
     // Ion's when this tab's first load starts. Later loads don't reset it.
     property bool pageSchemeRestored: false
     onLoadingChanged: info => {
-        // Ion's own error page covers Chromium's.
+        // Ion's own error page covers Chromium's until something replaces it;
+        // a load that only starts, or is stopped, leaves Chromium's in place.
         if (info.status === WebEngineView.LoadFailedStatus)
             loadError.showFor(info)
-        else if (info.status === WebEngineView.LoadStartedStatus)
+        else if (info.status === WebEngineView.LoadSucceededStatus)
             loadError.visible = false
         if (!pageSchemeRestored && info.status === WebEngineView.LoadStartedStatus) {
             pageSchemeRestored = true

@@ -27,6 +27,13 @@ Rectangle {
         visible = true
     }
 
+    // Hides the page once the view moves on to another address, so a page
+    // that is still loading shows as it renders.
+    function leftFor(url) {
+        if (visible && url.toString() !== pageUrl)
+            visible = false
+    }
+
     // Above the page content and the new-tab page, below find and prompts.
     z: 6
     visible: false
