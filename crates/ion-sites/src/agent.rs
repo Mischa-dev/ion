@@ -66,8 +66,9 @@ pub fn for_url(sites: &BTreeMap<String, Site>, url: &str, engine: &str) -> Optio
         .and_then(|value| resolve(value, engine))
 }
 
-/// A page script that makes `navigator.userAgent` (and `appVersion`) agree
-/// with the header on sites that override it. `None` when no entry does.
+/// A page script that makes `navigator.userAgent` (and `appVersion`, `vendor`,
+/// `productSub`, `platform`) agree with the header on sites that override it.
+/// `None` when no entry does.
 pub fn script(sites: &BTreeMap<String, Site>, engine: &str) -> Option<Script> {
     // (site, user agent or null for the engine's, keep client hints)
     let mut entries: Vec<(String, Option<String>, bool)> = sites
@@ -103,6 +104,15 @@ pub fn script(sites: &BTreeMap<String, Site>, engine: &str) -> Option<Script> {
   const get = (value) => ({{ get: () => value, configurable: true, enumerable: true }});
   Object.defineProperty(Navigator.prototype, "userAgent", get(ua));
   Object.defineProperty(Navigator.prototype, "appVersion", get(ua.replace(/^Mozilla\//, "")));
+  // The other identity fields, so they don't contradict the claimed browser.
+  const gecko = /Firefox\//.test(ua) && !/AppleWebKit/.test(ua);
+  const apple = /Version\/[\d.]+.*Safari\//.test(ua) && !/Chrome|Chromium/.test(ua);
+  Object.defineProperty(Navigator.prototype, "vendor",
+    get(gecko ? "" : apple ? "Apple Computer, Inc." : "Google Inc."));
+  Object.defineProperty(Navigator.prototype, "productSub", get(gecko ? "20100101" : "20030107"));
+  const platform = /iPhone|iPad/.test(ua) ? "iPhone" : /Macintosh/.test(ua) ? "MacIntel"
+    : /Windows/.test(ua) ? "Win32" : /Android|Linux/.test(ua) ? "Linux x86_64" : null;
+  if (platform) Object.defineProperty(Navigator.prototype, "platform", get(platform));
   if (!hints && "userAgentData" in Navigator.prototype)
     Object.defineProperty(Navigator.prototype, "userAgentData", get(undefined));
 }})();
@@ -194,5 +204,13 @@ mod tests {
         let s = script(&sites(&[("a.org", "x/\"1</script>")]), ENGINE).unwrap();
         assert_eq!(s.world, World::Main);
         assert!(s.source.contains(r#"[["a.org","x/\"1</script>",false]]"#));
+    }
+
+    #[test]
+    fn script_keeps_the_other_identity_fields_consistent() {
+        let s = script(&sites(&[("a.org", "safari")]), ENGINE).unwrap();
+        for field in ["\"vendor\"", "\"productSub\"", "\"platform\""] {
+            assert!(s.source.contains(field), "{field}");
+        }
     }
 }
