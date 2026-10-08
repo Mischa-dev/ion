@@ -417,4 +417,5 @@ ApplicationWindow {
     }
 
     AgentsStoppedNotice {}
+    AgentTools { views: views }
 }
