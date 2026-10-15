@@ -38,9 +38,14 @@ pub struct Bookmarks {
 
 /// Whether a URL can be bookmarked. Internal and blank pages can not.
 pub fn is_bookmarkable(url: &str) -> bool {
-    ["https://", "http://", "file://"]
-        .iter()
-        .any(|scheme| url.starts_with(scheme))
+    let Ok(url) = url::Url::parse(url) else {
+        return false;
+    };
+    match url.scheme() {
+        "http" | "https" => url.host_str().is_some(),
+        "file" => true,
+        _ => false,
+    }
 }
 
 impl Bookmarks {

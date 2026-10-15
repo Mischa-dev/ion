@@ -181,11 +181,8 @@ fn is_safe_selector(selector: &str) -> bool {
                     return false;
                 }
             }
-            ('\\', _) => {
-                if chars.next().is_none() {
-                    return false;
-                }
-            }
+            ('\\', _) if chars.next().is_none() => return false,
+            ('\\', _) => {}
             ('"' | '\'', None) => quote = Some(c),
             (c, Some(q)) if c == q => quote = None,
             ('\n' | '\r' | '\x0c', Some(_)) => return false,
