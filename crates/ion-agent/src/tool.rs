@@ -178,7 +178,15 @@ impl Element {
 }
 
 fn clip(text: &str, max: usize) -> String {
-    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut words = text.split_whitespace();
+    let mut text = String::with_capacity(text.len());
+    if let Some(first) = words.next() {
+        text.push_str(first);
+        for word in words {
+            text.push(' ');
+            text.push_str(word);
+        }
+    }
     if text.chars().count() > max {
         let mut cut: String = text.chars().take(max - 1).collect();
         cut.push('…');

@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 use std::fmt;
+use std::fmt::Write;
 
 use adblock::Engine;
 use adblock::lists::{FilterFormat, FilterSet, ParseOptions, RuleTypes};
@@ -156,10 +157,13 @@ impl Blocker {
 /// A style sheet hiding everything `selectors` match. One rule per selector,
 /// so a selector the browser doesn't understand only voids itself.
 pub fn hiding_css(selectors: &[String]) -> String {
-    selectors
-        .iter()
-        .map(|s| format!("{s}{{display:none!important}}\n"))
-        .collect()
+    let selector_bytes = selectors.iter().map(String::len).sum::<usize>();
+    let mut css = String::with_capacity(selector_bytes + selectors.len() * 25);
+    for selector in selectors {
+        // Writing to a String cannot fail.
+        writeln!(css, "{selector}{{display:none!important}}").unwrap();
+    }
+    css
 }
 
 /// Selectors go into a style sheet verbatim, so one that could close its rule

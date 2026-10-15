@@ -25,9 +25,9 @@ pub struct Bookmark {
 }
 
 #[derive(Default, Serialize, Deserialize)]
-struct BookmarksFile {
+struct BookmarksFile<T = Vec<Bookmark>> {
     #[serde(default)]
-    bookmarks: Vec<Bookmark>,
+    bookmarks: T,
 }
 
 /// All bookmarks. Each URL is bookmarked at most once.
@@ -76,7 +76,7 @@ impl Bookmarks {
     /// Write bookmarks to `path` atomically.
     pub fn save(&self, path: &Path) -> io::Result<()> {
         let file = BookmarksFile {
-            bookmarks: self.items.clone(),
+            bookmarks: &self.items,
         };
         let json = serde_json::to_vec_pretty(&file).map_err(io::Error::other)?;
         if let Some(parent) = path.parent() {

@@ -382,7 +382,17 @@ fn absolute(link: &str, base: Option<&Url>) -> Option<String> {
 
 /// Collapse runs of whitespace to single spaces and trim.
 fn collapse(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
+    let mut words = text.split_whitespace();
+    let Some(first) = words.next() else {
+        return String::new();
+    };
+    let mut collapsed = String::with_capacity(text.len());
+    collapsed.push_str(first);
+    for word in words {
+        collapsed.push(' ');
+        collapsed.push_str(word);
+    }
+    collapsed
 }
 
 pub(crate) fn escape_into(text: &str, out: &mut String) {

@@ -48,9 +48,9 @@ impl HistoryEntry {
 }
 
 #[derive(Default, Serialize, Deserialize)]
-struct HistoryFile {
+struct HistoryFile<T = Vec<HistoryEntry>> {
     #[serde(default)]
-    entries: Vec<HistoryEntry>,
+    entries: T,
 }
 
 /// The visited pages, newest knowledge first.
@@ -103,7 +103,7 @@ impl History {
 
     pub fn save(&self, path: &Path) -> io::Result<()> {
         let file = HistoryFile {
-            entries: self.entries.clone(),
+            entries: &self.entries,
         };
         let json = serde_json::to_vec(&file).map_err(io::Error::other)?;
         write_atomic(path, &json)
