@@ -254,10 +254,10 @@ impl Safety {
         entry.reason = overridden.map(|r| r.to_string());
         entry.detail = Some(choice.id().to_owned());
         self.log(entry);
-        if let Some(rule) = rule {
-            if self.policy.add_user_rule(rule) {
-                self.save();
-            }
+        if let Some(rule) = rule
+            && self.policy.add_user_rule(rule)
+        {
+            self.save();
         }
         Ok(verdict)
     }

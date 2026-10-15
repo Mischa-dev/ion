@@ -152,10 +152,10 @@ impl Palette {
             return finish(bookmark_items(bookmarks, &[], rest.trim()));
         }
 
-        if let Some(trigger) = input.strip_prefix('!') {
-            if !trigger.contains(char::is_whitespace) {
-                return finish(self.bang_completions(trigger));
-            }
+        if let Some(trigger) = input.strip_prefix('!')
+            && !trigger.contains(char::is_whitespace)
+        {
+            return finish(self.bang_completions(trigger));
         }
 
         let query = input.trim();
@@ -219,15 +219,15 @@ impl Palette {
                 score: i32::MAX,
             });
         }
-        if let Some(trigger) = query.strip_prefix('!') {
-            if !trigger.contains(char::is_whitespace) {
-                let exact = trigger.to_lowercase();
-                rest.extend(
-                    self.bang_completions(trigger)
-                        .into_iter()
-                        .filter(|item| item.hint[1..] != exact),
-                );
-            }
+        if let Some(trigger) = query.strip_prefix('!')
+            && !trigger.contains(char::is_whitespace)
+        {
+            let exact = trigger.to_lowercase();
+            rest.extend(
+                self.bang_completions(trigger)
+                    .into_iter()
+                    .filter(|item| item.hint[1..] != exact),
+            );
         }
         if !query.starts_with('!') {
             // Switching to the tab you're already in isn't a suggestion.

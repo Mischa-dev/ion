@@ -120,14 +120,14 @@ fn firefox_default_profile(root: &Path) -> Option<PathBuf> {
         };
         if section.starts_with("Install") && key == "Default" {
             install_default.get_or_insert_with(|| value.to_owned());
-        } else if section.starts_with("Profile") {
-            if let Some(p) = profiles.last_mut() {
-                match key {
-                    "Path" => p.0 = value.to_owned(),
-                    "IsRelative" => p.1 = value != "0",
-                    "Default" => p.2 = value == "1",
-                    _ => {}
-                }
+        } else if section.starts_with("Profile")
+            && let Some(p) = profiles.last_mut()
+        {
+            match key {
+                "Path" => p.0 = value.to_owned(),
+                "IsRelative" => p.1 = value != "0",
+                "Default" => p.2 = value == "1",
+                _ => {}
             }
         }
     }
