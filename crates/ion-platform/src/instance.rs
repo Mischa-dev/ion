@@ -91,16 +91,40 @@ pub fn urls_from_args(args: impl IntoIterator<Item = String>, cwd: &Path) -> Vec
 
 /// Where the socket for `profile` lives: `$XDG_RUNTIME_DIR/<app_id>/` on Linux
 /// sessions that have one, otherwise a per-user directory under the temp dir
-/// (`$TMPDIR` is already per-user on macOS).
+/// (`$TMPDIR` is already per-user on macOS). The fallback never incorporates
+/// `$USER`: environment values are untrusted and may contain path separators.
 pub fn socket_path(app_id: &str, profile: &str) -> PathBuf {
+    let app_id = path_component(app_id);
+    let profile = path_component(profile);
     let dir = match std::env::var_os("XDG_RUNTIME_DIR").filter(|d| !d.is_empty()) {
-        Some(runtime) => PathBuf::from(runtime).join(app_id),
+        Some(runtime) => PathBuf::from(runtime).join(&app_id),
         None => {
-            let user = std::env::var("USER").unwrap_or_default();
+            #[cfg(unix)]
+            let user = unsafe { libc::geteuid() }.to_string();
+            #[cfg(not(unix))]
+            let user = "user";
             std::env::temp_dir().join(format!("{app_id}-{user}"))
         }
     };
     dir.join(format!("{profile}.sock"))
+}
+
+fn path_component(value: &str) -> String {
+    let value: String = value
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    if value.is_empty() || value == "." || value == ".." {
+        "default".to_owned()
+    } else {
+        value
+    }
 }
 
 /// Outcome of [`claim`].
@@ -249,6 +273,37 @@ mod fallback {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn fallback_socket_path_does_not_trust_user_environment() {
+        // SAFETY: this test restores the process environment before returning.
+        let old_runtime = std::env::var_os("XDG_RUNTIME_DIR");
+        let old_user = std::env::var_os("USER");
+        unsafe {
+            std::env::remove_var("XDG_RUNTIME_DIR");
+            std::env::set_var("USER", "../../attacker");
+        }
+        let path = socket_path("dev.ion.Ion", "Default");
+        unsafe {
+            match old_runtime {
+                Some(v) => std::env::set_var("XDG_RUNTIME_DIR", v),
+                None => std::env::remove_var("XDG_RUNTIME_DIR"),
+            }
+            match old_user {
+                Some(v) => std::env::set_var("USER", v),
+                None => std::env::remove_var("USER"),
+            }
+        }
+        assert!(!path.to_string_lossy().contains("attacker"));
+        assert!(path.ends_with("Default.sock"));
+    }
+
+    #[test]
+    fn socket_names_cannot_escape_the_runtime_directory() {
+        assert_eq!(path_component("../../profile/name"), ".._.._profile_name");
+        assert_eq!(path_component(".."), "default");
+    }
 
     #[test]
     fn requests_round_trip() {

@@ -369,13 +369,15 @@ fn attributes(el: ElementRef, base: Option<&Url>) -> String {
     out
 }
 
-/// `link` resolved against `base`, if it's a web or mail link.
+/// `link` resolved against `base`, if it is safe to expose on the reader
+/// page. In particular, a web page must never be able to smuggle a `file:`
+/// link into Ion's privileged reader document.
 fn absolute(link: &str, base: Option<&Url>) -> Option<String> {
     let url = match base {
         Some(base) => base.join(link.trim()).ok()?,
         None => Url::parse(link.trim()).ok()?,
     };
-    matches!(url.scheme(), "http" | "https" | "mailto" | "file").then(|| url.to_string())
+    matches!(url.scheme(), "http" | "https" | "mailto").then(|| url.to_string())
 }
 
 /// Collapse runs of whitespace to single spaces and trim.
@@ -428,6 +430,24 @@ mod tests {
             </article>
             <footer><p>{PROSE}</p></footer>"#
         )
+    }
+
+    #[test]
+    fn reader_links_cannot_open_local_files_or_active_schemes() {
+        let html = page(&format!(
+            r#"<article><p>{PROSE} {PROSE} {PROSE}</p>
+            <p><a href="file:///etc/passwd">local</a>
+            <a href="javascript:alert(1)">active</a>
+            <a href="/safe">safe</a></p></article>"#
+        ));
+        let article = extract(&html, "https://example.com/story").unwrap();
+        assert!(!article.content.contains("file:///"));
+        assert!(!article.content.contains("javascript:"));
+        assert!(
+            article
+                .content
+                .contains("href=\"https://example.com/safe\"")
+        );
     }
 
     #[test]
