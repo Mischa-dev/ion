@@ -317,8 +317,17 @@ impl TabList {
     /// Returns the new index.
     pub fn cycle(&mut self, step: isize) -> Option<usize> {
         let rows = self.rows_in(self.current_workspace());
-        let at = rows.iter().position(|&i| i == self.current)? as isize;
-        self.current = rows[(at + step).rem_euclid(rows.len() as isize) as usize];
+        let at = rows.iter().position(|&i| i == self.current)?;
+        // Do the addition in two bounded pieces. `at + step` can overflow for
+        // callers that use an extreme step even though the final, wrapped
+        // index is always tiny.
+        let offset = step.unsigned_abs() % rows.len();
+        let next = if step < 0 {
+            (at + rows.len() - offset) % rows.len()
+        } else {
+            (at + offset) % rows.len()
+        };
+        self.current = rows[next];
         Some(self.current)
     }
 
@@ -485,7 +494,15 @@ impl TabList {
             .iter()
             .map(|w| w.id)
             .max()
-            .map_or(0, |m| m + 1);
+            .and_then(|m| m.checked_add(1))
+            // A hand-edited/restored session can contain `u32::MAX`. Reuse a
+            // gap instead of overflowing (and, in release builds, silently
+            // creating a duplicate id).
+            .unwrap_or_else(|| {
+                (0..u32::MAX)
+                    .find(|candidate| self.workspace(*candidate).is_none())
+                    .expect("the in-memory workspace list cannot contain every u32 id")
+            });
         let name = match name.trim() {
             "" => format!("Workspace {}", self.workspaces.len() + 1),
             name => name.to_owned(),
@@ -726,6 +743,8 @@ mod tests {
         assert_eq!(l.cycle(-1), Some(2));
         assert_eq!(l.cycle(1), Some(0));
         assert_eq!(l.cycle(4), Some(1));
+        assert_eq!(l.cycle(isize::MAX), Some(2));
+        assert_eq!(l.cycle(isize::MIN), Some(0));
         assert_eq!(TabList::new().cycle(1), None);
     }
 
@@ -827,6 +846,29 @@ mod tests {
         l.open(i + 1, "w2", "", false);
         assert_eq!(l.rows_in(work), [1, 2]);
         assert_eq!(l.rows_in(0), [0]);
+    }
+
+    #[test]
+    fn adding_a_workspace_after_the_largest_id_reuses_a_gap() {
+        let session = Session {
+            workspaces: vec![
+                SavedWorkspace {
+                    id: 0,
+                    name: "Default".into(),
+                    ..SavedWorkspace::default()
+                },
+                SavedWorkspace {
+                    id: u32::MAX,
+                    name: "Imported".into(),
+                    ..SavedWorkspace::default()
+                },
+            ],
+            ..Session::default()
+        };
+        let mut list = TabList::from_session(&session);
+        let id = list.add_workspace("Work", "");
+        assert_eq!(id, 1);
+        assert_eq!(list.workspaces().iter().filter(|w| w.id == id).count(), 1);
     }
 
     #[test]
