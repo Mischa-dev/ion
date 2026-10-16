@@ -110,12 +110,31 @@ impl History {
     }
 
     fn reindex(&mut self) {
-        self.by_url = self
-            .entries
-            .iter()
-            .enumerate()
-            .map(|(i, e)| (e.url.clone(), i))
-            .collect();
+        // Older, hand-edited, or partially recovered files can contain the
+        // same URL more than once. Leaving those duplicates in `entries`
+        // makes searches show a page repeatedly while all mutations happen
+        // to only the last copy selected by `HashMap::collect`.
+        let mut unique: Vec<HistoryEntry> = Vec::with_capacity(self.entries.len());
+        let mut by_url: HashMap<String, usize> = HashMap::with_capacity(self.entries.len());
+        for entry in self.entries.drain(..) {
+            if let Some(&i) = by_url.get(&entry.url) {
+                let here = &mut unique[i];
+                here.visits = here.visits.max(entry.visits);
+                if entry.last_visit > here.last_visit {
+                    here.last_visit = entry.last_visit;
+                    if !entry.title.is_empty() {
+                        here.title = entry.title;
+                    }
+                } else if here.title.is_empty() {
+                    here.title = entry.title;
+                }
+            } else {
+                by_url.insert(entry.url.clone(), unique.len());
+                unique.push(entry);
+            }
+        }
+        self.entries = unique;
+        self.by_url = by_url;
     }
 
     pub fn len(&self) -> usize {
@@ -418,6 +437,34 @@ mod tests {
             loaded.get("https://a.example/"),
             h.get("https://a.example/")
         );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn load_consolidates_duplicate_urls() {
+        let dir = test_dir("history-duplicates");
+        let path = dir.join("history.json");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            &path,
+            r#"{"entries":[
+                {"url":"https://a.example/","title":"Old","visits":7,"last_visit":10},
+                {"url":"https://a.example/","title":"New","visits":2,"last_visit":20},
+                {"url":"https://b.example/","title":"","visits":1,"last_visit":15}
+            ]}"#,
+        )
+        .unwrap();
+
+        let mut history = History::load(&path).unwrap();
+        assert_eq!(history.len(), 2);
+        let entry = history.get("https://a.example/").unwrap();
+        assert_eq!(
+            (entry.title.as_str(), entry.visits, entry.last_visit),
+            ("New", 7, 20)
+        );
+        history.record_visit("https://a.example/", "Newest", 30);
+        assert_eq!(history.len(), 2);
+        assert_eq!(history.get("https://a.example/").unwrap().visits, 8);
         std::fs::remove_dir_all(dir).unwrap();
     }
 
