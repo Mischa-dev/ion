@@ -57,7 +57,9 @@ nix flake check -L              # build, tests, lints, and packaging checks
 Enter an address or search in the location bar. Type `!name query` (or
 `query !name`) to search a site directly—for example `!gh cxx-qt`, `!nix
 ripgrep`, or `!yt`. A bang by itself opens that site. Unknown bangs fall back
-to the configured search engine.
+to the configured search engine. The built-in set lives in
+`crates/ion-bangs/src/bang.rs`; add, replace or remove bangs in the `[bangs]`
+config table ([docs/CONFIG.md](docs/CONFIG.md)).
 
 The command palette (`Ctrl/Cmd+K`) searches tabs, history, saved sessions,
 commands, settings, and bangs. Prefix a query with `!` to browse bangs or `>`
@@ -66,7 +68,10 @@ to browse commands and settings. Examples include `nord`, `vertical tabs`,
 
 Location-bar suggestions show the action Enter will perform, matching open
 tabs, history, and bang completions. Use Up/Down to select, Tab to complete a
-bang, and Alt+Enter to open a result in a new tab.
+bang, and Alt+Enter to open a result in a new tab. Addresses you have open or
+visited fill in as you type ("git" → "github.com/"; keep typing or press
+Backspace to drop it), and typing a bang's name without the `!` ("gh") offers
+that site's search: press Tab to switch to it.
 
 ### Keyboard shortcuts
 
