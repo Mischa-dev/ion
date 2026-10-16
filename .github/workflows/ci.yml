@@ -10,9 +10,13 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   check:
-    name: nix flake check (${{ matrix.os }})
+    name: Build, lint, and test (${{ matrix.os }})
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -24,5 +28,7 @@ jobs:
         with:
           extra_nix_config: |
             accept-flake-config = true
-      # Builds the package (with the workspace unit tests), clippy and format checks.
-      - run: nix flake check -L
+      # The flake checks build Ion, run all workspace tests, run Clippy with
+      # warnings denied, check Rust/Nix formatting, and validate packaging.
+      - name: Run build, lint, test, and packaging checks
+        run: nix flake check -L

@@ -26,11 +26,17 @@ const KNOWN_SCHEMES: &[&str] = &[
 /// A search engine described by a URL template containing `{}`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SearchEngine {
+    /// Name presented in search settings and suggestions.
     pub name: String,
+    /// URL template whose `{}` marker is replaced with the encoded query.
     pub template: String,
 }
 
 impl SearchEngine {
+    /// Create a search engine from its display name and URL template.
+    ///
+    /// The template should contain `{}`. Templates without it are accepted,
+    /// but [`url_for`](Self::url_for) then returns the unchanged template.
     pub fn new(name: impl Into<String>, template: impl Into<String>) -> Self {
         Self {
             name: name.into(),
@@ -63,6 +69,7 @@ pub enum Resolved {
 }
 
 impl Resolved {
+    /// Return the URL the browser should load for this resolution.
     pub fn url(&self) -> &str {
         match self {
             Resolved::Url(u) | Resolved::Search(u) | Resolved::Expanded(u) => u,
@@ -81,6 +88,7 @@ pub trait InputStep: Send + Sync {
 /// Resolves URL-bar input.
 #[derive(Clone, Default)]
 pub struct Omnibox {
+    /// Search provider used when the input does not look like an address.
     pub search: SearchEngine,
     steps: Vec<Arc<dyn InputStep>>,
 }
@@ -95,6 +103,7 @@ impl fmt::Debug for Omnibox {
 }
 
 impl Omnibox {
+    /// Create an omnibox with no custom input-resolution stages.
     pub fn new(search: SearchEngine) -> Self {
         Self {
             search,

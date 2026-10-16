@@ -6,8 +6,11 @@ use crate::tool::Tool;
 /// the JSON text it sent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolCall {
+    /// Provider-assigned identifier used when returning the tool result.
     pub id: String,
+    /// Browser tool name requested by the model.
     pub name: String,
+    /// JSON object encoded as text, following the provider protocol.
     pub arguments: String,
 }
 
@@ -30,12 +33,15 @@ pub enum Message {
 /// No calls means the text is the answer.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Reply {
+    /// Natural-language content produced during this turn.
     pub text: String,
+    /// Browser operations the model wants the runtime to consider next.
     pub calls: Vec<ToolCall>,
 }
 
 /// A model service. Calls block; the app runs them off the UI thread.
 pub trait Model: Send + Sync {
+    /// Produce the next reply for a conversation and the advertised tools.
     fn reply(&self, messages: &[Message], tools: &[Tool]) -> Result<Reply, String>;
 
     /// Like [`Model::reply`], calling `text` with each piece of the answer
