@@ -42,7 +42,7 @@ impl OpenAi {
 
 impl OpenAi {
     fn post(&self, body: &Value) -> Result<ureq::http::Response<ureq::Body>, String> {
-        let endpoint = endpoint(&self.base_url)?;
+        let endpoint = endpoint(&self.base_url, self.api_key.is_some())?;
         let mut request = self
             .http
             .post(endpoint)
@@ -56,10 +56,11 @@ impl OpenAi {
     }
 }
 
-/// Build the completions endpoint without allowing prompts or API keys to be
-/// sent over the cleartext network. HTTP remains useful for model servers on
-/// the same machine, where TLS is normally unavailable.
-fn endpoint(base: &str) -> Result<String, String> {
+/// Build the completions endpoint without allowing an API key to be sent over
+/// the cleartext network. Plain HTTP stays allowed for model servers on the
+/// same machine, and for keyless servers elsewhere (Ollama on another box on
+/// the LAN), where TLS is normally unavailable.
+fn endpoint(base: &str, sends_key: bool) -> Result<String, String> {
     let mut url = Url::parse(base.trim())
         .map_err(|_| "The model service URL isn't a valid absolute address.".to_owned())?;
     let loopback = match url.host() {
@@ -68,10 +69,12 @@ fn endpoint(base: &str) -> Result<String, String> {
         Some(Host::Domain(host)) => host.eq_ignore_ascii_case("localhost"),
         None => false,
     };
-    let local_http = url.scheme() == "http" && loopback;
-    if url.scheme() != "https" && !local_http {
+    let allowed_http = url.scheme() == "http" && (loopback || !sends_key);
+    if url.scheme() != "https" && !allowed_http {
         return Err(
-            "The model service must use HTTPS (HTTP is allowed only for localhost).".to_owned(),
+            "The model service must use HTTPS to send an API key (HTTP is allowed for \
+             localhost, or when no key is sent)."
+                .to_owned(),
         );
     }
     if !url.username().is_empty()
@@ -360,19 +363,20 @@ mod tests {
     #[test]
     fn model_endpoints_require_secure_transport() {
         assert_eq!(
-            endpoint("https://api.example/v1").unwrap(),
+            endpoint("https://api.example/v1", true).unwrap(),
             "https://api.example/v1/chat/completions"
         );
         assert_eq!(
-            endpoint("http://127.0.0.1:11434/v1/").unwrap(),
+            endpoint("http://127.0.0.1:11434/v1/", true).unwrap(),
             "http://127.0.0.1:11434/v1/chat/completions"
         );
-        assert!(endpoint("http://[::1]:8080/v1").is_ok());
-        assert!(endpoint("http://localhost:8080/v1").is_ok());
-        assert!(endpoint("http://models.example/v1").is_err());
-        assert!(endpoint("ftp://models.example/v1").is_err());
-        assert!(endpoint("https://user:secret@models.example/v1").is_err());
-        assert!(endpoint("https://models.example/v1?token=secret").is_err());
+        assert!(endpoint("http://[::1]:8080/v1", true).is_ok());
+        assert!(endpoint("http://localhost:8080/v1", true).is_ok());
+        assert!(endpoint("http://models.example/v1", true).is_err());
+        assert!(endpoint("http://192.168.1.20:11434/v1", false).is_ok());
+        assert!(endpoint("ftp://models.example/v1", false).is_err());
+        assert!(endpoint("https://user:secret@models.example/v1", true).is_err());
+        assert!(endpoint("https://models.example/v1?token=secret", true).is_err());
     }
 
     #[test]

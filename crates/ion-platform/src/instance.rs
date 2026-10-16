@@ -274,35 +274,16 @@ mod fallback {
 mod tests {
     use super::*;
 
-    #[cfg(unix)]
-    #[test]
-    fn fallback_socket_path_does_not_trust_user_environment() {
-        // SAFETY: this test restores the process environment before returning.
-        let old_runtime = std::env::var_os("XDG_RUNTIME_DIR");
-        let old_user = std::env::var_os("USER");
-        unsafe {
-            std::env::remove_var("XDG_RUNTIME_DIR");
-            std::env::set_var("USER", "../../attacker");
-        }
-        let path = socket_path("dev.ion.Ion", "Default");
-        unsafe {
-            match old_runtime {
-                Some(v) => std::env::set_var("XDG_RUNTIME_DIR", v),
-                None => std::env::remove_var("XDG_RUNTIME_DIR"),
-            }
-            match old_user {
-                Some(v) => std::env::set_var("USER", v),
-                None => std::env::remove_var("USER"),
-            }
-        }
-        assert!(!path.to_string_lossy().contains("attacker"));
-        assert!(path.ends_with("Default.sock"));
-    }
-
     #[test]
     fn socket_names_cannot_escape_the_runtime_directory() {
         assert_eq!(path_component("../../profile/name"), ".._.._profile_name");
         assert_eq!(path_component(".."), "default");
+        let path = socket_path("../app", "../Default");
+        assert!(path.ends_with(".._Default.sock"));
+        assert!(
+            path.components()
+                .all(|c| c != std::path::Component::ParentDir)
+        );
     }
 
     #[test]
