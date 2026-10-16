@@ -172,8 +172,7 @@ impl Palette {
         let mut items: Vec<Item> = save_session_item(query).into_iter().collect();
         items.extend(tab_items(tabs, current_tab, query));
         items.extend(bookmark_items(bookmarks, tabs, query));
-        let known: Vec<TabEntry> = tabs.iter().chain(bookmarks).cloned().collect();
-        items.extend(history_items(history, &known, query));
+        items.extend(history_items(history, tabs, bookmarks, query));
         items.extend(session_items(sessions, query));
         items.extend(commands(query));
         items.extend(setting_items(settings, query));
@@ -244,13 +243,12 @@ impl Palette {
                     }),
             );
             rest.extend(bookmark_items(sources.bookmarks, sources.tabs, query));
-            let known: Vec<TabEntry> = sources
-                .tabs
-                .iter()
-                .chain(sources.bookmarks)
-                .cloned()
-                .collect();
-            rest.extend(history_items(sources.history, &known, query));
+            rest.extend(history_items(
+                sources.history,
+                sources.tabs,
+                sources.bookmarks,
+                query,
+            ));
         }
         let mut items = vec![first];
         items.extend(finish(rest).into_iter().take(SUGGESTIONS - 1));
@@ -326,10 +324,11 @@ impl Palette {
 }
 
 fn tab_items(tabs: &[TabEntry], current: Option<usize>, query: &str) -> Vec<Item> {
+    let matcher = fuzzy::Matcher::new(query);
     tabs.iter()
         .enumerate()
         .filter_map(|(index, tab)| {
-            let score = fuzzy::score(query, &tab.title).max(fuzzy::score(query, &tab.url))?;
+            let score = matcher.score(&tab.title).max(matcher.score(&tab.url))?;
             let title = if tab.title.is_empty() {
                 if tab.url.is_empty() {
                     "New tab"
@@ -358,6 +357,7 @@ fn tab_items(tabs: &[TabEntry], current: Option<usize>, query: &str) -> Vec<Item
 /// Bookmarks that aren't already open in a tab. An empty query lists them all
 /// in the order given.
 fn bookmark_items(bookmarks: &[TabEntry], tabs: &[TabEntry], query: &str) -> Vec<Item> {
+    let matcher = fuzzy::Matcher::new(query);
     bookmarks
         .iter()
         .filter(|page| !tabs.iter().any(|tab| tab.url == page.url))
@@ -365,7 +365,7 @@ fn bookmark_items(bookmarks: &[TabEntry], tabs: &[TabEntry], query: &str) -> Vec
             let score = if query.is_empty() {
                 0
             } else {
-                fuzzy::score(query, &page.title).max(fuzzy::score(query, &page.url))?
+                matcher.score(&page.title).max(matcher.score(&page.url))?
             };
             Some(Item {
                 kind: Kind::Bookmark,
@@ -384,13 +384,23 @@ fn bookmark_items(bookmarks: &[TabEntry], tabs: &[TabEntry], query: &str) -> Vec
 }
 
 /// History pages that aren't already open in a tab or listed as a bookmark.
-fn history_items(history: &[TabEntry], tabs: &[TabEntry], query: &str) -> Vec<Item> {
+fn history_items(
+    history: &[TabEntry],
+    tabs: &[TabEntry],
+    bookmarks: &[TabEntry],
+    query: &str,
+) -> Vec<Item> {
+    let matcher = fuzzy::Matcher::new(query);
     history
         .iter()
-        .filter(|page| !tabs.iter().any(|tab| tab.url == page.url))
+        .filter(|page| {
+            !tabs
+                .iter()
+                .chain(bookmarks)
+                .any(|known| known.url == page.url)
+        })
         .filter_map(|page| {
-            let score = fuzzy::score(query, &page.title).max(fuzzy::score(query, &page.url))?
-                - HISTORY_PENALTY;
+            let score = matcher.score(&page.title).max(matcher.score(&page.url))? - HISTORY_PENALTY;
             Some(Item {
                 kind: Kind::History,
                 title: if page.title.is_empty() {
@@ -408,11 +418,13 @@ fn history_items(history: &[TabEntry], tabs: &[TabEntry], query: &str) -> Vec<It
 }
 
 fn session_items(sessions: &[String], query: &str) -> Vec<Item> {
+    let matcher = fuzzy::Matcher::new(query);
     sessions
         .iter()
         .filter_map(|name| {
-            let score =
-                fuzzy::score(query, name).max(fuzzy::score(query, &format!("{name} session")))?;
+            let score = matcher
+                .score(name)
+                .max(matcher.score(&format!("{name} session")))?;
             Some(Item {
                 kind: Kind::Session,
                 title: name.clone(),
@@ -448,13 +460,13 @@ fn save_session_item(query: &str) -> Option<Item> {
 }
 
 fn setting_items(settings: &[SettingOption], query: &str) -> Vec<Item> {
+    let matcher = fuzzy::Matcher::new(query);
     settings
         .iter()
         .filter_map(|option| {
-            let score = fuzzy::score(query, &option.title).max(fuzzy::score(
-                query,
-                &format!("{} {}", option.title, option.keywords),
-            ))?;
+            let score = matcher
+                .score(&option.title)
+                .max(matcher.score(&format!("{} {}", option.title, option.keywords)))?;
             Some(Item {
                 kind: Kind::Setting,
                 title: option.title.clone(),
@@ -473,6 +485,7 @@ fn setting_items(settings: &[SettingOption], query: &str) -> Vec<Item> {
 }
 
 fn commands(query: &str) -> Vec<Item> {
+    let matcher = fuzzy::Matcher::new(query);
     COMMANDS
         .iter()
         .filter_map(|command| {
@@ -482,8 +495,9 @@ fn commands(query: &str) -> Vec<Item> {
                 keywords,
                 shortcut,
             } = *command;
-            let score = fuzzy::score(query, title)
-                .max(fuzzy::score(query, &format!("{title} {keywords}")))?;
+            let score = matcher
+                .score(title)
+                .max(matcher.score(&format!("{title} {keywords}")))?;
             Some(Item {
                 kind: Kind::Command,
                 title: title.to_owned(),

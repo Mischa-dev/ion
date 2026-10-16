@@ -15,23 +15,41 @@ const WORD_START: i32 = 3;
 /// Extra points when the term matches at the very start of the text.
 const TEXT_START: i32 = 1;
 
+/// A query prepared for scoring several candidates without repeatedly
+/// lowercasing and allocating its terms.
+pub struct Matcher {
+    terms: Vec<Vec<char>>,
+}
+
+impl Matcher {
+    pub fn new(query: &str) -> Self {
+        Self {
+            terms: query
+                .split_whitespace()
+                .map(|term| term.chars().flat_map(char::to_lowercase).collect())
+                .collect(),
+        }
+    }
+
+    /// Score `text`, or `None` if some query term does not match.
+    pub fn score(&self, text: &str) -> Option<i32> {
+        let text: Vec<char> = text.chars().flat_map(char::to_lowercase).collect();
+        self.terms.iter().map(|term| score_term(term, &text)).sum()
+    }
+}
+
 /// Score `text` against `query`, or `None` if some term doesn't match.
 /// A blank query matches everything with score 0.
 pub fn score(query: &str, text: &str) -> Option<i32> {
-    let text: Vec<char> = text.chars().flat_map(char::to_lowercase).collect();
-    query
-        .split_whitespace()
-        .map(|term| score_term(term, &text))
-        .sum()
+    Matcher::new(query).score(text)
 }
 
-fn score_term(term: &str, text: &[char]) -> Option<i32> {
-    let term: Vec<char> = term.chars().flat_map(char::to_lowercase).collect();
+fn score_term(term: &[char], text: &[char]) -> Option<i32> {
     // Try every start position of the first character and keep the best,
     // so "tab" prefers the word "tab" over the "t" in "Reload current".
     (0..text.len())
         .filter(|&i| text[i] == term[0])
-        .filter_map(|start| greedy(&term, text, start))
+        .filter_map(|start| greedy(term, text, start))
         .max()
 }
 
