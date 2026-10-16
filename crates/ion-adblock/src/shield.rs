@@ -126,10 +126,8 @@ impl Shield {
     /// of tracking parameters; loading one resets its site's counter.
     pub fn decide(&mut self, request: &RequestInfo<'_>) -> Verdict {
         let is_page = request.resource == ResourceType::MainFrame;
-        if is_page {
-            if let Some(site) = site_of(request.url) {
-                self.blocked.remove(&site);
-            }
+        if is_page && let Some(site) = site_of(request.url) {
+            self.blocked.remove(&site);
         }
         if !self.enabled || !is_web_url(request.url) {
             return Verdict::Allow;

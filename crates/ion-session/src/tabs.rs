@@ -404,10 +404,10 @@ impl TabList {
     pub fn note_current(&mut self, now: u64) -> Option<usize> {
         let current = self.current()?;
         let current_id = self.tabs[current].id;
-        if let Some(previous) = self.seen_current.filter(|&id| id != current_id) {
-            if let Some(i) = self.index_of(previous) {
-                self.tabs[i].last_active = now;
-            }
+        if let Some(previous) = self.seen_current.filter(|&id| id != current_id)
+            && let Some(i) = self.index_of(previous)
+        {
+            self.tabs[i].last_active = now;
         }
         self.seen_current = Some(current_id);
         let workspace = self.tabs[current].workspace;

@@ -142,10 +142,10 @@ fn as_url(input: &str) -> Option<String> {
 
     // Explicit scheme: `https://…`, `about:blank`, `file:///…`. Checked before
     // the whitespace rule so pasted URLs with spaces still open.
-    if let Some((scheme, _)) = input.split_once(':') {
-        if KNOWN_SCHEMES.contains(&scheme.to_ascii_lowercase().as_str()) {
-            return Url::parse(input).ok().map(String::from);
-        }
+    if let Some((scheme, _)) = input.split_once(':')
+        && KNOWN_SCHEMES.contains(&scheme.to_ascii_lowercase().as_str())
+    {
+        return Url::parse(input).ok().map(String::from);
     }
 
     if input.chars().any(char::is_whitespace) {

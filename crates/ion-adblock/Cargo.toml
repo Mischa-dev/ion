@@ -11,7 +11,7 @@ url.workspace = true
 # `single-thread` is left out so the engine is Send: it is built on a worker
 # thread and handed to the UI thread, where QtWebEngine asks about requests.
 adblock = { version = "0.13", default-features = false, features = ["embedded-domain-resolver", "full-regex-handling"] }
-dirs = "6"
+dirs = "7"
 # The public suffix list, also used by adblock-rust (through `addr`).
 psl = "2"
 ureq = "3"

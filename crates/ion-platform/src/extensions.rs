@@ -50,15 +50,15 @@ pub fn discover(configured: &[String], folder: Option<&Path>, home: Option<&Path
             _ => PathBuf::from(p),
         })
         .collect();
-    if let Some(folder) = folder {
-        if let Ok(entries) = std::fs::read_dir(folder) {
-            let mut dirs: Vec<PathBuf> = entries
-                .filter_map(|e| e.ok().map(|e| e.path()))
-                .filter(|p| p.is_dir())
-                .collect();
-            dirs.sort();
-            paths.extend(dirs);
-        }
+    if let Some(folder) = folder
+        && let Ok(entries) = std::fs::read_dir(folder)
+    {
+        let mut dirs: Vec<PathBuf> = entries
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.is_dir())
+            .collect();
+        dirs.sort();
+        paths.extend(dirs);
     }
     let mut seen = std::collections::HashSet::new();
     paths
