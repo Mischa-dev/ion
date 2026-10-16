@@ -85,10 +85,10 @@ pub fn clear_profile_files() {
     let dir = qobject::profile_storage_path(&cxx_qt_lib::QString::from("Default")).to_string();
     for name in files {
         let file = std::path::Path::new(&dir).join(name);
-        if let Err(err) = std::fs::remove_file(&file) {
-            if err.kind() != std::io::ErrorKind::NotFound {
-                eprintln!("ion: could not delete {}: {err}", file.display());
-            }
+        if let Err(err) = std::fs::remove_file(&file)
+            && err.kind() != std::io::ErrorKind::NotFound
+        {
+            eprintln!("ion: could not delete {}: {err}", file.display());
         }
     }
 }

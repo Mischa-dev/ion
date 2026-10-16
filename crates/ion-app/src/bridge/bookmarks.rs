@@ -108,10 +108,10 @@ pub fn read_profile(browser: &str) -> Option<import::Imported> {
 impl qobject::Bookmarks {
     /// Save, then tell QML the list changed.
     fn changed(mut self: Pin<&mut Self>) {
-        if let Some(path) = &self.path {
-            if let Err(err) = self.bookmarks.save(path) {
-                eprintln!("ion: could not save bookmarks: {err}");
-            }
+        if let Some(path) = &self.path
+            && let Err(err) = self.bookmarks.save(path)
+        {
+            eprintln!("ion: could not save bookmarks: {err}");
         }
         let revision = self.revision.wrapping_add(1);
         let count = i32::try_from(self.bookmarks.len()).unwrap_or(i32::MAX);

@@ -84,10 +84,10 @@ pub fn current_bangs() -> Arc<BangTable> {
     static CACHE: Mutex<Option<(Arc<Config>, Arc<BangTable>)>> = Mutex::new(None);
     let config = ion_config::global().config();
     let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
-    if let Some((seen, table)) = cache.as_ref() {
-        if Arc::ptr_eq(seen, &config) {
-            return table.clone();
-        }
+    if let Some((seen, table)) = cache.as_ref()
+        && Arc::ptr_eq(seen, &config)
+    {
+        return table.clone();
     }
     let mut table = BangTable::default();
     let entries = config.bangs.iter().map(|(k, v)| (k.as_str(), v.as_str()));

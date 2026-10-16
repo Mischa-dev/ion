@@ -590,10 +590,10 @@ impl qobject::Tabs {
     }
 
     fn activate_nth(mut self: Pin<&mut Self>, n: i32) {
-        if let Some(i) = self.list.nth_in_workspace(n as isize) {
-            if self.as_mut().rust_mut().list.activate(i) {
-                self.sync();
-            }
+        if let Some(i) = self.list.nth_in_workspace(n as isize)
+            && self.as_mut().rust_mut().list.activate(i)
+        {
+            self.sync();
         }
     }
 

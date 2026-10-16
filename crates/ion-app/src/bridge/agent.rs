@@ -536,10 +536,10 @@ impl qobject::Agent {
             selection: String::new(),
         };
         let mut tabs = None;
-        if let Some(running) = self.as_mut().rust_mut().tasks.get_mut(&task) {
-            if running.task.follow_up(question, &context) {
-                tabs = Some(running.tabs().collect::<Vec<u64>>());
-            }
+        if let Some(running) = self.as_mut().rust_mut().tasks.get_mut(&task)
+            && running.task.follow_up(question, &context)
+        {
+            tabs = Some(running.tabs().collect::<Vec<u64>>());
         }
         let Some(tabs) = tabs else {
             return false;

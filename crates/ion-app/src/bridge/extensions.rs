@@ -128,10 +128,10 @@ impl qobject::Extensions {
             .rust_mut()
             .disabled
             .set(&path.to_string(), disabled);
-        if let (true, Some(file)) = (changed, self.state_file.as_deref()) {
-            if let Err(err) = self.disabled.save(file) {
-                eprintln!("ion: could not save {}: {err}", file.display());
-            }
+        if let (true, Some(file)) = (changed, self.state_file.as_deref())
+            && let Err(err) = self.disabled.save(file)
+        {
+            eprintln!("ion: could not save {}: {err}", file.display());
         }
     }
 
