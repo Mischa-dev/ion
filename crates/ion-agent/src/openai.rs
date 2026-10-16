@@ -5,6 +5,7 @@ use std::io::{BufRead, BufReader};
 use std::time::Duration;
 
 use serde_json::{Value, json};
+use url::{Host, Url};
 
 use crate::model::{Message, Model, Reply, ToolCall};
 use crate::tool::Tool;
@@ -41,9 +42,10 @@ impl OpenAi {
 
 impl OpenAi {
     fn post(&self, body: &Value) -> Result<ureq::http::Response<ureq::Body>, String> {
+        let endpoint = endpoint(&self.base_url, self.api_key.is_some())?;
         let mut request = self
             .http
-            .post(format!("{}/chat/completions", self.base_url))
+            .post(endpoint)
             .header("Content-Type", "application/json");
         if let Some(key) = &self.api_key {
             request = request.header("Authorization", format!("Bearer {key}"));
@@ -52,6 +54,43 @@ impl OpenAi {
             .send(body.to_string())
             .map_err(|e| format!("Couldn't reach the model service: {e}"))
     }
+}
+
+/// Build the completions endpoint without allowing an API key to be sent over
+/// the cleartext network. Plain HTTP stays allowed for model servers on the
+/// same machine, and for keyless servers elsewhere (Ollama on another box on
+/// the LAN), where TLS is normally unavailable.
+fn endpoint(base: &str, sends_key: bool) -> Result<String, String> {
+    let mut url = Url::parse(base.trim())
+        .map_err(|_| "The model service URL isn't a valid absolute address.".to_owned())?;
+    let loopback = match url.host() {
+        Some(Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(Host::Ipv6(ip)) => ip.is_loopback(),
+        Some(Host::Domain(host)) => host.eq_ignore_ascii_case("localhost"),
+        None => false,
+    };
+    let allowed_http = url.scheme() == "http" && (loopback || !sends_key);
+    if url.scheme() != "https" && !allowed_http {
+        return Err(
+            "The model service must use HTTPS to send an API key (HTTP is allowed for \
+             localhost, or when no key is sent)."
+                .to_owned(),
+        );
+    }
+    if !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(
+            "The model service URL must not contain credentials, a query, or a fragment."
+                .to_owned(),
+        );
+    }
+    let mut path = url.path().trim_end_matches('/').to_owned();
+    path.push_str("/chat/completions");
+    url.set_path(&path);
+    Ok(url.into())
 }
 
 impl Model for OpenAi {
@@ -320,6 +359,25 @@ pub fn describe_error(status: u16, body: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn model_endpoints_require_secure_transport() {
+        assert_eq!(
+            endpoint("https://api.example/v1", true).unwrap(),
+            "https://api.example/v1/chat/completions"
+        );
+        assert_eq!(
+            endpoint("http://127.0.0.1:11434/v1/", true).unwrap(),
+            "http://127.0.0.1:11434/v1/chat/completions"
+        );
+        assert!(endpoint("http://[::1]:8080/v1", true).is_ok());
+        assert!(endpoint("http://localhost:8080/v1", true).is_ok());
+        assert!(endpoint("http://models.example/v1", true).is_err());
+        assert!(endpoint("http://192.168.1.20:11434/v1", false).is_ok());
+        assert!(endpoint("ftp://models.example/v1", false).is_err());
+        assert!(endpoint("https://user:secret@models.example/v1", true).is_err());
+        assert!(endpoint("https://models.example/v1?token=secret", true).is_err());
+    }
 
     #[test]
     fn streams_are_put_together() {
