@@ -8,6 +8,7 @@ pub mod agent;
 pub mod basics;
 pub mod bookmarks;
 pub mod config;
+pub mod download_log;
 pub mod downloads;
 pub mod extensions;
 pub mod fonts;
