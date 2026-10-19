@@ -141,14 +141,14 @@ Rectangle {
             IconButton {
                 implicitWidth: Theme.urlBarHeight - Theme.spacing
                 implicitHeight: implicitWidth
-                glyph: "◷"
+                iconName: "history"
                 tip: qsTr("Agent activity")
                 onClicked: sidebar.activityRequested()
             }
             IconButton {
                 implicitWidth: Theme.urlBarHeight - Theme.spacing
                 implicitHeight: implicitWidth
-                glyph: "✕"
+                iconName: "close"
                 tip: qsTr("Close")
                 onClicked: sidebar.hide()
             }
@@ -252,7 +252,7 @@ Rectangle {
                     implicitWidth: Theme.urlBarHeight - Theme.spacing
                     implicitHeight: implicitWidth
                     opacity: rowArea.containsMouse || hovered ? 1 : 0
-                    glyph: "✕"
+                    iconName: "close"
                     tip: qsTr("Forget this conversation")
                     onClicked: Agent.forgetConversation(row.modelData.key)
                 }
