@@ -88,11 +88,31 @@ Rectangle {
     color: Theme.background
 
     onQueryChanged: refresh()
-    onPathChanged: Qt.callLater(() => scrollTo(path))
+    onPathChanged: settle.go(path)
     Component.onCompleted: {
         refresh()
         if (path.length > 0)
-            Qt.callLater(() => scrollTo(path))
+            settle.go(path)
+    }
+
+    // A link to a section (`ion://settings/search`) scrolls there once the
+    // cards have their heights, which takes a few frames after loading.
+    Timer {
+        id: settle
+        property string target
+        property int tries: 0
+        function go(id) {
+            target = id
+            tries = 0
+            restart()
+        }
+        interval: 16
+        repeat: true
+        onTriggered: {
+            page.scrollTo(target)
+            if (++tries >= 20)
+                stop()
+        }
     }
 
     Connections {
@@ -166,12 +186,9 @@ Rectangle {
                             anchors.rightMargin: Theme.spacing * 2
                             spacing: Theme.spacing * 2
 
-                            Text {
-                                Layout.preferredWidth: Theme.iconSize
-                                text: navItem.modelData.icon
+                            Icon {
+                                name: navItem.modelData.icon
                                 color: navItem.current ? Theme.accent : Theme.textMuted
-                                font.pixelSize: Theme.fontSize + 1
-                                horizontalAlignment: Text.AlignHCenter
                             }
                             Text {
                                 Layout.fillWidth: true
@@ -211,6 +228,7 @@ Rectangle {
             boundsBehavior: Flickable.StopAtBounds
             clip: true
             onContentYChanged: page.updateCurrent()
+            onMovementStarted: settle.stop()
 
             ScrollBar.vertical: ScrollBar {}
 

@@ -27,9 +27,10 @@ pub fn section(_: &Context) -> Section {
     Section::new(
         "search",
         "Search",
-        "⌕",
+        "search",
         "What the address bar does with words that aren't an address.",
-        vec![Group::new(
+        vec![
+            Group::new(
             "Search engine",
             vec![
                 Setting::new(
@@ -48,6 +49,21 @@ pub fn section(_: &Context) -> Section {
                 .help("For any other engine: its search URL, with {} where your words go.")
                 .keywords("custom url template query"),
             ],
-        )],
+        ),
+            Group::new(
+                "Your bangs",
+                vec![
+                    Setting::new(
+                        "bangs",
+                        "Bangs",
+                        Control::Custom {
+                            component: "BangsEditor".into(),
+                        },
+                    )
+                    .help("Type !name and your words in the address bar to search a site directly. Ion knows many already, like !gh, !w and !yt; yours win.")
+                    .keywords("bang shortcut keyword search engines custom site search"),
+                ],
+            ),
+        ],
     )
 }

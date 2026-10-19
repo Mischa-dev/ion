@@ -74,6 +74,17 @@ pub mod qobject {
         /// `ion://<id>` or `ion://<id>/<path>`.
         #[qinvokable]
         fn url(self: &Pages, id: &QString, path: &QString) -> QString;
+
+        /// Whether this is Ion's first start: nothing in its data folder
+        /// yet, and the welcome page hasn't been finished.
+        #[qinvokable]
+        #[cxx_name = "isFirstRun"]
+        fn is_first_run(self: &Pages) -> bool;
+
+        /// Remember that the welcome page was finished (or skipped).
+        #[qinvokable]
+        #[cxx_name = "finishWelcome"]
+        fn finish_welcome(self: &Pages);
     }
 }
 
@@ -90,6 +101,11 @@ pub struct PagesRust {
 /// Declare the `ion:` scheme. Must run before the application object exists.
 pub fn register_scheme() {
     qobject::register_ion_scheme();
+}
+
+/// `<data dir>/welcomed`, written once the welcome page is done.
+fn welcome_marker() -> Option<std::path::PathBuf> {
+    ion_session::paths::data_dir().map(|d| d.join("welcomed"))
 }
 
 fn parse(url: &QUrl) -> Option<(ion_core::pages::Page, String)> {
@@ -134,5 +150,29 @@ impl qobject::Pages {
 
     fn url(&self, id: &QString, path: &QString) -> QString {
         QString::from(ion_core::pages::url(&id.to_string(), &path.to_string()).as_str())
+    }
+
+    fn is_first_run(&self) -> bool {
+        let Some(dir) = ion_session::paths::data_dir() else {
+            return false;
+        };
+        // Someone who used Ion before this page existed has history or a
+        // saved session already.
+        let used = ["welcomed", "history.json", "sessions"]
+            .iter()
+            .any(|name| dir.join(name).exists());
+        !used
+    }
+
+    fn finish_welcome(&self) {
+        let Some(marker) = welcome_marker() else {
+            return;
+        };
+        if let Some(dir) = marker.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        if let Err(err) = std::fs::write(&marker, "") {
+            eprintln!("ion: could not save {}: {err}", marker.display());
+        }
     }
 }

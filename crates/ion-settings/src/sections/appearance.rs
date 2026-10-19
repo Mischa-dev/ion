@@ -27,7 +27,7 @@ pub fn section(ctx: &Context) -> Section {
     Section::new(
         "appearance",
         "Appearance",
-        "◐",
+        "sun",
         "Colors, layout and motion.",
         vec![
             Group::new(
