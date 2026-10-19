@@ -33,7 +33,7 @@ pub fn actions(custom: &BTreeMap<String, String>) -> BTreeMap<String, String> {
         .collect();
     for (stroke, id) in custom {
         let stroke = stroke.trim().to_ascii_uppercase();
-        if stroke.is_empty() || !stroke.chars().all(|c| "LRUD".contains(c)) {
+        if !drawable(&stroke) {
             continue;
         }
         if id.trim().is_empty() {
@@ -43,6 +43,16 @@ pub fn actions(custom: &BTreeMap<String, String>) -> BTreeMap<String, String> {
         }
     }
     map
+}
+
+/// Whether `Stroke` can produce `stroke`: up to `MAX_MOVES` letters of LRUD,
+/// never the same one twice in a row (one long move is a single letter).
+fn drawable(stroke: &str) -> bool {
+    let bytes = stroke.as_bytes();
+    !bytes.is_empty()
+        && bytes.len() <= MAX_MOVES
+        && bytes.iter().all(|c| b"LRUD".contains(c))
+        && bytes.windows(2).all(|pair| pair[0] != pair[1])
 }
 
 /// One stroke being drawn.
@@ -160,5 +170,18 @@ mod tests {
         assert!(!map.contains_key("D"));
         assert!(!map.contains_key("X"));
         assert_eq!(map["L"], "back");
+    }
+
+    #[test]
+    fn strokes_that_cannot_be_drawn_are_ignored() {
+        let custom = BTreeMap::from([
+            ("LL".to_string(), "new-tab".to_string()),
+            ("LRUDL".to_string(), "quit".to_string()),
+            ("LRUD".to_string(), "reload".to_string()),
+        ]);
+        let map = actions(&custom);
+        assert!(!map.contains_key("LL"));
+        assert!(!map.contains_key("LRUDL"));
+        assert_eq!(map["LRUD"], "reload");
     }
 }

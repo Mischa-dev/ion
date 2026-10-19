@@ -112,6 +112,7 @@ mouse = false                # hold the right button and draw: L back, R forward
                              # D new tab, DR close tab, DL reopen closed tab,
                              # UD reload, U reset zoom, RL duplicate tab
 [gestures.mouseStrokes]      # change or add strokes: moves to a command id
+                             # (up to 4 of L R U D, no letter twice in a row)
 # U = "new-tab"
 # D = ""                     # "" turns a stroke off
 
