@@ -79,6 +79,7 @@ let
     removeAttrs cfg [
       "enable"
       "package"
+      "widevine"
     ]
   );
 in
@@ -91,10 +92,23 @@ in
       options = {
         enable = lib.mkEnableOption "the Ion browser";
 
+        widevine = mkOption {
+          type = types.bool;
+          default = false;
+          description = ''
+            Install Ion with Google's Widevine DRM module (unfree), which
+            Netflix, Spotify and other streaming sites need. Linux only.
+          '';
+        };
+
         package = mkOption {
           type = types.nullOr types.package;
-          default = self.packages.${pkgs.stdenv.hostPlatform.system}.default or null;
-          defaultText = lib.literalExpression "ion.packages.\${pkgs.stdenv.hostPlatform.system}.default";
+          default =
+            let
+              packages = self.packages.${pkgs.stdenv.hostPlatform.system} or { };
+            in
+            if cfg.widevine then packages.ion-widevine or null else packages.default or null;
+          defaultText = lib.literalExpression "ion.packages.\${pkgs.stdenv.hostPlatform.system}.default (ion-widevine with `widevine = true`)";
           description = "The Ion package to install, or null to only write the config.";
         };
 

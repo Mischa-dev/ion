@@ -5,12 +5,18 @@
   rustPlatform,
   qt6,
   src,
+  # Google's Widevine DRM module (`widevine-cdm`, unfree), for Netflix,
+  # Spotify and other streaming sites; `packages.ion-widevine` passes it.
+  # Not named `widevine-cdm`, so callPackage doesn't fill it in.
+  widevine ? null,
 }:
 let
   qt = callPackage ./qt.nix { };
   icons = callPackage ./icons.nix { };
   cargoToml = lib.importTOML ../Cargo.toml;
   inherit (cargoToml.workspace.package) version;
+  widevineArch = if stdenv.hostPlatform.isAarch64 then "linux_arm64" else "linux_x64";
+  widevinePath = "${widevine}/share/google/chrome/WidevineCdm/_platform_specific/${widevineArch}/libwidevinecdm.so";
 in
 rustPlatform.buildRustPackage {
   pname = "ion";
@@ -65,6 +71,13 @@ rustPlatform.buildRustPackage {
         install -Dm644 ${../packaging/linux/dev.ion.Ion.metainfo.xml} $out/share/metainfo/dev.ion.Ion.metainfo.xml
         cp -r ${icons}/share/icons $out/share/
       '';
+
+  # Ion passes it to QtWebEngine as `--widevine-path` (ion-platform).
+  qtWrapperArgs = lib.optionals (widevine != null) [
+    "--set-default"
+    "ION_WIDEVINE_PATH"
+    widevinePath
+  ];
 
   # After wrapQtAppsHook has wrapped the bundle's binary, so `ion` on PATH
   # (and `nix run`) starts the same wrapped app.
