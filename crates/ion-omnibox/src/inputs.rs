@@ -141,6 +141,26 @@ impl InputHistory {
         self.choices.len() != before
     }
 
+    /// Forget choices of pages on `site` and its subdomains, as history's
+    /// "forget this site" does. True if any went.
+    pub fn forget_site(&mut self, site: &str) -> bool {
+        let site = site.to_lowercase();
+        let site = site.strip_prefix("www.").unwrap_or(&site).to_owned();
+        if site.is_empty() {
+            return false;
+        }
+        let before = self.choices.len();
+        self.choices.retain(|c| {
+            let host = url::Url::parse(&c.url)
+                .ok()
+                .and_then(|url| url.host_str().map(str::to_lowercase))
+                .unwrap_or_default();
+            let host = host.strip_prefix("www.").unwrap_or(&host);
+            !(host == site || host.ends_with(&format!(".{site}")))
+        });
+        self.choices.len() != before
+    }
+
     pub fn clear(&mut self) {
         self.choices.clear();
     }
@@ -197,5 +217,18 @@ mod tests {
         assert!(inputs.forget_url(MAIL));
         assert!(inputs.is_empty());
         assert_eq!(InputHistory::from_json("{}").unwrap().len(), 0);
+    }
+
+    #[test]
+    fn forgetting_a_site_takes_its_subdomains() {
+        let mut inputs = InputHistory::default();
+        inputs.record("docs", "https://docs.example.com/a", "Docs", 1);
+        inputs.record("ex", "https://www.example.com/", "Example", 1);
+        inputs.record("notex", "https://notexample.com/", "Other", 1);
+        assert!(inputs.forget_site("example.com"));
+        assert!(inputs.boosts("docs", 2).is_empty());
+        assert!(inputs.boosts("ex", 2).is_empty());
+        assert_eq!(inputs.boosts("notex", 2).len(), 1);
+        assert!(!inputs.forget_site("example.com"));
     }
 }

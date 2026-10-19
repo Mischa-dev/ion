@@ -50,6 +50,9 @@ ApplicationWindow {
         // (Safety, docs/SAFETY.md), so the engine keeps none of its own.
         persistentPermissionsPolicy: WebEngineProfile.PersistentPermissionsPolicy.AskEveryTime
     }
+    // The downloads panel's requests, newest first (the Downloads page lists
+    // the running ones).
+    readonly property var downloadItems: downloads.items
     // Set in Component.onCompleted: instance() is null until the prototype is complete.
     property WebEngineProfile profile: null
     // Folders of the Chrome extensions Ion loaded at startup.
@@ -239,7 +242,7 @@ ApplicationWindow {
         const urls = Qt.application.arguments.slice(1).filter(arg => !arg.startsWith("-"))
         urls.forEach((arg, i) => openTab(urlBarResolver.resolve(arg), i === 0))
         if (Tabs.count === 0)
-            openTab(homeUrl)
+            openTab(Pages.isFirstRun() ? Pages.url("welcome", "") : homeUrl)
         startupFinished = true
         sessionSaveTimer.restart()
     }
@@ -517,7 +520,7 @@ ApplicationWindow {
         }
     }
 
-    DownloadsPanel { id: downloads; profile: window.profile }
+    DownloadsPanel { id: downloads; profile: window.profile; browser: window }
     NotificationToasts { profile: window.profile }
     FullScreenController {
         id: fullScreen

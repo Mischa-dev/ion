@@ -51,8 +51,17 @@ pub mod qobject {
         #[qinvokable]
         fn chosen(self: &History, query: &QString) -> QString;
 
+        /// Pages matching `query`, newest first, as JSON like `search`.
+        #[qinvokable]
+        fn recent(self: &History, query: &QString, limit: i32) -> QString;
+
         #[qinvokable]
         fn remove(self: Pin<&mut History>, url: &QString) -> bool;
+
+        /// Forget every page on `site` and its subdomains. Returns how many.
+        #[qinvokable]
+        #[cxx_name = "removeSite"]
+        fn remove_site(self: Pin<&mut History>, site: &QString) -> i32;
 
         #[qinvokable]
         fn clear(self: Pin<&mut History>);
@@ -142,22 +151,33 @@ impl qobject::History {
 
     fn search(&self, query: &QString, limit: i32) -> QString {
         let limit = usize::try_from(limit).unwrap_or(0);
-        let now = history::now();
-        let hits: Vec<serde_json::Value> = self
+        to_json(
+            self.history
+                .search(&query.to_string(), limit, history::now()),
+        )
+    }
+
+    fn recent(&self, query: &QString, limit: i32) -> QString {
+        let limit = usize::try_from(limit).unwrap_or(0);
+        to_json(self.history.recent(&query.to_string(), limit))
+    }
+
+    fn remove_site(mut self: Pin<&mut Self>, site: &QString) -> i32 {
+        let removed = self
+            .as_mut()
+            .rust_mut()
             .history
-            .search(&query.to_string(), limit, now)
-            .into_iter()
-            .map(|e| {
-                serde_json::json!({
-                    "url": e.url,
-                    "title": e.title,
-                    "visits": e.visits,
-                    "lastVisit": e.last_visit,
-                    "frecency": e.frecency(now),
-                })
-            })
-            .collect();
-        QString::from(serde_json::Value::Array(hits).to_string().as_str())
+            .remove_site(&site.to_string());
+        // What the address bar learned about the site goes with it.
+        let forgot = self
+            .as_mut()
+            .rust_mut()
+            .inputs
+            .forget_site(&site.to_string());
+        if removed > 0 || forgot {
+            self.changed();
+        }
+        i32::try_from(removed).unwrap_or(i32::MAX)
     }
 
     fn record_choice(mut self: Pin<&mut Self>, input: &QString, url: &QString, title: &QString) {
@@ -238,4 +258,21 @@ impl qobject::History {
         });
         saved && inputs_saved
     }
+}
+
+fn to_json(entries: Vec<&history::HistoryEntry>) -> QString {
+    let now = history::now();
+    let hits: Vec<serde_json::Value> = entries
+        .into_iter()
+        .map(|e| {
+            serde_json::json!({
+                "url": e.url,
+                "title": e.title,
+                "visits": e.visits,
+                "lastVisit": e.last_visit,
+                "frecency": e.frecency(now),
+            })
+        })
+        .collect();
+    QString::from(serde_json::Value::Array(hits).to_string().as_str())
 }
