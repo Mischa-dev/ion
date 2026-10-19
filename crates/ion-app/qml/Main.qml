@@ -279,6 +279,30 @@ ApplicationWindow {
 
     PlatformIntegration { window: window }
 
+    // Two-finger swipes go back and forward; pinching zooms the page.
+    Gestures {
+        id: gestures
+        area: {
+            pageArea.x; pageArea.y; pageArea.width; pageArea.height
+            return pageArea.mapToItem(null, 0, 0, pageArea.width, pageArea.height)
+        }
+        readonly property var view: window.currentView
+        canGoBack: !!view && view.canGoBack && view.scrollPosition.x <= 1
+        canGoForward: !!view && view.canGoForward
+            && view.scrollPosition.x + view.width / view.zoomFactor >= view.contentsSize.width / view.zoomFactor - 1
+        zoomFactor: view ? view.zoomFactor : 1
+        onNavigate: direction => direction === "back" ? view?.goBack() : view?.goForward()
+        onZoom: (factor, done) => {
+            if (!view)
+                return
+            if (done)
+                view.setZoom(factor)
+            else
+                view.zoomFactor = factor
+        }
+        Component.onCompleted: attach(window)
+    }
+
     // Command palette (Ctrl/Cmd+K).
     CommandPalette { id: palette; browser: window }
 
@@ -352,6 +376,7 @@ ApplicationWindow {
 
         // One web view per tab, stacked; only the current one is visible.
         Item {
+            id: pageArea
             Layout.fillWidth: true
             Layout.fillHeight: true
 
@@ -438,6 +463,12 @@ ApplicationWindow {
             onActivityRequested: agentActivity.show()
             onFinished: window.currentView?.forceActiveFocus()
         }
+    }
+
+    SwipeIndicator {
+        parent: pageArea
+        direction: gestures.swipeDirection
+        progress: gestures.swipeProgress
     }
 
     DownloadsPanel { id: downloads; profile: window.profile }

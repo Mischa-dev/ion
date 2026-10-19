@@ -10,6 +10,7 @@ pub mod bookmarks;
 pub mod config;
 pub mod downloads;
 pub mod extensions;
+pub mod gestures;
 pub mod history;
 pub mod keymap;
 pub mod load_error;
