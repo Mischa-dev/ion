@@ -209,6 +209,18 @@ in
           vim = setting types.bool "Vim-style keys and link hints in pages.";
         };
 
+        gestures = {
+          swipe = setting types.bool "Swipe two fingers sideways on a touchpad to go back or forward (default true).";
+          pinch =
+            setting
+              (types.enum [
+                "zoom"
+                "magnify"
+                "off"
+              ])
+              "What a touchpad pinch does: page zoom remembered per site (default), Chromium's magnifier, or nothing.";
+        };
+
         privacy = {
           globalPrivacyControl = setting types.bool "Send the Global Privacy Control signal to sites.";
           blockThirdPartyCookies = setting types.bool "Refuse cookies from sites other than the one in the address bar.";

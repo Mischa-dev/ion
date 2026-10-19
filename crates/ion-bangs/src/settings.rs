@@ -5,7 +5,7 @@
 //! overrides through `Config.set`, so they apply live and persist; the base
 //! config (and so the Nix config) is left untouched.
 
-use ion_config::{Autoplay, Config, Density, TabLayout, ThemeSource};
+use ion_config::{Autoplay, Config, Density, PinchAction, TabLayout, ThemeSource};
 
 /// A value to store under a config key.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -155,6 +155,35 @@ pub fn options<'a>(
         active: false,
     });
 
+    let swipe = config.gestures.swipe;
+    options.push(SettingOption {
+        title: if swipe {
+            "Turn off swipe to go back and forward"
+        } else {
+            "Turn on swipe to go back and forward"
+        }
+        .into(),
+        keywords: "settings gestures touchpad trackpad two finger navigation",
+        changes: vec![("gestures.swipe", SettingValue::Flag(!swipe))],
+        active: false,
+    });
+    for (pinch, value, title) in [
+        (PinchAction::Zoom, "zoom", "Pinch: zoom the page"),
+        (
+            PinchAction::Magnify,
+            "magnify",
+            "Pinch: magnify without reflowing",
+        ),
+        (PinchAction::Off, "off", "Pinch: do nothing"),
+    ] {
+        options.push(SettingOption {
+            title: title.into(),
+            keywords: "settings gestures touchpad trackpad pinch zoom",
+            changes: vec![("gestures.pinch", text(value))],
+            active: config.gestures.pinch == pinch,
+        });
+    }
+
     // Agents stay off until the person turns them on (docs/CONFIG.md).
     let agents = config.ai.enable;
     options.push(SettingOption {
@@ -242,6 +271,7 @@ mod tests {
                 "Theme: Automatic light or dark",
                 "Comfortable density",
                 "Horizontal tabs",
+                "Pinch: zoom the page",
                 "Autoplay: silent video only",
                 "Search with DuckDuckGo",
             ]
