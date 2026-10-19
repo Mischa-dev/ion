@@ -7,7 +7,7 @@ pub fn section(_: &Context) -> Section {
     Section::new(
         "agent",
         "Ion Agent",
-        "✦",
+        "@",
         "Ask about a page, or have Ion do things for you, from the address bar.",
         vec![
             Group::new(
@@ -24,7 +24,7 @@ pub fn section(_: &Context) -> Section {
                             button: "Set up Ion Agent".into(),
                         },
                     )
-                    .help("Pick Claude, OpenAI, OpenRouter, Ollama or another service, paste a key and choose a model.")
+                    .help("Pick Claude, OpenAI, OpenRouter, Ollama or another service, paste a key and choose a model. A saved key can be forgotten there too.")
                     .keywords("api key claude openai ollama provider keyring"),
                 ],
             ),
