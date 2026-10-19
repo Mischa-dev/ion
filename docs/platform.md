@@ -56,6 +56,16 @@ Checklist on a real machine:
 If decoding stays in software, try `QTWEBENGINE_CHROMIUM_FLAGS=--ignore-gpu-blocklist`,
 and note the GPU, driver and what `chrome://gpu` says in an issue.
 
+`QT_LOGGING_RULES=qt.webenginecontext.debug=true ion` prints which GL
+backend QtWebEngine picked (ANGLE, Vulkan or software) and whether GBM works;
+without GBM QtWebEngine turns VA-API decoding off.
+
+NVIDIA: Chromium refuses VA-API on NVIDIA GPUs unless asked. With
+nvidia-vaapi-driver installed, start Ion with `LIBVA_DRIVER_NAME=nvidia` and
+Ion adds the `VaapiOnNvidiaGPUs` feature. `[performance] hardwareVideo =
+false` in `config.toml` turns all of Ion's video features off, like
+`ION_HARDWARE_VIDEO=0`.
+
 ## macOS
 
 `nix build` produces `result/Applications/Ion.app` (plus `result/bin/ion`,

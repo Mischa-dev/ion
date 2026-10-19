@@ -61,8 +61,15 @@ build only, then `qmlprofiler --output trace.qtd target/release/ion URL`.
   `TabPart` too.
 - **The new-tab page exists only while it shows.** Before, every tab kept one
   (with its tiles) and rebuilt all of them on every config change.
+- **Dialogs load on first use.** The import, extensions, profiles and
+  password dialogs and the agent setup and activity panels are
+  `Lazy` loaders in `Main.qml`; call `.get()` to reach the object. New
+  window-level popups that aren't open at startup belong in a `Lazy` too.
+- **DNS prefetch.** Pages look up the addresses of their links before they
+  are clicked, as in Chrome (`[performance] dnsPrefetch`, on by default).
 - **Hardware video on Linux.** VA-API decode and encode features are switched
-  on (`crates/ion-platform/src/chromium.rs`); see
+  on (`crates/ion-platform/src/chromium.rs`), including NVIDIA's driver when
+  `LIBVA_DRIVER_NAME=nvidia`; see
   [platform.md](platform.md#hardware-video-and-gpu-linux) for the checks.
 
 ## Memory pressure
@@ -99,6 +106,19 @@ work runs on the CPU for every browser alike. Medians of 5 runs.
 | Restore 30 tabs → page loaded | 1559 ms | **834 ms** | – | – |
 | Restore 30 tabs, memory | 1298 MiB | **721 MiB** | – | – |
 | Scrolling (software, 60 Hz) | 59.9 fps | 59.9 fps | 59.9 fps | 59.0 fps |
+
+The memory rows above are one launch each. With the benchmark now taking
+medians of `--runs` launches (October 2026, after the tabs revamp and with
+dialogs built on first use):
+
+| Memory | Ion | Chromium 154 | Firefox 157 |
+|---|---|---|---|
+| 1 tab | 337 MiB | 428 MiB | 509 MiB |
+| 10 tabs | 650 MiB | 664 MiB | 702 MiB |
+| Each extra tab | 35 MiB | 26 MiB | 21 MiB |
+
+The tabs revamp made the window about 60 ms slower to build; building
+dialogs on first use wins back about 35 ms of that.
 
 Before this work a restored session loaded every tab at startup (the views
 were created after the restore flag had already cleared), which is where

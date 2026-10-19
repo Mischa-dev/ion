@@ -81,9 +81,18 @@ static LISTENER: Mutex<Option<Listener>> = Mutex::new(None);
 /// over this launch and the process should exit.
 pub fn startup() -> bool {
     let user_flags = std::env::var(chromium::FLAGS_VAR).ok();
-    if let Some(flags) =
-        chromium::merged_flags(&chromium::Options::from_env(), user_flags.as_deref())
+    let mut options = chromium::Options::from_env();
+    // `[performance] hardwareVideo`. Read without the global store, whose
+    // file watcher would start a thread before set_var below.
+    if let Some(paths) = ion_config::Paths::from_env()
+        && !ion_config::Store::open(paths)
+            .config()
+            .performance
+            .hardware_video
     {
+        options.hardware_video = false;
+    }
+    if let Some(flags) = chromium::merged_flags(&options, user_flags.as_deref()) {
         // SAFETY: called at the top of `main`, before any other thread exists.
         unsafe { std::env::set_var(chromium::FLAGS_VAR, flags) };
     }

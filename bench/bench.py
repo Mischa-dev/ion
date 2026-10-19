@@ -362,28 +362,32 @@ def bench_startup(browser: Browser, reports: Reports, port: int, runs: int) -> d
     return result
 
 
-def bench_memory(browser: Browser, reports: Reports, port: int, tabs: int) -> dict:
-    """One launch with one tab, one with `tabs` tabs (all on the command line,
-    which every browser supports the same way)."""
-    measured = {}
-    for count in (1, tabs):
-        browser.fresh_profile()
-        urls = [page_url(port, "article.html", tab=i) for i in range(count)]
-        started = browser.start_many(urls)
-        try:
-            reports.wait("load", count=count, timeout=120, since=started)
-            measured[count] = settled_memory(browser.proc.pid, seconds=4 + count * 0.3)
-        finally:
-            browser.stop()
-        mib, procs = measured[count]
-        print(f"  memory: {count} tab(s) {mib:.0f} MiB ({procs} processes)", flush=True)
-    one, many = measured[1][0], measured[tabs][0]
+def bench_memory(browser: Browser, reports: Reports, port: int, tabs: int, runs: int) -> dict:
+    """Launches with one tab and with `tabs` tabs (all on the command line,
+    which every browser supports the same way), `runs` times each; medians."""
+    samples = {1: [], tabs: []}
+    processes = []
+    for run in range(runs):
+        for count in (1, tabs):
+            browser.fresh_profile()
+            urls = [page_url(port, "article.html", tab=i, run=run) for i in range(count)]
+            started = browser.start_many(urls)
+            try:
+                reports.wait("load", count=count, timeout=120, since=started)
+                mib, procs = settled_memory(browser.proc.pid, seconds=4 + count * 0.3)
+            finally:
+                browser.stop()
+            samples[count].append(mib)
+            if count == tabs:
+                processes.append(procs)
+            print(f"  memory run {run + 1}/{runs}: {count} tab(s) {mib:.0f} MiB ({procs} processes)", flush=True)
+    one, many = statistics.median(samples[1]), statistics.median(samples[tabs])
     return {
         "one_tab_mib": round(one, 1),
         "tabs": tabs,
         "many_tabs_mib": round(many, 1),
         "per_extra_tab_mib": round((many - one) / max(1, tabs - 1), 1),
-        "processes": measured[tabs][1],
+        "processes": round(statistics.median(processes)),
     }
 
 
@@ -509,7 +513,7 @@ def main() -> None:
         if "startup" in tests:
             results["startup"] = bench_startup(browser, reports, port, args.runs)
         if "memory" in tests:
-            results["memory"] = bench_memory(browser, reports, port, args.tabs)
+            results["memory"] = bench_memory(browser, reports, port, args.tabs, args.runs)
         if "restore" in tests and args.browser == "ion":
             results["restore"] = bench_restore(browser, reports, port, args.runs, args.restore_tabs)
         if "scroll" in tests:
