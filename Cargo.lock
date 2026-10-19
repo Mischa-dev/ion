@@ -1302,6 +1302,7 @@ dependencies = [
  "cxx-qt",
  "cxx-qt-build",
  "cxx-qt-lib",
+ "getrandom 0.4.3",
  "ion-adblock",
  "ion-agent",
  "ion-bangs",
@@ -1312,6 +1313,7 @@ dependencies = [
  "ion-keyring",
  "ion-passwords",
  "ion-platform",
+ "ion-privacy",
  "ion-reader",
  "ion-safety",
  "ion-session",
@@ -1396,6 +1398,14 @@ version = "0.1.0"
 dependencies = [
  "libc",
  "serde_json",
+]
+
+[[package]]
+name = "ion-privacy"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "url",
 ]
 
 [[package]]

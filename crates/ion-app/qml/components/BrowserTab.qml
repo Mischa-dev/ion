@@ -98,7 +98,22 @@ WebEngineView {
     onLoadingChanged: info => {
         // Ion's own error page covers Chromium's until something replaces it;
         // a load that only starts, or is stopped, leaves Chromium's in place.
-        if (info.status === WebEngineView.LoadFailedStatus)
+        // HTTPS-first: the https page Ion asked for failed; go back to http
+        // ("upgrade") or offer it ("strict").
+        // Only a connection or certificate failure means "no https here"; a
+        // load the person stopped doesn't.
+        const noHttps = info.status === WebEngineView.LoadFailedStatus
+                && (info.errorDomain === WebEngineView.ConnectionErrorDomain
+                    || info.errorDomain === WebEngineView.CertificateErrorDomain)
+                && info.errorCode !== -3
+        const insecure = noHttps ? Privacy.httpsFallback(info.url.toString()) : ""
+        if (insecure.length > 0 && Privacy.httpsMode() === "strict") {
+            loadError.showInsecureOffer(info, insecure)
+        } else if (insecure.length > 0) {
+            Qt.callLater(() => view.url = insecure)
+            notify(qsTr("%1 has no secure connection; loaded without HTTPS")
+                   .arg(insecure.replace(/^http:\/\//, "").split("/")[0]))
+        } else if (info.status === WebEngineView.LoadFailedStatus)
             loadError.showFor(info)
         else if (info.status === WebEngineView.LoadSucceededStatus)
             loadError.visible = false
@@ -248,5 +263,9 @@ WebEngineView {
         id: loadError
         anchors.fill: parent
         onRetry: view.reload()
+        onContinueInsecure: target => {
+            Privacy.allowHttp(target)
+            view.url = target
+        }
     }
 }

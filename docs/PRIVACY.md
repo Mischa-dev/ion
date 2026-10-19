@@ -48,3 +48,26 @@ exports from Chrome, Edge, Brave, Firefox, Safari, Bitwarden and 1Password.
 **Other secrets.** `ion_keyring::global()` stores any named secret
 (`get`/`set`/`delete`/`get_or_create`) for the rest of Ion, for example an
 agent's API key.
+
+## Protections
+
+The shield next to the address bar (`AdblockButton.qml`, `AdblockPopup.qml`)
+shows how each protection stands on the current page, which hosts were
+blocked there, and one switch that turns protections off for a site that
+breaks (blocking and fingerprinting resistance).
+
+- **Ads and trackers**: `ion-adblock` with EasyList and EasyPrivacy by default.
+- **Cross-site cookies**: refused (`privacy.blockThirdPartyCookies`).
+- **HTTPS-first** (`privacy.httpsOnly`, `crates/ion-privacy/src/https.rs`):
+  the request interceptor sends top-level http navigations to https. When
+  the https version fails with a connection or certificate error, "upgrade"
+  (the default) loads http and remembers the site for the session; "strict"
+  shows a warning with "Continue without HTTPS". Local names (localhost, IP
+  addresses, `.local`, `.lan`, single-label hosts) and explicit ports are
+  left alone, and a site that redirects https back to http is let through.
+- **Fingerprinting** (`privacy.fingerprinting`,
+  `crates/ion-privacy/src/fingerprint.js`): in every frame before page
+  scripts run, canvas, WebGL and audio readouts get noise that is stable per
+  site and session but differs across both; WebGL hides the GPU's name;
+  `hardwareConcurrency` and `deviceMemory` report 8; the Battery API is gone.
+- **Global Privacy Control**: `Sec-GPC: 1` and `navigator.globalPrivacyControl`.

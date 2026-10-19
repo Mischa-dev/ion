@@ -26,11 +26,13 @@ ion-safety.workspace = true
 ion-agent.workspace = true
 ion-keyring.workspace = true
 ion-passwords.workspace = true
+ion-privacy.workspace = true
 cxx.workspace = true
 cxx-qt.workspace = true
 cxx-qt-lib.workspace = true
 serde_json.workspace = true
 url.workspace = true
+getrandom.workspace = true
 
 [build-dependencies]
 cxx-qt-build.workspace = true

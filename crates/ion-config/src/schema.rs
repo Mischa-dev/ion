@@ -62,6 +62,12 @@ pub struct Privacy {
     /// Browsing data deleted when Ion quits (and, in case quitting was cut
     /// short, when it next starts).
     pub clear_on_exit: Vec<BrowsingData>,
+    /// Load http pages over https: `"upgrade"` falls back to http quietly
+    /// when a site has no https, `"strict"` asks first, `"off"` never tries.
+    pub https_only: String,
+    /// Add noise to what fingerprinting scripts read (canvas, WebGL, audio)
+    /// and report common hardware values, so sites can't recognise you.
+    pub fingerprinting: bool,
 }
 
 impl Default for Privacy {
@@ -70,6 +76,8 @@ impl Default for Privacy {
             global_privacy_control: true,
             block_third_party_cookies: true,
             clear_on_exit: Vec::new(),
+            https_only: "upgrade".into(),
+            fingerprinting: true,
         }
     }
 }
