@@ -440,7 +440,7 @@ fn askable() -> Vec<(String, String)> {
 /// or `[ai]` for Ion Agent. The key is looked up when connecting, off the
 /// UI thread, because the keyring may take a moment (or ask to unlock).
 #[derive(Clone)]
-struct Recipe {
+pub(crate) struct Recipe {
     kind: Kind,
     base_url: String,
     model: String,
@@ -448,7 +448,7 @@ struct Recipe {
 }
 
 impl Recipe {
-    fn for_agent(agent: &str) -> Result<Recipe, String> {
+    pub(crate) fn for_agent(agent: &str) -> Result<Recipe, String> {
         let config = ion_config::global().config();
         let ai = config.ai.clone();
         let own = config
@@ -500,7 +500,7 @@ impl Recipe {
     }
 
     /// Connect, with the key from the keyring or the environment.
-    fn connect(&self) -> Result<Arc<dyn Model>, String> {
+    pub(crate) fn connect(&self) -> Result<Arc<dyn Model>, String> {
         let account = provider::key_account(self.kind, &self.base_url);
         let (key, source) = keys::lookup(account.as_deref(), &self.key_env);
         if source == keys::Source::Missing {

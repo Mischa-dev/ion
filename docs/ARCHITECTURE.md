@@ -34,6 +34,8 @@ crates/
                           user agent and site quirks, links that open other apps
   ion-reader/             reader mode: article extraction and the themed reader page
   ion-media/              autoplay policy, picture-in-picture and system media controls
+  ion-print/              print preview: page ranges, paper sizes, saved-PDF names
+  ion-translate/          opt-in page translation through Ion Agent's model
   ion-safety/             permissions and agent trust: decisions, prompts, activity log
   ion-agent/              Ion Agent's runtime: tasks, browser tools, model access
   ion-perf/               startup marks, memory pressure, per-process memory
@@ -165,3 +167,17 @@ from `config.toml` and offer to go back to it.
   per site to `zoom.txt` in Ion's data directory.
 - Settings come from `ion-config` (layered TOML, live reload, `programs.ion`
   home-manager module); see [CONFIG.md](CONFIG.md).
+- Media: pages report what they play through a main-world script
+  (`ion_media::session`) as console messages that `BrowserTab` reads into
+  `media`; `MediaSessions.qml` picks the tab the system's controls show and
+  publishes it over MPRIS (`cpp/mpris.cpp`, Linux only), and
+  `NowPlayingButton.qml` lists every playing tab. Picture-in-picture
+  (`PictureInPicture.qml`) reparents the tab's view into its own window and
+  styles the page so the video fills it (`ion_media::pip`).
+- Printing: `PrintPreview.qml` renders the page with `printToPdf` and shows it
+  with QtPdf; `Printing` (`bridge/print.rs`, `cpp/print.cpp`) prints that PDF
+  with QPrinter off the UI thread. The PDF viewer is Chromium's own.
+- Reading: `ReaderMode.qml` and `ReaderBar.qml` (settings in `[reader]`,
+  applied live through CSS variables); `PageTranslator.qml` translates a page
+  on request through Ion Agent's model (`ion_translate`, `bridge/translate.rs`),
+  sending nothing until you ask.

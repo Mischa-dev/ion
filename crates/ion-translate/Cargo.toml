@@ -1,0 +1,13 @@
+[package]
+name = "ion-translate"
+description = "Page translation for the Ion browser: collecting a page's text, batching it for a model and putting the translation back"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

@@ -10,6 +10,7 @@ Rectangle {
 
     property var view   // BrowserTab of the current tab, may be null
     property DownloadsPanel downloads   // may be null
+    property MediaSessions mediaSessions   // may be null
     property AgentSidebar agentSidebar   // may be null
     property alias urlBar: urlBar
 
@@ -185,6 +186,7 @@ Rectangle {
         }
         SitePermissions { view: bar.view }
         AdblockButton { view: bar.view }
+        NowPlayingButton { sessions: bar.mediaSessions }
         DownloadsButton { panel: bar.downloads }
     }
 

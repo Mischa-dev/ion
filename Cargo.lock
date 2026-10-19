@@ -1319,6 +1319,7 @@ dependencies = [
  "ion-passwords",
  "ion-perf",
  "ion-platform",
+ "ion-print",
  "ion-privacy",
  "ion-reader",
  "ion-safety",
@@ -1326,6 +1327,7 @@ dependencies = [
  "ion-settings",
  "ion-sites",
  "ion-theme",
+ "ion-translate",
  "serde_json",
  "url",
 ]
@@ -1397,6 +1399,7 @@ version = "0.1.0"
 dependencies = [
  "ion-config",
  "ion-sites",
+ "serde_json",
 ]
 
 [[package]]
@@ -1447,6 +1450,10 @@ dependencies = [
  "libc",
  "serde_json",
 ]
+
+[[package]]
+name = "ion-print"
+version = "0.1.0"
 
 [[package]]
 name = "ion-privacy"
@@ -1511,6 +1518,13 @@ dependencies = [
  "serde_json",
  "toml",
  "url",
+]
+
+[[package]]
+name = "ion-translate"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
 ]
 
 [[package]]

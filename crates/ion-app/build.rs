@@ -50,7 +50,7 @@ fn main() {
         .into_iter()
         .filter(|h| std::fs::read_to_string(h).is_ok_and(|src| src.contains("Q_OBJECT")))
         .collect();
-    // D-Bus (desktop notifications) only exists on Linux.
+    // D-Bus (desktop notifications, MPRIS media controls) only exists on Linux.
     let linux = std::env::var("CARGO_CFG_TARGET_OS").is_ok_and(|os| os == "linux");
 
     let mut builder = CxxQtBuilder::new_qml_module(
@@ -58,6 +58,8 @@ fn main() {
     )
     .qt_module("Gui")
     .qt_module("Network")
+    .qt_module("Pdf")
+    .qt_module("PrintSupport")
     .qt_module("Quick")
     .qt_module("QuickControls2")
     .qt_module("WebEngineCore")

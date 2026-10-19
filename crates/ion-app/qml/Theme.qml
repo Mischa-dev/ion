@@ -60,6 +60,11 @@ QtObject {
     // What a web page without its own background is drawn on. Not themed:
     // pages assume the web's default white.
     readonly property color pageCanvas: "white"
+    // Picture-in-picture draws over video, so its colors don't follow the
+    // theme: light controls on a dark wash.
+    readonly property color videoCanvas: "black"
+    readonly property color onVideo: "white"
+    readonly property color videoScrim: Qt.rgba(0, 0, 0, 0.6)
 
     // Shape and density, from the [ui] config section (docs/CONFIG.md).
     readonly property bool compact: Config.density === "compact"

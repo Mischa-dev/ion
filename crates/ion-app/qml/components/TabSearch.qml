@@ -24,16 +24,27 @@ Popup {
         field.forceActiveFocus()
     }
 
-    function refresh() {
-        const keep = results[list.currentIndex]
+    // `keepSelection` stays on the highlighted tab (by id, as rows shift);
+    // otherwise a new query starts from the top.
+    function refresh(keepSelection) {
+        const keep = keepSelection ? results[list.currentIndex] : undefined
         results = JSON.parse(Tabs.searchTabs(field.text))
         // The current tab heads a blank search; start on the one before it,
         // so Enter goes back like Ctrl+Tab would.
         const start = field.text.length === 0 && results.length > 1 && results[0].current ? 1 : 0
-        const again = keep ? results.findIndex(r => r.kind === keep.kind && r.index === keep.index) : -1
-        list.currentIndex = results.length === 0 ? -1 : again >= 0 && field.text.length === 0 ? again : start
+        const again = keep ? results.findIndex(r => r.kind === keep.kind && r.id === keep.id) : -1
+        list.currentIndex = results.length === 0 ? -1 : again >= 0 ? again : start
         if (list.currentIndex <= start)
             list.positionViewAtBeginning()
+    }
+    function refreshKeepingSelection() { refresh(true) }
+
+    // Results hold row indexes, so redo them when tabs open, close, move or
+    // change while the popup is up (a page can open one in the background).
+    Connections {
+        target: Tabs
+        enabled: root.opened
+        function onSessionChanged() { Qt.callLater(root.refreshKeepingSelection) }
     }
 
     function choose(item) {
@@ -49,7 +60,7 @@ Popup {
     function closeRow(item) {
         if (item.kind === "tab")
             root.browser.closeTab(item.index)
-        Qt.callLater(refresh)
+        Qt.callLater(refreshKeepingSelection)
     }
 
     // Moving the pointer selects the row under it; a resting pointer doesn't.
@@ -76,7 +87,7 @@ Popup {
 
     onAboutToShow: {
         lastPointer = Qt.point(-1, -1)
-        refresh()
+        refresh(false)
     }
     onOpened: field.forceActiveFocus()
 
@@ -121,7 +132,7 @@ Popup {
                 color: Theme.surfaceRaised
             }
 
-            onTextChanged: if (root.opened || root.visible) root.refresh()
+            onTextChanged: if (root.opened || root.visible) root.refresh(false)
 
             Keys.onUpPressed: list.decrementCurrentIndex()
             Keys.onDownPressed: list.incrementCurrentIndex()
