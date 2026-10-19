@@ -21,9 +21,23 @@ pub mod qobject {
         /// The reader page for `html` loaded from `url`, or "" if there is no
         /// article in it. `style` is a JSON object with `background`, `text`,
         /// `muted`, `accent`, `surface` and `border` colors (`#rrggbb`) and
-        /// optionally `fontSize` (px) and `serif` (bool).
+        /// optionally `fontSize` (px), `serif` (bool), `width` ("narrow",
+        /// "medium", "wide") and `theme` (a `[reader] theme`, whose own
+        /// colors replace the given ones).
         #[qinvokable]
         fn render(self: &Reader, html: &QString, url: &QString, style: &QString) -> QString;
+
+        /// Script (Ion's world) restyling an open reader page to `style`
+        /// (as for `render`) without reloading it.
+        #[qinvokable]
+        #[cxx_name = "styleScript"]
+        fn style_script(self: &Reader, style: &QString) -> QString;
+
+        /// Background and text colors of a `[reader] theme` preset, as
+        /// `"#bg #text"`, or "" for `"match"` (Ion's theme).
+        #[qinvokable]
+        #[cxx_name = "themeColors"]
+        fn theme_colors(self: &Reader, theme: &QString) -> QString;
     }
 }
 
@@ -53,7 +67,12 @@ fn style_from_json(json: &str) -> Style {
     if let Some(serif) = value["serif"].as_bool() {
         style.serif = serif;
     }
-    style
+    match value["width"].as_str() {
+        Some("narrow") => style.width_em = 32,
+        Some("wide") => style.width_em = 48,
+        _ => {}
+    }
+    style.with_preset(value["theme"].as_str().unwrap_or(""))
 }
 
 impl qobject::Reader {
@@ -65,5 +84,17 @@ impl qobject::Reader {
             }
             None => QString::default(),
         }
+    }
+
+    fn theme_colors(&self, theme: &QString) -> QString {
+        match ion_reader::preset(&theme.to_string()) {
+            Some([background, text, ..]) => QString::from(format!("{background} {text}").as_str()),
+            None => QString::default(),
+        }
+    }
+
+    fn style_script(&self, style: &QString) -> QString {
+        let style = style_from_json(&style.to_string());
+        QString::from(ion_reader::style_script(&style).as_str())
     }
 }

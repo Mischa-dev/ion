@@ -5,8 +5,10 @@ import QtWebEngine
 import Ion
 
 // Find in page. Lives inside a BrowserTab, floats over the top-right corner of
-// the page. Ctrl+F opens it, Enter / Shift+Enter (or the find-next and
-// find-previous commands, F3 / Shift+F3) step through matches, Esc closes it and clears the highlight.
+// the page. Ctrl+F opens it (with the page's selection, if any), Enter /
+// Shift+Enter (or the find-next and find-previous commands, F3 / Shift+F3)
+// step through matches, Aa matches case, Esc closes it and clears the
+// highlight.
 Rectangle {
     id: bar
 
@@ -14,8 +16,21 @@ Rectangle {
 
     property int activeMatch: 0
     property int matchCount: 0
+    property bool caseSensitive: false
+    // Whether the current text has been searched yet, so "no matches" only
+    // shows once the page has answered.
+    property bool answered: false
 
     function open() {
+        // A short selection on the page is what you want to find.
+        view.runJavaScript("String(window.getSelection())", WebEngineScript.ApplicationWorld, text => {
+            const selection = String(text ?? "").trim()
+            if (bar.visible && selection.length > 0 && selection.length <= 200
+                    && selection.indexOf("\n") < 0 && selection !== field.text) {
+                field.text = selection
+                field.selectAll()
+            }
+        })
         visible = true
         field.forceActiveFocus()
         field.selectAll()
@@ -40,8 +55,12 @@ Rectangle {
             activeMatch = 0
             return
         }
-        view.findText(field.text, direction < 0 ? WebEngineView.FindBackward : 0)
+        let flags = direction < 0 ? WebEngineView.FindBackward : 0
+        if (caseSensitive)
+            flags |= WebEngineView.FindCaseSensitively
+        view.findText(field.text, flags)
     }
+    onCaseSensitiveChanged: search(0)
 
     visible: false
     z: 10
@@ -60,6 +79,7 @@ Rectangle {
         function onFindTextFinished(result) {
             bar.matchCount = result.numberOfMatches
             bar.activeMatch = result.activeMatch
+            bar.answered = true
         }
         function onUrlChanged() {
             if (bar.visible)
@@ -90,8 +110,8 @@ Rectangle {
             background: Rectangle {
                 radius: Theme.radius
                 color: Theme.surfaceRaised
-                border.width: field.activeFocus ? 1 : 0
-                border.color: Theme.accent
+                border.width: field.missing || field.activeFocus ? Theme.hairline : 0
+                border.color: field.missing ? Theme.danger : Theme.accent
             }
 
             Text {
@@ -100,16 +120,27 @@ Rectangle {
                 anchors.rightMargin: Theme.spacing * 2
                 anchors.verticalCenter: parent.verticalCenter
                 text: Basics.findLabel(field.text, bar.activeMatch, bar.matchCount)
-                color: Theme.textMuted
+                color: field.missing ? Theme.danger : Theme.textMuted
                 font.pixelSize: Theme.fontSize - 1
             }
 
-            onTextChanged: bar.search(0)
+            readonly property bool missing: text.length > 0 && bar.answered && bar.matchCount === 0
+            onTextChanged: {
+                bar.answered = false
+                bar.search(0)
+            }
             Keys.onReturnPressed: event => bar.search(event.modifiers & Qt.ShiftModifier ? -1 : 1)
             Keys.onEnterPressed: event => bar.search(event.modifiers & Qt.ShiftModifier ? -1 : 1)
             Keys.onEscapePressed: bar.close()
         }
 
+        IconButton {
+            id: caseButton
+            glyph: "Aa"
+            tip: bar.caseSensitive ? qsTr("Match case: on") : qsTr("Match case")
+            active: bar.caseSensitive
+            onClicked: bar.caseSensitive = !bar.caseSensitive
+        }
         IconButton {
             iconName: "chevron-up"
             tip: qsTr("Previous match")

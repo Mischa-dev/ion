@@ -300,6 +300,30 @@ pub const COMMANDS: &[Command] = &[
         &["Ctrl+Alt+R"],
     ),
     command(
+        "translate-page",
+        "Translate page",
+        "translate language foreign english show original",
+        &[],
+    ),
+    command(
+        "picture-in-picture",
+        "Picture-in-picture",
+        "pip video float pop out mini player",
+        &["Ctrl+Alt+P"],
+    ),
+    command(
+        "print",
+        "Print",
+        "printer paper preview save pdf",
+        &["Ctrl+P"],
+    ),
+    command(
+        "save-pdf",
+        "Save page as PDF",
+        "print export download document",
+        &[],
+    ),
+    command(
         "mute-tab",
         "Mute or unmute tab",
         "sound audio silence quiet volume speaker",
