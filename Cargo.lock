@@ -1243,8 +1243,8 @@ dependencies = [
 name = "ion-agent"
 version = "0.1.0"
 dependencies = [
+ "ion-keyring",
  "ion-safety",
- "keyring",
  "serde",
  "serde_json",
  "ureq",
@@ -1320,6 +1320,14 @@ name = "ion-core"
 version = "0.1.0"
 dependencies = [
  "url",
+]
+
+[[package]]
+name = "ion-keyring"
+version = "0.1.0"
+dependencies = [
+ "keyring",
+ "serde_json",
 ]
 
 [[package]]

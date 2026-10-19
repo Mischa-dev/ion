@@ -22,6 +22,10 @@ Popup {
     property var models: []
     // Where the saved setup's key comes from (`Agent.keyChecked`).
     property string keySource: ""
+    // Where saved keys go: "system keyring", "Keychain" or "a private file".
+    property string keyStore: "system keyring"
+    readonly property string savedIn: keyStore === "a private file"
+        ? qsTr("saved in a private file") : qsTr("saved in your %1").arg(keyStore)
 
     // Asks `input` once the setup is saved.
     signal ask(string input)
@@ -103,8 +107,9 @@ Popup {
             if (input.length > 0)
                 root.ask(input)
         }
-        function onKeyChecked(source, error) {
+        function onKeyChecked(source, store, error) {
             root.keySource = source
+            root.keyStore = store
             if (error.length > 0) {
                 root.tested = true
                 root.testOk = false
@@ -259,10 +264,10 @@ Popup {
                 Label {
                     Layout.fillWidth: true
                     text: !root.preset ? ""
-                        : root.editingSaved && root.keySource === "keyring" ? qsTr("API key: saved in your keyring. Paste a new one to replace it.")
-                        : root.editingSaved && root.keySource === "environment" ? qsTr("API key: from %1. Paste one to save it in your keyring instead.").arg(root.setup.keyEnv)
+                        : root.editingSaved && root.keySource === "keyring" ? qsTr("API key: %1. Paste a new one to replace it.").arg(root.savedIn)
+                        : root.editingSaved && root.keySource === "environment" ? qsTr("API key: from %1. Paste one to keep it %2 instead.").arg(root.setup.keyEnv).arg(root.savedIn)
                         : root.preset.id === "custom" ? qsTr("API key, if the service needs one")
-                        : qsTr("API key, saved in your system keyring")
+                        : qsTr("API key, %1").arg(root.savedIn)
                 }
                 Text {
                     visible: root.preset !== null && root.preset.keyPage.length > 0 && root.preset.needsKey
@@ -307,8 +312,9 @@ Popup {
                 Repeater {
                     // The ones matching what is typed, a handful at a time.
                     model: {
-                        const typed = modelField.text.trim().toLowerCase()
-                        const matching = root.models.filter(m => typed.length === 0 || m.toLowerCase().includes(typed) || m === modelField.text)
+                        // A model already picked shows them all, to switch.
+                        const typed = root.models.includes(modelField.text) ? "" : modelField.text.trim().toLowerCase()
+                        const matching = root.models.filter(m => typed.length === 0 || m.toLowerCase().includes(typed))
                         return (matching.length > 0 ? matching : root.models).slice(0, 12)
                     }
                     delegate: DialogButton {

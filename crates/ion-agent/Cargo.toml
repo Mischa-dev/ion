@@ -7,19 +7,12 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+ion-keyring.workspace = true
 ion-safety.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 url.workspace = true
 ureq = "3"
-
-# API keys live in the system keyring: Secret Service on Linux (pure Rust
-# D-Bus, no system library), the Keychain on macOS.
-[target.'cfg(target_os = "linux")'.dependencies]
-keyring = { version = "3", default-features = false, features = ["async-secret-service", "async-io", "crypto-rust"] }
-
-[target.'cfg(target_os = "macos")'.dependencies]
-keyring = { version = "3", default-features = false, features = ["apple-native"] }
 
 [lints]
 workspace = true

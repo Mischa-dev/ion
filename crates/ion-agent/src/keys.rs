@@ -1,42 +1,20 @@
-//! Model service API keys, kept in the system keyring (Secret Service on
-//! Linux, the Keychain on macOS) under [`crate::provider::key_account`].
-//! Never in config, never in Ion's own files.
+//! Model service API keys, kept with Ion's other secrets in
+//! [`ion_keyring`] (the system keyring, or a private file when none
+//! answers) under [`crate::provider::key_account`]. Never in config.
 
-/// The keyring service name Ion's keys are filed under.
-const SERVICE: &str = "Ion browser";
-
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-fn entry(account: &str) -> Result<keyring::Entry, String> {
-    keyring::Entry::new(SERVICE, account).map_err(describe)
+/// The secret name a service's key is saved under.
+fn name(account: &str) -> String {
+    format!("agent-key:{account}")
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-fn describe(error: keyring::Error) -> String {
-    match error {
-        keyring::Error::NoStorageAccess(_) | keyring::Error::PlatformFailure(_) => format!(
-            "The system keyring isn't available ({error}). Start a Secret Service such as \
-             GNOME Keyring or KeePassXC, or put the key in an environment variable."
-        ),
-        _ => format!("The system keyring refused: {error}"),
-    }
-}
-
-/// The key saved for `account`, if any. A keyring that isn't there reads
-/// as no key, so the environment variable still works.
+/// The key saved for `account`, if any. A keyring that can't be read
+/// reads as no key, so the environment variable still works.
 pub fn saved(account: &str) -> Option<String> {
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    {
-        entry(account)
-            .ok()?
-            .get_password()
-            .ok()
-            .filter(|k| !k.trim().is_empty())
-    }
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-    {
-        let _ = account;
-        None
-    }
+    ion_keyring::global()
+        .get(&name(account))
+        .ok()
+        .flatten()
+        .filter(|k| !k.trim().is_empty())
 }
 
 /// Save `key` for `account`, replacing any saved before.
@@ -45,31 +23,22 @@ pub fn save(account: &str, key: &str) -> Result<(), String> {
     if key.is_empty() {
         return Err("The key is empty.".to_owned());
     }
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    {
-        entry(account)?.set_password(key).map_err(describe)
-    }
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-    {
-        let _ = account;
-        Err("Ion can't save keys on this system; use an environment variable.".to_owned())
-    }
+    ion_keyring::global()
+        .set(&name(account), key)
+        .map_err(|e| format!("Couldn't save the key: {e}"))
 }
 
 /// Forget the key saved for `account`. Nothing saved is not an error.
 pub fn forget(account: &str) -> Result<(), String> {
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    {
-        match entry(account)?.delete_credential() {
-            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-            Err(e) => Err(describe(e)),
-        }
-    }
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-    {
-        let _ = account;
-        Ok(())
-    }
+    ion_keyring::global()
+        .delete(&name(account))
+        .map_err(|e| format!("Couldn't forget the key: {e}"))
+}
+
+/// Where keys are kept, for the setup to say: "system keyring",
+/// "Keychain" or "a private file".
+pub fn store_label() -> &'static str {
+    ion_keyring::global().backend().label()
 }
 
 /// Where a key comes from, for the setup to say.
@@ -98,7 +67,11 @@ impl Source {
 /// whose config names `env`: the keyring first, then the environment. An
 /// empty `env` means the service takes no key, unless one is saved.
 pub fn lookup(account: Option<&str>, env: &str) -> (Option<String>, Source) {
-    if let Some(key) = account.and_then(saved) {
+    lookup_in(account.and_then(saved), env)
+}
+
+fn lookup_in(saved: Option<String>, env: &str) -> (Option<String>, Source) {
+    if let Some(key) = saved {
         return (Some(key), Source::Keyring);
     }
     let env = env.trim();
@@ -116,18 +89,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn environment_and_keyless_services() {
-        // No keyring in the test environment, and an account no one saved.
-        let account = Some("openai:ion-test.invalid");
-        assert_eq!(lookup(account, "").1, Source::NotNeeded);
+    fn saved_keys_then_environment_then_none() {
         assert_eq!(
-            lookup(account, "ION_TEST_KEY_THAT_IS_NOT_SET").1,
-            Source::Missing
+            lookup_in(Some("sk-saved".into()), "PATH"),
+            (Some("sk-saved".into()), Source::Keyring)
         );
         // PATH is always set; it stands in for a key variable.
-        let (key, source) = lookup(None, "PATH");
+        let (key, source) = lookup_in(None, "PATH");
         assert_eq!(source, Source::Environment);
         assert!(key.is_some());
+        assert_eq!(
+            lookup_in(None, "ION_TEST_KEY_THAT_IS_NOT_SET").1,
+            Source::Missing
+        );
+        assert_eq!(lookup_in(None, " ").1, Source::NotNeeded);
         assert!(save("x", "  ").is_err());
     }
 }

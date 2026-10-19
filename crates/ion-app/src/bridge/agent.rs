@@ -240,10 +240,11 @@ pub mod qobject {
         fn setup_saved(self: Pin<&mut Agent>, error: &QString);
 
         /// `source` is "keyring", "environment", "notNeeded" or "missing";
-        /// `error` says why forgetting failed.
+        /// `store` says where saved keys go ("system keyring", "Keychain",
+        /// "a private file"); `error` says why forgetting failed.
         #[qsignal]
         #[cxx_name = "keyChecked"]
-        fn key_checked(self: Pin<&mut Agent>, source: &QString, error: &QString);
+        fn key_checked(self: Pin<&mut Agent>, source: &QString, store: &QString, error: &QString);
 
         #[qsignal]
         #[cxx_name = "taskChanged"]
@@ -1373,9 +1374,13 @@ impl qobject::Agent {
         let thread = self.qt_thread();
         std::thread::spawn(move || {
             let source = keys::lookup(account_for(&ai).as_deref(), &ai.api_key_env).1;
+            let store = keys::store_label();
             let _ = thread.queue(move |mut obj| {
-                obj.as_mut()
-                    .key_checked(&QString::from(source.id()), &QString::default());
+                obj.as_mut().key_checked(
+                    &QString::from(source.id()),
+                    &QString::from(store),
+                    &QString::default(),
+                );
             });
         });
     }
@@ -1391,9 +1396,13 @@ impl qobject::Agent {
                 .err()
                 .unwrap_or_default();
             let source = keys::lookup(account.as_deref(), &ai.api_key_env).1;
+            let store = keys::store_label();
             let _ = thread.queue(move |mut obj| {
-                obj.as_mut()
-                    .key_checked(&QString::from(source.id()), &QString::from(error.as_str()));
+                obj.as_mut().key_checked(
+                    &QString::from(source.id()),
+                    &QString::from(store),
+                    &QString::from(error.as_str()),
+                );
             });
         });
     }
