@@ -26,9 +26,10 @@ pub struct Config {
     pub adblock: Adblock,
     pub downloads: Downloads,
     pub new_tab: NewTab,
-    /// Shortcut remaps: command id (for example `"palette"`) to a Qt key
-    /// sequence (for example `"Ctrl+K"`). Unlisted commands keep their default.
-    pub shortcuts: BTreeMap<String, String>,
+    /// Shortcut remaps: command (for example `"palette"` or `"newTab"`) to a
+    /// Qt key sequence (`"Ctrl+K"`), a list of them, or `""` for none.
+    /// Unlisted commands keep their default keys.
+    pub shortcuts: BTreeMap<String, Keys>,
     /// Per-site settings, keyed by host. `"example.com"` also covers its
     /// subdomains; the most specific key wins. `"*"` covers every site.
     pub sites: BTreeMap<String, Site>,
@@ -41,6 +42,27 @@ pub struct Config {
     pub agents: Agents,
     pub safety: Safety,
     pub ai: Ai,
+}
+
+/// One shortcut remap: a key sequence or several.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Keys {
+    One(String),
+    Many(Vec<String>),
+}
+
+impl Keys {
+    /// The key sequences, without empty ones.
+    pub fn to_vec(&self) -> Vec<String> {
+        match self {
+            Keys::One(key) => vec![key.clone()],
+            Keys::Many(keys) => keys.clone(),
+        }
+        .into_iter()
+        .filter(|key| !key.trim().is_empty())
+        .collect()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -649,6 +671,22 @@ mod tests {
             Some("firefox")
         );
         assert!(config.privacy.global_privacy_control);
+    }
+
+    #[test]
+    fn shortcut_remaps_take_one_key_or_several() {
+        let config: Config = toml::from_str(
+            r#"
+            [shortcuts]
+            palette = "Ctrl+P"
+            reload = ["F5", "Ctrl+R"]
+            stop = ""
+            "#,
+        )
+        .unwrap();
+        assert_eq!(config.shortcuts["palette"].to_vec(), ["Ctrl+P"]);
+        assert_eq!(config.shortcuts["reload"].to_vec(), ["F5", "Ctrl+R"]);
+        assert!(config.shortcuts["stop"].to_vec().is_empty());
     }
 
     #[test]

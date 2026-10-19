@@ -27,6 +27,7 @@ ion-agent.workspace = true
 ion-keyring.workspace = true
 ion-passwords.workspace = true
 ion-privacy.workspace = true
+ion-input.workspace = true
 cxx.workspace = true
 cxx-qt.workspace = true
 cxx-qt-lib.workspace = true

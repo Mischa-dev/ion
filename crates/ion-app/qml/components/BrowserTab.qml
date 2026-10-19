@@ -14,6 +14,7 @@ WebEngineView {
     readonly property alias reader: readerMode
     // Saved passwords on this tab's pages: `passwords.prompt`, `passwords.formOnPage`.
     readonly property alias passwords: formFill
+    readonly property alias findBar: findBar
 
     // Emitted when the page asks for a new tab or window (target=_blank, window.open).
     signal newTabRequested(var request)
@@ -168,7 +169,7 @@ WebEngineView {
         onManageRequested: view.managePasswords()
     }
     AdblockCosmetics { view: view }
-    FindBar { view: view }
+    FindBar { id: findBar; view: view }
     PermissionPrompt { view: view; tabId: view.tabId }
     ScreenSharePicker { view: view }
     PageDialog { view: view }

@@ -7,12 +7,10 @@ import Ion
 // commands, settings and bangs. Ranking lives in Rust (`PaletteSearch`); this file
 // gathers the sources, shows the results and carries out the chosen one.
 //
-// Tabs and history come from the `Tabs` and `History` singletons; `browser`
-// (the main window) provides openTab(url), newTab(), closeTab(i),
-// focusUrlBar(), toggleBookmark(), showImport(), showPasswords(), openPrivateWindow(), showProfiles(), showExtensions(),
-// askAgent(input), startAgentQuestion(), toggleAgentSidebar(),
-// showAgentActivity(), profile and currentView. Bookmarks come from the `Bookmarks`
-// singleton.
+// Tabs and history come from the `Tabs` and `History` singletons, bookmarks
+// from `Bookmarks`. `browser` (the main window) provides openTab(url),
+// runCommand(id) and canRunCommand(id) (commands live in Commands.qml) and
+// currentView.
 Popup {
     id: root
 
@@ -30,12 +28,6 @@ Popup {
         // Now rather than in onOpened, after the enter transition: the first
         // keys typed right after Ctrl/Cmd+K must not be lost.
         field.forceActiveFocus()
-    }
-
-    function copyText(text) {
-        clipboard.text = text
-        clipboard.selectAll()
-        clipboard.copy()
     }
 
     // Moving the pointer selects the row under it; a resting pointer doesn't.
@@ -60,9 +52,8 @@ Popup {
         const bookmarks = text.startsWith("*") ? Bookmarks.search(text.slice(1), 200)
             : pages ? Bookmarks.search(text, Theme.paletteMaxRows) : "[]"
         const found = search.query(field.text, titles, urls, Tabs.currentIndex, history, bookmarks, Tabs.sessionNames())
-        // Agent commands only once agents are turned on.
-        const agents = Config.value("ai.enable") === true
-        results = agents ? found : found.filter(item => !(item.action === "run" && agentCommands.includes(item.value)))
+        // Only commands that can run now (agent ones need agents turned on).
+        results = found.filter(item => item.action !== "run" || browser.canRunCommand(item.value))
         list.currentIndex = results.length > 0 ? 0 : -1
     }
 
@@ -98,7 +89,8 @@ Popup {
                 view.url = item.value
             break
         case "run":
-            run(item.value)
+            Keymap.noteUsed(item.value)
+            browser.runCommand(item.value)
             break
         case "set":
             for (let i = 0; i + 1 < item.value.length; i += 2) {
@@ -110,73 +102,7 @@ Popup {
         }
     }
 
-    readonly property var agentCommands: ["ask-agent", "summarize-page", "agent-sidebar", "agent-activity"]
-
-    // Command ids come from `ion_bangs::commands::COMMANDS`.
-    function run(id) {
-        const view = browser.currentView
-        switch (id) {
-        case "new-tab": browser.newTab(); break
-        case "close-tab": browser.closeTab(Tabs.currentIndex); break
-        case "duplicate-tab": browser.openTab(view ? view.url : ""); break
-        case "reopen-tab": Tabs.reopenClosedTab(); break
-        case "next-tab": Tabs.cycle(1); break
-        case "previous-tab": Tabs.cycle(-1); break
-        case "move-tab-left": Tabs.moveTab(Tabs.currentIndex, Tabs.neighbour(Tabs.currentIndex, -1)); break
-        case "move-tab-right": Tabs.moveTab(Tabs.currentIndex, Tabs.neighbour(Tabs.currentIndex, 1)); break
-        case "close-other-tabs": browser.closeOtherTabs(Tabs.currentIndex); break
-        case "focus-url": browser.focusUrlBar(); break
-        case "copy-url": copyText(view ? view.url.toString() : ""); break
-        case "reload": view?.reload(); break
-        case "hard-reload": view?.reloadAndBypassCache(); break
-        case "stop": view?.stop(); break
-        case "back": view?.goBack(); break
-        case "forward": view?.goForward(); break
-        case "bookmark-page": browser.toggleBookmark(); break
-        case "bookmarks": Qt.callLater(() => root.show("*")); break
-        case "import-browser-data": browser.showImport(); break
-        case "passwords": browser.showPasswords(""); break
-        case "new-private-window": browser.openPrivateWindow(); break
-        case "profiles": browser.showProfiles(); break
-        case "generate-password": Passwords.copySecret(Passwords.generate()); break
-        case "clear-cookies": Privacy.clearCookies(browser.profile); break
-        case "clear-cache": browser.profile.clearHttpCache(); break
-        case "clear-history": History.clear(); History.save(); break
-        case "reader-mode": view?.reader.toggle(); break
-        case "extensions": browser.showExtensions(); break
-        case "open-extensions-folder":
-            if (Extensions.ensureFolder())
-                Qt.openUrlExternally("file://" + Extensions.folder)
-            break
-        case "reload-userscripts": Sites.reload(); view?.reload(); break
-        case "open-userscripts":
-            if (Sites.ensureDirectory())
-                Qt.openUrlExternally("file://" + Sites.directory)
-            break
-        case "fullscreen":
-            browser.toggleFullScreen()
-            break
-        case "toggle-adblock":
-            if (view && Adblock.setEnabledOn(view.url, !Adblock.isEnabledOn(view.url)))
-                view.reload()
-            break
-        case "update-filter-lists": Adblock.updateLists(); break
-        case "stop-agents": Safety.stopAgents(); break
-        case "resume-agents": Safety.resumeAgents(); break
-        case "ask-agent": browser.startAgentQuestion(); break
-        case "summarize-page": browser.askAgent("@ion Summarize this page."); break
-        case "agent-sidebar": browser.toggleAgentSidebar(); break
-        case "agent-activity": browser.showAgentActivity(); break
-        case "screenshot": view?.takeScreenshot(false); break
-        case "screenshot-page": view?.takeScreenshot(true); break
-        case "quit": Qt.quit(); break
-        default: console.warn("CommandPalette: unknown command", id)
-        }
-    }
-
     PaletteSearch { id: search }
-    // QML has no clipboard API; an invisible text field copies for copyText().
-    TextInput { id: clipboard; visible: false }
 
     parent: Overlay.overlay
     x: Math.round((parent.width - width) / 2)

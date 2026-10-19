@@ -25,6 +25,7 @@ ion-agent = { path = "crates/ion-agent" }
 ion-keyring = { path = "crates/ion-keyring" }
 ion-passwords = { path = "crates/ion-passwords" }
 ion-privacy = { path = "crates/ion-privacy" }
+ion-input = { path = "crates/ion-input" }
 
 cxx = "1.0"
 cxx-qt = "0.10"

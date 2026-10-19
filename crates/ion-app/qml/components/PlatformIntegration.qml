@@ -2,15 +2,13 @@ import QtQuick
 import Ion
 
 // Desktop integration for the main window: URLs handed over by a second
-// launch or by macOS (clicked links, files opened with Ion), and the macOS
-// shortcuts that Main.qml's cross-platform ones do not cover.
+// launch or by macOS (clicked links, files opened with Ion). macOS's own
+// shortcuts are the commands' defaults there (`ion_bangs::commands`).
 Item {
     id: root
 
     // The ApplicationWindow from Main.qml (openTab).
     required property var window
-
-    readonly property bool macOS: Qt.platform.os === "osx"
 
     Omnibox {
         id: resolver
@@ -29,18 +27,5 @@ Item {
             root.window.raise()
             root.window.requestActivate()
         }
-    }
-
-    // Qt maps "Ctrl" to Cmd and "Meta" to the Control key on macOS, so the
-    // shared Ctrl+Tab becomes Cmd+Tab there, which the system takes.
-    Shortcut {
-        enabled: root.macOS
-        sequences: ["Meta+Tab", "Ctrl+}", "Ctrl+Alt+Right"]
-        onActivated: Tabs.cycle(1)
-    }
-    Shortcut {
-        enabled: root.macOS
-        sequences: ["Meta+Shift+Tab", "Ctrl+{", "Ctrl+Alt+Left"]
-        onActivated: Tabs.cycle(-1)
     }
 }
