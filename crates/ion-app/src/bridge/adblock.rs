@@ -91,6 +91,12 @@ pub mod qobject {
         #[cxx_name = "blockedOn"]
         fn blocked_on(self: &Adblock, url: &QUrl) -> i32;
 
+        /// The hosts blocked on the current page of `url`'s site as a JSON
+        /// array of `{host, count}`, most blocked first, at most `limit`.
+        #[qinvokable]
+        #[cxx_name = "blockedHostsOn"]
+        fn blocked_hosts_on(self: &Adblock, url: &QUrl, limit: i32) -> QString;
+
         /// Whether blocking applies on `url`'s site.
         #[qinvokable]
         #[cxx_name = "isEnabledOn"]
@@ -489,6 +495,15 @@ impl qobject::Adblock {
             method: &method,
         };
 
+        // HTTPS-first: an http page is asked for over https instead. The
+        // new request comes back through here for blocking and headers.
+        if resource == ResourceType::MainFrame
+            && let Some(target) = super::privacy::https_upgrade(&url)
+        {
+            qobject::redirect_request(info, &QString::from(target.as_str()));
+            return;
+        }
+
         let verdict = self.as_mut().rust_mut().shield.decide(&request);
         let blocked = verdict.is_block();
         // The profile has one interceptor, so the privacy signal rides here.
@@ -553,6 +568,17 @@ impl qobject::Adblock {
 
     fn blocked_on(&self, url: &QUrl) -> i32 {
         i32::try_from(self.shield.blocked_on(&url.to_string())).unwrap_or(i32::MAX)
+    }
+
+    fn blocked_hosts_on(&self, url: &QUrl, limit: i32) -> QString {
+        let hosts: Vec<serde_json::Value> = self
+            .shield
+            .blocked_hosts_on(&url.to_string())
+            .into_iter()
+            .take(usize::try_from(limit).unwrap_or(0))
+            .map(|(host, count)| serde_json::json!({"host": host, "count": count}))
+            .collect();
+        QString::from(&serde_json::Value::from(hosts).to_string())
     }
 
     fn is_enabled_on(&self, url: &QUrl) -> bool {

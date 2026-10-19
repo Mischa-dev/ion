@@ -34,6 +34,7 @@ pub struct Config {
     /// subdomains; the most specific key wins. `"*"` covers every site.
     pub sites: BTreeMap<String, Site>,
     pub privacy: Privacy,
+    pub passwords: Passwords,
     pub keyboard: Keyboard,
     /// Unpacked Chrome extension folders (Manifest V3) loaded at startup,
     /// on top of those in Ion's own extensions folder.
@@ -84,6 +85,12 @@ pub struct Privacy {
     /// Browsing data deleted when Ion quits (and, in case quitting was cut
     /// short, when it next starts).
     pub clear_on_exit: Vec<BrowsingData>,
+    /// Load http pages over https: `"upgrade"` falls back to http quietly
+    /// when a site has no https, `"strict"` asks first, `"off"` never tries.
+    pub https_only: String,
+    /// Add noise to what fingerprinting scripts read (canvas, WebGL, audio)
+    /// and report common hardware values, so sites can't recognise you.
+    pub fingerprinting: bool,
 }
 
 impl Default for Privacy {
@@ -92,6 +99,28 @@ impl Default for Privacy {
             global_privacy_control: true,
             block_third_party_cookies: true,
             clear_on_exit: Vec::new(),
+            https_only: "upgrade".into(),
+            fingerprinting: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Passwords {
+    /// Offer to save passwords typed into sites.
+    pub enable: bool,
+    /// Fill a site's saved login in by itself when the login page loads and
+    /// there is exactly one; otherwise it is picked from the list under the
+    /// field. Plain-http pages always wait to be picked.
+    pub autofill: bool,
+}
+
+impl Default for Passwords {
+    fn default() -> Self {
+        Self {
+            enable: true,
+            autofill: true,
         }
     }
 }

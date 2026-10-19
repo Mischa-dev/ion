@@ -106,6 +106,14 @@ globalPrivacyControl = true  # Sec-GPC header and navigator.globalPrivacyControl
 blockThirdPartyCookies = true
 clearOnExit = []             # any of "cookies", "cache", "history" (the cache
                              # is cleared as Ion next starts)
+httpsOnly = "upgrade"        # try https first: "upgrade" falls back to http
+                             # quietly, "strict" asks first, "off"
+fingerprinting = true        # noise on canvas/WebGL/audio readouts, common
+                             # hardware values; off per site with the shield
+
+[passwords]                  # saved in the system keyring's protection (docs/PRIVACY.md)
+enable = true                # offer to save passwords typed into sites
+autofill = true              # fill a site's only saved login when its page loads
 
 [media]
 autoplay = "muted"           # what pages may play before you click or type:

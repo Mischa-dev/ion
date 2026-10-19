@@ -183,11 +183,58 @@ pub const COMMANDS: &[Command] = &[
         "star favorite save remove unbookmark",
         &["Ctrl+D"],
     ),
-    command("bookmarks", "Show bookmarks", "favorites starred list", &[]),
+    command(
+        "bookmarks",
+        "Bookmarks",
+        "favorites starred list manage folders",
+        &["Ctrl+Shift+O"],
+    ),
+    command(
+        "history",
+        "History",
+        "visited pages recent past",
+        &["Ctrl+H"],
+    ),
+    command(
+        "all-downloads",
+        "All downloads",
+        "files saved list page",
+        &["Ctrl+Shift+J"],
+    ),
     command(
         "import-browser-data",
         "Import bookmarks and history",
         "chrome firefox brave chromium vivaldi edge migrate",
+        &[],
+    ),
+    command(
+        "new-private-window",
+        "New private window",
+        "incognito secret anonymous history off the record",
+        &["Ctrl+Shift+N"],
+    ),
+    command(
+        "profiles",
+        "Switch profile",
+        "profiles accounts work personal separate cookies sign in containers",
+        &[],
+    ),
+    command(
+        "passwords",
+        "Passwords",
+        "logins keys keychain saved accounts manager vault credentials",
+        &[],
+    ),
+    command(
+        "addresses",
+        "Addresses",
+        "autofill shipping billing home contact forms saved",
+        &[],
+    ),
+    command(
+        "generate-password",
+        "Copy a strong new password",
+        "generate random secure create",
         &[],
     ),
     command(
@@ -311,6 +358,12 @@ pub const COMMANDS: &[Command] = &[
         "Settings",
         "preferences options config configure",
         &["Ctrl+,"],
+    ),
+    command(
+        "welcome",
+        "Set up Ion (welcome page)",
+        "onboarding first run tour import theme",
+        &[],
     ),
     command(
         "clear-browsing-data",

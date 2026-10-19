@@ -219,6 +219,17 @@ in
               "history"
             ]
           )) "Browsing data deleted when Ion quits.";
+          httpsOnly = setting (types.enum [
+            "upgrade"
+            "strict"
+            "off"
+          ]) "Load http pages over https: upgrade (fall back quietly), strict (ask first) or off.";
+          fingerprinting = setting types.bool "Resist fingerprinting: noise on canvas, WebGL and audio readouts, common hardware values.";
+        };
+
+        passwords = {
+          enable = setting types.bool "Offer to save passwords typed into sites.";
+          autofill = setting types.bool "Fill a site's only saved login in when its login page loads.";
         };
 
         sites = mkOption {

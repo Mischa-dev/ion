@@ -17,6 +17,8 @@ pub struct Shield {
     enabled: bool,
     sites: SiteSettings,
     blocked: HashMap<String, u32>,
+    /// Per site, which hosts its current page was stopped from reaching.
+    blocked_hosts: HashMap<String, HashMap<String, u32>>,
     total: u64,
 }
 
@@ -79,6 +81,17 @@ impl Shield {
             .unwrap_or(0)
     }
 
+    /// The hosts blocked on the current page of `page_url`'s site, most
+    /// blocked first, with how many requests each.
+    pub fn blocked_hosts_on(&self, page_url: &str) -> Vec<(String, u32)> {
+        let mut hosts: Vec<(String, u32)> = site_of(page_url)
+            .and_then(|site| self.blocked_hosts.get(&site))
+            .map(|hosts| hosts.iter().map(|(h, n)| (h.clone(), *n)).collect())
+            .unwrap_or_default();
+        hosts.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+        hosts
+    }
+
     /// Requests blocked since Ion started.
     pub fn total_blocked(&self) -> u64 {
         self.total
@@ -128,6 +141,7 @@ impl Shield {
         let is_page = request.resource == ResourceType::MainFrame;
         if is_page && let Some(site) = site_of(request.url) {
             self.blocked.remove(&site);
+            self.blocked_hosts.remove(&site);
         }
         if !self.enabled || !is_web_url(request.url) {
             return Verdict::Allow;
@@ -145,7 +159,15 @@ impl Shield {
             Verdict::Block => {
                 self.total += 1;
                 if let Some(site) = site {
-                    *self.blocked.entry(site).or_default() += 1;
+                    *self.blocked.entry(site.clone()).or_default() += 1;
+                    if let Some(host) = site_of(request.url) {
+                        *self
+                            .blocked_hosts
+                            .entry(site)
+                            .or_default()
+                            .entry(host)
+                            .or_default() += 1;
+                    }
                 }
                 Verdict::Block
             }
@@ -211,6 +233,8 @@ mod tests {
         assert_eq!(shield.blocked_on("https://blog.test/x"), 1);
         assert_eq!(shield.blocked_on("about:blank"), 0);
         assert_eq!(shield.total_blocked(), 3);
+        assert_eq!(shield.blocked_hosts_on(PAGE), [("ads.test".to_owned(), 2)]);
+        assert!(shield.blocked_hosts_on("about:blank").is_empty());
     }
 
     #[test]

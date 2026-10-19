@@ -65,9 +65,6 @@ use cxx_qt_lib::{QString, QStringList};
 use ion_platform::instance::{self, Claim, Listener, Request};
 use ion_platform::{chromium, desktop};
 
-/// The browser profile; one running Ion per profile.
-const PROFILE: &str = "Default";
-
 #[derive(Default)]
 pub struct PlatformRust;
 
@@ -96,7 +93,21 @@ pub fn startup() -> bool {
         unsafe { std::env::set_var(desktop::PLATFORM_THEME_VAR, theme) };
     }
 
-    let path = instance::socket_path(ion_core::APP_ID, PROFILE);
+    // Private windows and profiles (`--private`, `--profile=NAME`) each run
+    // as their own process; a profile keeps its files in its own folder.
+    let mode = ion_privacy::window::Mode::from_args(std::env::args().skip(1));
+    if let ion_privacy::window::Mode::Profile(_) = &mode
+        && let Some(base) = ion_session::paths::data_dir()
+    {
+        // SAFETY: called at the top of `main`, before any other thread exists.
+        unsafe { std::env::set_var(ion_session::paths::DATA_DIR_ENV, mode.data_dir(&base)) };
+    }
+    ion_privacy::window::set_mode(mode.clone());
+    // One running Ion per profile; every private window is its own.
+    let Some(name) = mode.instance_name() else {
+        return true;
+    };
+    let path = instance::socket_path(ion_core::APP_ID, &name);
     match instance::claim(&path, &Request::from_launch(std::env::args().skip(1))) {
         Claim::Forwarded => false,
         Claim::Primary(listener) => {

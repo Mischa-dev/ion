@@ -25,6 +25,8 @@ ion-agent = { path = "crates/ion-agent" }
 ion-media = { path = "crates/ion-media" }
 ion-settings = { path = "crates/ion-settings" }
 ion-keyring = { path = "crates/ion-keyring" }
+ion-passwords = { path = "crates/ion-passwords" }
+ion-privacy = { path = "crates/ion-privacy" }
 ion-input = { path = "crates/ion-input" }
 
 cxx = "1.0"
@@ -48,8 +50,11 @@ unicode-segmentation = "1.13"
 # ion-bookmarks
 rusqlite = { version = "0.40", features = ["bundled"] }
 
-# ion-keyring
+# ion-keyring, ion-passwords
 keyring = { version = "3.6", features = ["apple-native", "async-secret-service", "async-io", "crypto-rust"] }
+aes-gcm = "0.10"
+getrandom = "0.4"
+base64 = "0.22"
 
 # ion-reader
 scraper = { version = "0.27", default-features = false }

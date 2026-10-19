@@ -12,6 +12,7 @@ mod general;
 mod keyboard;
 mod media;
 mod new_tab;
+mod passwords;
 mod privacy;
 mod search;
 
@@ -22,6 +23,7 @@ pub fn all(ctx: &Context) -> Vec<Section> {
         search::section(ctx),
         new_tab::section(ctx),
         privacy::section(ctx),
+        passwords::section(ctx),
         blocking::section(ctx),
         media::section(ctx),
         downloads::section(ctx),
