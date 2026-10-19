@@ -55,6 +55,8 @@ fn trim_zeros(text: &str) -> &str {
 /// IP addresses or versions, not sums.
 fn looks_like_an_identifier(input: &str) -> bool {
     const SEPARATORS: [char; 3] = ['-', '.', '/'];
+    // A country code's "+" doesn't make "+1-555-1234" a sum.
+    let input = input.strip_prefix('+').unwrap_or(input);
     let groups: Vec<&str> = input.split(SEPARATORS).collect();
     if groups.len() < 2
         || !groups
@@ -422,6 +424,8 @@ mod tests {
             "covid-19",
             "2026-10-19",
             "555-1234",
+            "+1-555-1234",
+            "+44-20-7946-0958",
             "1.2.3",
             "10/19/2026",
             "192.168.1.1",
