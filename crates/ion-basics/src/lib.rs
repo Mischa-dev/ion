@@ -8,6 +8,7 @@
 
 pub mod context_menu;
 pub mod dialogs;
+pub mod download_log;
 pub mod downloads;
 pub mod find;
 pub mod new_tab;

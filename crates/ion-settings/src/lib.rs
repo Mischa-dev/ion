@@ -35,7 +35,7 @@ pub struct Section {
     /// Used in links: `ion://settings/<id>`.
     pub id: String,
     pub title: String,
-    /// A short glyph shown beside the title.
+    /// The icon beside the title: a name from `qml/components/IconSet.qml`.
     pub icon: String,
     /// One line under the title at the top of the section.
     pub summary: String,

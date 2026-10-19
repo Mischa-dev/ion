@@ -183,7 +183,24 @@ pub const COMMANDS: &[Command] = &[
         "star favorite save remove unbookmark",
         &["Ctrl+D"],
     ),
-    command("bookmarks", "Show bookmarks", "favorites starred list", &[]),
+    command(
+        "bookmarks",
+        "Bookmarks",
+        "favorites starred list manage folders",
+        &["Ctrl+Shift+O"],
+    ),
+    command(
+        "history",
+        "History",
+        "visited pages recent past",
+        &["Ctrl+H"],
+    ),
+    command(
+        "all-downloads",
+        "All downloads",
+        "files saved list page",
+        &["Ctrl+Shift+J"],
+    ),
     command(
         "import-browser-data",
         "Import bookmarks and history",
@@ -299,6 +316,12 @@ pub const COMMANDS: &[Command] = &[
         "Settings",
         "preferences options config configure",
         &["Ctrl+,"],
+    ),
+    command(
+        "welcome",
+        "Set up Ion (welcome page)",
+        "onboarding first run tour import theme",
+        &[],
     ),
     command(
         "clear-browsing-data",
