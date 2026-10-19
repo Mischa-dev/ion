@@ -101,6 +101,16 @@ Item {
         case "clear-cache": browser.profile.clearHttpCache(); break
         case "clear-history": History.clear(); History.save(); break
         case "reader-mode": view?.reader.toggle(); break
+        // Again on a translated page brings the original back.
+        case "translate-page":
+            if (view?.translator.state.length > 0)
+                view.translator.showOriginal()
+            else
+                view?.translator.translate()
+            break
+        case "picture-in-picture": browser.togglePictureInPicture(); break
+        case "print": browser.printPage(); break
+        case "save-pdf": browser.printPage(true); break
         case "mute-tab": browser.toggleMute(); break
         case "mute-other-tabs": browser.muteOtherTabs(); break
         case "extensions": browser.showExtensions(); break

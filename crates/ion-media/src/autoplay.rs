@@ -40,15 +40,20 @@ pub fn requires_gesture(policy: Autoplay) -> bool {
 /// Page script (main world, document creation, every frame) for
 /// `autoplay = "block"`: until the frame has had a click or key press,
 /// `play()` is refused and media that starts anyway (the `autoplay`
-/// attribute) is paused. Run again on a loaded page (the policy changed to
+/// attribute, in shadow roots too) is paused. Run again on a loaded page (the policy changed to
 /// "block"), it also pauses what is already playing on its own.
 /// [`UNBLOCK_SCRIPT`] lifts it from a loaded page.
 pub const BLOCK_SCRIPT: &str = r#"(() => {
   const active = () => !window.__ionAutoplayBlocked ||
     !!(navigator.userActivation && navigator.userActivation.hasBeenActive);
+  // Every element under `root`, inside open shadow roots too.
+  const walk = (root, visit) => root.querySelectorAll("*").forEach(element => {
+    visit(element);
+    if (element.shadowRoot) walk(element.shadowRoot, visit);
+  });
   window.__ionAutoplayBlocked = true;
   if (!active())
-    document.querySelectorAll("audio, video").forEach(media => media.pause());
+    walk(document, element => { if (element instanceof HTMLMediaElement) element.pause(); });
   if (window.__ionAutoplayInstalled) return;
   window.__ionAutoplayInstalled = true;
   const play = HTMLMediaElement.prototype.play;
@@ -57,10 +62,22 @@ pub const BLOCK_SCRIPT: &str = r#"(() => {
       return Promise.reject(new DOMException("Autoplay is blocked by Ion", "NotAllowedError"));
     return play.apply(this, arguments);
   };
-  document.addEventListener("play", event => {
+  const guard = event => {
     if (!active() && event.target instanceof HTMLMediaElement)
       event.target.pause();
-  }, true);
+  };
+  // "play" doesn't leave a shadow root, so each one listens as well: those
+  // made from now on (closed ones too), and open ones already there.
+  document.addEventListener("play", guard, true);
+  const attachShadow = Element.prototype.attachShadow;
+  Element.prototype.attachShadow = function () {
+    const root = attachShadow.apply(this, arguments);
+    root.addEventListener("play", guard, true);
+    return root;
+  };
+  walk(document, element => {
+    if (element.shadowRoot) element.shadowRoot.addEventListener("play", guard, true);
+  });
 })();"#;
 
 /// Page script (main world) that lifts [`BLOCK_SCRIPT`] from a loaded page
@@ -128,5 +145,11 @@ mod tests {
     fn block_script_guards_against_running_twice() {
         assert!(BLOCK_SCRIPT.contains("if (window.__ionAutoplayInstalled) return;"));
         assert!(BLOCK_SCRIPT.contains("hasBeenActive"));
+    }
+
+    #[test]
+    fn block_script_reaches_into_shadow_roots() {
+        assert!(BLOCK_SCRIPT.contains("Element.prototype.attachShadow"));
+        assert!(BLOCK_SCRIPT.contains("element.shadowRoot"));
     }
 }

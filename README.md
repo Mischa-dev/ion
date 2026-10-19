@@ -11,8 +11,9 @@ shell and its adapters.
 
 Today Ion includes tabs and workspaces, session and history persistence,
 bookmarks and browser import, `!bang` search, a command palette, ad blocking,
-reader mode, per-site settings, userscripts, themes, and a permission-gated
-browser agent.
+reader mode, print preview and a PDF viewer, picture-in-picture, system media
+controls (MPRIS), opt-in page translation, per-site settings, userscripts,
+themes, and a permission-gated browser agent.
 
 ## Quick start
 
@@ -128,6 +129,8 @@ for adding a feature.
 | `crates/ion-theme` | Palettes, theme sources, page theming, and file watching |
 | `crates/ion-reader` | Safe article extraction and reader-page rendering |
 | `crates/ion-media` | Autoplay policy, picture-in-picture, and system media controls |
+| `crates/ion-print` | Print preview page ranges, paper sizes, and saved-PDF names |
+| `crates/ion-translate` | Opt-in page translation through Ion Agent's model |
 | `crates/ion-safety` | Site permissions, agent policy, prompts, and audit trail |
 | `crates/ion-agent` | Model-independent agent task state machine and browser tools |
 | `crates/ion-platform` | Chromium flags, extensions, and single-instance handoff |
