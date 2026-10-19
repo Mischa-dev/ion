@@ -163,6 +163,7 @@ Popup {
         case "summarize-page": browser.askAgent("@ion Summarize this page."); break
         case "agent-sidebar": browser.toggleAgentSidebar(); break
         case "agent-activity": browser.showAgentActivity(); break
+        case "set-up-agent": browser.showAgentSetup(); break
         case "screenshot": view?.takeScreenshot(false); break
         case "screenshot-page": view?.takeScreenshot(true); break
         case "quit": Qt.quit(); break

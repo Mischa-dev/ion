@@ -508,6 +508,9 @@ ApplicationWindow {
     function showAgentActivity() {
         agentActivity.show()
     }
+    function showAgentSetup() {
+        agentSetup.show("")
+    }
     function toggleAgentSidebar() {
         agentSidebar.toggle(window.currentView ? Agent.latestTask(window.currentView.tabId) : -1)
     }
@@ -527,5 +530,9 @@ ApplicationWindow {
 
     AgentsStoppedNotice {}
     AgentActivity { id: agentActivity }
+    AgentSetup {
+        id: agentSetup
+        onAsk: input => window.askAgent(input)
+    }
     AgentTools { views: views }
 }

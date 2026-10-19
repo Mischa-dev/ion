@@ -177,6 +177,74 @@ pub mod qobject {
         #[cxx_name = "answerHtml"]
         fn answer_html(self: &Agent, markdown: &QString) -> QString;
 
+        /// The model services the setup offers, and the current setup, as
+        /// JSON: `{enabled, preset, provider, baseUrl, model, keyEnv,
+        /// presets: [{id, name, blurb, provider, baseUrl, model, keyEnv,
+        /// needsKey, keyPage, local}]}`.
+        #[qinvokable]
+        #[cxx_name = "setupJson"]
+        fn setup_json(self: &Agent) -> QString;
+
+        /// Check a setup before saving it by listing the service's models,
+        /// with `key`, or the saved or environment key when `key` is empty.
+        /// Answered by `setupTested`.
+        #[qinvokable]
+        #[cxx_name = "testSetup"]
+        fn test_setup(
+            self: Pin<&mut Agent>,
+            preset: &QString,
+            base_url: &QString,
+            model: &QString,
+            key: &QString,
+        );
+
+        /// Save a setup and turn Ion Agent on: `key`, when given, goes in
+        /// the system keyring, the rest in Ion's settings. Answered by
+        /// `setupSaved`.
+        #[qinvokable]
+        #[cxx_name = "saveSetup"]
+        fn save_setup(
+            self: Pin<&mut Agent>,
+            preset: &QString,
+            base_url: &QString,
+            model: &QString,
+            key: &QString,
+        );
+
+        /// Find where the current setup's key comes from. Answered by
+        /// `keyChecked`.
+        #[qinvokable]
+        #[cxx_name = "checkKey"]
+        fn check_key(self: Pin<&mut Agent>);
+
+        /// Forget the key saved for the current setup's service. Answered
+        /// by `keyChecked`.
+        #[qinvokable]
+        #[cxx_name = "forgetKey"]
+        fn forget_key(self: Pin<&mut Agent>);
+
+        /// Someone asked Ion Agent while it isn't on: `input` is what they
+        /// asked, to ask once it is set up.
+        #[qsignal]
+        #[cxx_name = "setupRequested"]
+        fn setup_requested(self: Pin<&mut Agent>, input: &QString);
+
+        /// `models` is a JSON list of model ids when `ok`.
+        #[qsignal]
+        #[cxx_name = "setupTested"]
+        fn setup_tested(self: Pin<&mut Agent>, ok: bool, message: &QString, models: &QString);
+
+        /// `error` is empty once saved.
+        #[qsignal]
+        #[cxx_name = "setupSaved"]
+        fn setup_saved(self: Pin<&mut Agent>, error: &QString);
+
+        /// `source` is "keyring", "environment", "notNeeded" or "missing";
+        /// `error` says why forgetting failed.
+        #[qsignal]
+        #[cxx_name = "keyChecked"]
+        fn key_checked(self: Pin<&mut Agent>, source: &QString, error: &QString);
+
         #[qsignal]
         #[cxx_name = "taskChanged"]
         fn task_changed(self: Pin<&mut Agent>, task: i32);
@@ -208,12 +276,12 @@ use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
 use ion_agent::history::{Conversation, History};
 use ion_agent::model::Model;
-use ion_agent::openai::OpenAi;
+use ion_agent::provider::{self, Kind};
 use ion_agent::task::Context;
 use ion_agent::tool::{
     Element, Plan, PlanError, Use, page_result, plan, tab_argument, tabs_result,
 };
-use ion_agent::{Next, Reply, Task, Tool, ToolCall, ToolOutcome, invoke};
+use ion_agent::{Next, Reply, Status, Task, Tool, ToolCall, ToolOutcome, invoke, keys};
 use ion_safety::{Choice, Prompt, Verdict};
 use serde_json::{Value, json};
 
@@ -247,6 +315,8 @@ struct Running {
     started: u64,
     /// The page the first question was asked from.
     asked_from: (String, String),
+    /// It failed because Ion Agent isn't set up (no key or model).
+    needs_setup: bool,
 }
 
 impl Running {
@@ -266,6 +336,7 @@ impl Running {
             saved,
             started,
             asked_from,
+            needs_setup: false,
         }
     }
 
@@ -337,59 +408,81 @@ fn askable() -> Vec<(String, String)> {
     agents
 }
 
-/// The model `agent` runs on, with its key from the environment: its own
-/// `[agents.<id>]` model, or `[ai]` for Ion Agent.
-fn configured_model(agent: &str) -> Result<Arc<dyn Model>, String> {
-    let config = ion_config::global().config();
-    let ai = config.ai.clone();
-    if ai.provider != "openai" {
-        return Err(format!(
-            "Ion Agent can't use the {:?} provider yet. Set ai.provider to \"openai\".",
-            ai.provider
-        ));
-    }
-    let own = config
-        .agents
-        .profiles
-        .get(agent)
-        .filter(|p| !p.model.trim().is_empty());
-    let (model, base_url, key_env) = match own {
-        Some(p) => (
-            p.model.trim().to_owned(),
-            if p.base_url.trim().is_empty() {
-                ai.base_url.clone()
-            } else {
-                p.base_url.trim().to_owned()
-            },
-            p.api_key_env
-                .clone()
-                .unwrap_or_else(|| ai.api_key_env.clone()),
-        ),
-        None if agent == invoke::DEFAULT_AGENT => (
-            ai.model.clone(),
-            ai.base_url.clone(),
-            ai.api_key_env.clone(),
-        ),
-        None => {
-            return Err(format!(
-                "There's no agent called @{agent}. Give [agents.{agent}] a model in Ion's config to ask it."
-            ));
-        }
-    };
-    let key = if key_env.trim().is_empty() {
-        None
-    } else {
-        match std::env::var(key_env.trim()) {
-            Ok(key) if !key.trim().is_empty() => Some(key),
-            _ => {
+/// How to reach the model `agent` runs on: its own `[agents.<id>]` model,
+/// or `[ai]` for Ion Agent. The key is looked up when connecting, off the
+/// UI thread, because the keyring may take a moment (or ask to unlock).
+#[derive(Clone)]
+struct Recipe {
+    kind: Kind,
+    base_url: String,
+    model: String,
+    key_env: String,
+}
+
+impl Recipe {
+    fn for_agent(agent: &str) -> Result<Recipe, String> {
+        let config = ion_config::global().config();
+        let ai = config.ai.clone();
+        let own = config
+            .agents
+            .profiles
+            .get(agent)
+            .filter(|p| !p.model.trim().is_empty());
+        let (provider, model, base_url, key_env) = match own {
+            Some(p) => (
+                if p.provider.trim().is_empty() {
+                    ai.provider.clone()
+                } else {
+                    p.provider.trim().to_owned()
+                },
+                p.model.trim().to_owned(),
+                if p.base_url.trim().is_empty() {
+                    ai.base_url.clone()
+                } else {
+                    p.base_url.trim().to_owned()
+                },
+                p.api_key_env
+                    .clone()
+                    .unwrap_or_else(|| ai.api_key_env.clone()),
+            ),
+            None if agent == invoke::DEFAULT_AGENT => (
+                ai.provider.clone(),
+                ai.model.clone(),
+                ai.base_url.clone(),
+                ai.api_key_env.clone(),
+            ),
+            None => {
                 return Err(format!(
-                    "No API key: set {} in Ion's environment, or set its apiKeyEnv to \"\" for a local model.",
-                    key_env.trim()
+                    "There's no agent called @{agent}. Give [agents.{agent}] a model in Ion's config to ask it."
                 ));
             }
+        };
+        let kind = Kind::from_id(&provider).ok_or_else(|| {
+            format!("Ion Agent can't use the {provider:?} provider. Set it up again from the command palette.")
+        })?;
+        if model.trim().is_empty() {
+            return Err("No model is chosen yet. Set up Ion Agent to pick one.".to_owned());
         }
-    };
-    Ok(Arc::new(OpenAi::new(&base_url, &model, key)))
+        Ok(Recipe {
+            kind,
+            base_url,
+            model,
+            key_env,
+        })
+    }
+
+    /// Connect, with the key from the keyring or the environment.
+    fn connect(&self) -> Result<Arc<dyn Model>, String> {
+        let account = provider::key_account(self.kind, &self.base_url);
+        let (key, source) = keys::lookup(account.as_deref(), &self.key_env);
+        if source == keys::Source::Missing {
+            return Err(format!(
+                "No API key yet. Set up Ion Agent to add one, or set {} in Ion's environment.",
+                self.key_env.trim()
+            ));
+        }
+        Ok(self.kind.connect(&self.base_url, &self.model, key))
+    }
 }
 
 fn host_of(url: &str) -> Option<String> {
@@ -440,7 +533,19 @@ impl qobject::Agent {
     fn suggest(&self, input: &QString) -> QString {
         let input = input.to_string();
         if !enabled() {
-            return QString::from("[]");
+            // Asking Ion Agent before it is on offers to set it up.
+            let rows = match invoke::parse(&input) {
+                Some(ask) if ask.agent == invoke::DEFAULT_AGENT => vec![json!({
+                    "kind": "agent",
+                    "title": "Set up Ion Agent to ask this",
+                    "subtitle": ask.question,
+                    "hint": "Enter",
+                    "action": "agent",
+                    "value": input,
+                })],
+                _ => Vec::new(),
+            };
+            return QString::from(Value::from(rows).to_string().as_str());
         }
         let rows = if let Some(ask) = invoke::parse(&input) {
             let name = ion_safety::global().policy().display_name(&ask.agent);
@@ -488,6 +593,9 @@ impl qobject::Agent {
             return -1;
         };
         if !enabled() {
+            if ask.agent == invoke::DEFAULT_AGENT {
+                self.as_mut().setup_requested(input);
+            }
             return -1;
         }
         let id = self.next_id + 1;
@@ -508,8 +616,14 @@ impl qobject::Agent {
         let task = Task::new(id as u64, &ask.agent, tab_id, &ask.question, &context)
             .with_persona(&name, &instructions);
         // Asking from a tab hands it to the agent, even if the person took
-        // it back from an earlier task.
-        ion_safety::global().hand_back(tab_id);
+        // it back from an earlier task, and lets it read the page asked about.
+        {
+            let mut safety = ion_safety::global();
+            safety.hand_back(tab_id);
+            if let Some(site) = ion_safety::Origin::parse(&context.url) {
+                safety.allow_reading_asked_page(&ask.agent, tab_id, site);
+            }
+        }
         let started = now();
         let key = format!("{started}-{id}");
         let running = Running::new(task, key, started, (context.url, context.title));
@@ -539,6 +653,7 @@ impl qobject::Agent {
         if let Some(running) = self.as_mut().rust_mut().tasks.get_mut(&task)
             && running.task.follow_up(question, &context)
         {
+            running.needs_setup = false;
             tabs = Some(running.tabs().collect::<Vec<u64>>());
         }
         let Some(tabs) = tabs else {
@@ -569,10 +684,18 @@ impl qobject::Agent {
                         .get(&id)
                         .map(|r| r.task.agent.clone())
                         .unwrap_or_default();
-                    match configured_model(&agent) {
-                        Ok(model) => {
+                    match Recipe::for_agent(&agent) {
+                        Ok(recipe) => {
                             let thread = self.qt_thread();
                             std::thread::spawn(move || {
+                                let model = match recipe.connect() {
+                                    Ok(model) => model,
+                                    Err(error) => {
+                                        let _ = thread
+                                            .queue(move |obj| obj.model_done(id, Err(error), true));
+                                        return;
+                                    }
+                                };
                                 // Show the answer as it is written, a few
                                 // times a second rather than per token.
                                 let mut unsent = String::new();
@@ -586,12 +709,13 @@ impl qobject::Agent {
                                     }
                                 };
                                 let reply = model.reply_streaming(&messages, &Tool::ALL, &mut show);
-                                let _ = thread.queue(move |obj| obj.model_done(id, reply));
+                                let _ = thread.queue(move |obj| obj.model_done(id, reply, false));
                             });
                         }
                         Err(error) => {
                             if let Some(running) = self.as_mut().rust_mut().tasks.get_mut(&id) {
                                 running.task.model_failed(error);
+                                running.needs_setup = true;
                             }
                             continue;
                         }
@@ -653,11 +777,16 @@ impl qobject::Agent {
         }
     }
 
-    fn model_done(mut self: Pin<&mut Self>, id: i32, reply: Result<Reply, String>) {
+    /// `setup` says the model couldn't be reached as configured (no key,
+    /// no model), so the card offers the setup.
+    fn model_done(mut self: Pin<&mut Self>, id: i32, reply: Result<Reply, String>, setup: bool) {
         if let Some(running) = self.as_mut().rust_mut().tasks.get_mut(&id) {
             match reply {
                 Ok(reply) => running.task.model_replied(reply),
-                Err(error) => running.task.model_failed(error),
+                Err(error) => {
+                    running.needs_setup = setup;
+                    running.task.model_failed(error);
+                }
             }
             self.pump(id);
         }
@@ -689,6 +818,8 @@ impl qobject::Agent {
         };
         value["acting"] = Value::from((running.acted || !running.opened.is_empty()) && !over);
         value["takenOver"] = Value::from(!over && running.tabs().any(is_taken_over));
+        value["needsSetup"] =
+            Value::from(running.needs_setup && running.task.status() == Status::Failed);
         value["opened"] = Value::from(
             running
                 .opened
@@ -1158,6 +1289,210 @@ impl qobject::Agent {
             self.as_mut().rust_mut().tasks.remove(&task);
             self.bump(task);
         }
+    }
+
+    fn setup_json(&self) -> QString {
+        let ai = ion_config::global().config().ai.clone();
+        let kind = Kind::from_id(&ai.provider).unwrap_or(Kind::OpenAi);
+        let presets: Vec<Value> = provider::PRESETS
+            .iter()
+            .map(|p| {
+                json!({
+                    "id": p.id,
+                    "name": p.name,
+                    "blurb": p.blurb,
+                    "provider": p.kind.id(),
+                    "baseUrl": p.base_url,
+                    "model": p.model,
+                    "keyEnv": p.key_env,
+                    "needsKey": p.needs_key(),
+                    "keyPage": p.key_page,
+                    "local": p.local,
+                })
+            })
+            .collect();
+        let value = json!({
+            "enabled": ai.enable,
+            "preset": provider::preset_for(kind, &ai.base_url).id,
+            "provider": kind.id(),
+            "baseUrl": ai.base_url,
+            "model": ai.model,
+            "keyEnv": ai.api_key_env,
+            "presets": presets,
+        });
+        QString::from(value.to_string().as_str())
+    }
+
+    fn test_setup(
+        self: Pin<&mut Self>,
+        preset: &QString,
+        base_url: &QString,
+        model: &QString,
+        key: &QString,
+    ) {
+        let draft = Draft::new(preset, base_url, model, key);
+        let thread = self.qt_thread();
+        std::thread::spawn(move || {
+            let result = draft.and_then(|d| d.test());
+            let _ = thread.queue(move |mut obj| {
+                let (ok, message, models) = match result {
+                    Ok((message, models)) => (true, message, Value::from(models).to_string()),
+                    Err(error) => (false, error, "[]".to_owned()),
+                };
+                obj.as_mut().setup_tested(
+                    ok,
+                    &QString::from(message.as_str()),
+                    &QString::from(models.as_str()),
+                );
+            });
+        });
+    }
+
+    fn save_setup(
+        self: Pin<&mut Self>,
+        preset: &QString,
+        base_url: &QString,
+        model: &QString,
+        key: &QString,
+    ) {
+        let draft = Draft::new(preset, base_url, model, key);
+        let thread = self.qt_thread();
+        std::thread::spawn(move || {
+            let error = draft.and_then(|d| d.save()).err().unwrap_or_default();
+            let _ = thread.queue(move |mut obj| {
+                let revision = obj.revision.wrapping_add(1);
+                obj.as_mut().rust_mut().revision = revision;
+                obj.as_mut().revision_changed();
+                obj.as_mut().setup_saved(&QString::from(error.as_str()));
+            });
+        });
+    }
+
+    fn check_key(self: Pin<&mut Self>) {
+        let ai = ion_config::global().config().ai.clone();
+        let thread = self.qt_thread();
+        std::thread::spawn(move || {
+            let source = keys::lookup(account_for(&ai).as_deref(), &ai.api_key_env).1;
+            let _ = thread.queue(move |mut obj| {
+                obj.as_mut()
+                    .key_checked(&QString::from(source.id()), &QString::default());
+            });
+        });
+    }
+
+    fn forget_key(self: Pin<&mut Self>) {
+        let ai = ion_config::global().config().ai.clone();
+        let thread = self.qt_thread();
+        std::thread::spawn(move || {
+            let account = account_for(&ai);
+            let error = account
+                .as_deref()
+                .map_or(Ok(()), keys::forget)
+                .err()
+                .unwrap_or_default();
+            let source = keys::lookup(account.as_deref(), &ai.api_key_env).1;
+            let _ = thread.queue(move |mut obj| {
+                obj.as_mut()
+                    .key_checked(&QString::from(source.id()), &QString::from(error.as_str()));
+            });
+        });
+    }
+}
+
+/// The keyring account for the configured `[ai]` service.
+fn account_for(ai: &ion_config::Ai) -> Option<String> {
+    Kind::from_id(&ai.provider).and_then(|kind| provider::key_account(kind, &ai.base_url))
+}
+
+/// A setup being made in the setup dialog, before it is saved.
+struct Draft {
+    preset: &'static provider::Preset,
+    base_url: String,
+    model: String,
+    key: String,
+}
+
+impl Draft {
+    fn new(
+        preset: &QString,
+        base_url: &QString,
+        model: &QString,
+        key: &QString,
+    ) -> Result<Draft, String> {
+        let preset = provider::preset(&preset.to_string())
+            .ok_or_else(|| "Pick a service first.".to_owned())?;
+        let base_url = base_url.to_string().trim().trim_end_matches('/').to_owned();
+        let base_url = if base_url.is_empty() {
+            preset.base_url.to_owned()
+        } else {
+            base_url
+        };
+        if base_url.is_empty() {
+            return Err("Enter the service's address, up to and including /v1.".to_owned());
+        }
+        Ok(Draft {
+            preset,
+            base_url,
+            model: model.to_string().trim().to_owned(),
+            key: key.to_string().trim().to_owned(),
+        })
+    }
+
+    fn account(&self) -> Option<String> {
+        provider::key_account(self.preset.kind, &self.base_url)
+    }
+
+    /// The key to use: the one typed, else the saved or environment one.
+    fn key(&self) -> Result<Option<String>, String> {
+        if !self.key.is_empty() {
+            return Ok(Some(self.key.clone()));
+        }
+        match keys::lookup(self.account().as_deref(), self.preset.key_env) {
+            (_, keys::Source::Missing) => Err(format!("Paste your {} API key.", self.preset.name)),
+            (key, _) => Ok(key),
+        }
+    }
+
+    /// Lists the service's models: a sentence on how it went, and the ids.
+    fn test(&self) -> Result<(String, Vec<String>), String> {
+        let key = self.key()?;
+        let model = self.preset.kind.connect(&self.base_url, &self.model, key);
+        let models = model.models()?;
+        let message = if self.model.is_empty() || models.is_empty() || models.contains(&self.model)
+        {
+            if self.preset.id == "custom" {
+                "Connected.".to_owned()
+            } else {
+                format!("Connected to {}.", self.preset.name)
+            }
+        } else {
+            format!(
+                "Connected, but {} doesn't offer {:?}. Pick one of its models.",
+                self.preset.name, self.model
+            )
+        };
+        Ok((message, models))
+    }
+
+    fn save(&self) -> Result<(), String> {
+        if self.model.is_empty() {
+            return Err("Pick a model.".to_owned());
+        }
+        if !self.key.is_empty() {
+            let account = self
+                .account()
+                .ok_or_else(|| "The service's address isn't valid.".to_owned())?;
+            keys::save(&account, &self.key)?;
+        } else {
+            self.key()?;
+        }
+        let store = ion_config::global();
+        let text = |s: &str| ion_config::Value::String(s.to_owned());
+        store.set("ai.provider", text(self.preset.kind.id()))?;
+        store.set("ai.baseUrl", text(&self.base_url))?;
+        store.set("ai.model", text(&self.model))?;
+        store.set("ai.apiKeyEnv", text(self.preset.key_env))?;
+        store.set("ai.enable", ion_config::Value::Boolean(true))
     }
 }
 
