@@ -952,5 +952,10 @@ ApplicationWindow {
         id: agentSetup
         sourceComponent: AgentSetup { onAsk: input => window.askAgent(input) }
     }
+    // Here, not in AgentSetup: the dialog doesn't exist until it first opens.
+    Connections {
+        target: Agent
+        function onSetupRequested(input) { agentSetup.get().show(input) }
+    }
     AgentTools { views: views }
 }

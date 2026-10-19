@@ -171,11 +171,6 @@ in
               ])
               "What web pages see: the theme's light/dark (`match`), the system's, or `match` plus darkening pages without a dark style.";
           pageControls = setting types.bool "Give web page scrollbars, checkboxes and text selection the theme's colors, unless the page styles them itself.";
-          performance = {
-            dnsPrefetch = setting types.bool "Look up the addresses of a page's links before they are clicked.";
-            hardwareVideo = setting types.bool "Decode video on the GPU (VA-API on Linux). Read at startup.";
-          };
-
           sites = mkOption {
             type = types.attrsOf (
               types.submodule {
@@ -293,6 +288,11 @@ in
 
         safety = {
           auditRetentionDays = setting types.ints.positive "Days of agent activity log kept.";
+        };
+
+        performance = {
+          dnsPrefetch = setting types.bool "Look up the addresses of a page's links before they are clicked.";
+          hardwareVideo = setting types.bool "Decode video on the GPU (VA-API on Linux). Read at startup.";
         };
 
         media = {
