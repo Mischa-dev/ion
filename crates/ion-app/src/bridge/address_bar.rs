@@ -155,18 +155,16 @@ impl SiteSearches {
 /// site: they record where the person has been, so they go with history.
 pub fn forget_site_searches(site: Option<&str>) {
     with_site_searches(|s| {
-        let forgot = match site {
-            Some(site) => s.engines.forget_site(site),
-            // Always rewritten: a file Ion couldn't read may still name sites.
-            None => {
-                s.engines.clear();
-                true
+        match site {
+            Some(site) => {
+                s.engines.forget_site(site);
             }
-        };
-        s.tried.clear();
-        if forgot {
-            s.changed();
+            None => s.engines.clear(),
         }
+        s.tried.clear();
+        // Always rewritten, even when nothing was known: a file Ion
+        // couldn't read may still name sites.
+        s.changed();
     })
 }
 
