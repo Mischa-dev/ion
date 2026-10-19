@@ -40,6 +40,15 @@ zoommtg: links". Approvals live in `<data dir>/protocols.json`. Sites that ask
 to handle a scheme (`navigator.registerProtocolHandler`, such as Gmail for
 `mailto:`) get a prompt too; once allowed, those links open in that site.
 
+## Popups and files
+
+Pages a script opened (a "Sign in with Google" or PayPal popup) open as tabs
+next to their opener; when the page closes itself with `window.close()`, the
+tab goes and the opener comes back. Sites that want to keep using a file or
+folder picked for them (the File System Access API: vscode.dev "Open
+Folder", Photopea) ask first: "Let vscode.dev see and change the files in
+~/code?".
+
 ## Crashes
 
 A tab whose page process dies shows Ion's page ("youtube.com stopped working")
@@ -98,6 +107,9 @@ the portal. Without a portal Qt's own dialog shows instead.
 8. Discord or Gmail notification while Ion is in the background: it shows as
    a desktop notification, and clicking it brings Ion forward on that chat.
 9. An "Upload" button opens the desktop's file picker (GTK or KDE look).
+   On vscode.dev, Open Folder asks to see and change the files, then works.
+   "Sign in with Google" on a third-party site opens a tab that closes
+   itself after signing in.
 10. Crash: open `chrome://crash` in a tab; the tab shows the "stopped working"
    page and Try again reloads. `pkill -9 ion`, start Ion again: the tabs are
    back (or offered, with `restoreSession = false`).
