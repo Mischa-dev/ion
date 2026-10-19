@@ -11,6 +11,7 @@
 //! ([`Vault::propose`]), and reads and writes the CSV files other browsers
 //! export ([`Vault::import_csv`], [`Vault::export_csv`]).
 
+pub mod address;
 pub mod csv;
 pub mod generate;
 pub mod origin;
@@ -24,6 +25,7 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use serde::{Deserialize, Serialize};
 
+pub use address::Address;
 pub use generate::{DEFAULT_LENGTH, generate, is_weak};
 pub use origin::{Fit, display_host, origin_of, site_of};
 
@@ -137,6 +139,7 @@ pub struct Vault {
     /// Origins where Ion never offers to save.
     never: BTreeSet<String>,
     next_id: u64,
+    addresses: Vec<Address>,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -145,6 +148,9 @@ struct File {
     version: u32,
     logins: Vec<StoredLogin>,
     never: BTreeSet<String>,
+    /// The saved addresses as encrypted JSON (base64 of nonce ‖ ciphertext).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    addresses: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -204,7 +210,12 @@ impl Vault {
             logins: Vec::with_capacity(file.logins.len()),
             never: file.never,
             next_id: 1,
+            addresses: Vec::new(),
         };
+        if !file.addresses.is_empty() {
+            let json = vault.decrypt(&file.addresses)?;
+            vault.addresses = serde_json::from_str(&json).map_err(|_| Error::Undecryptable)?;
+        }
         for stored in file.logins {
             let password = vault.decrypt(&stored.password)?;
             let note = if stored.note.is_empty() {
@@ -279,6 +290,13 @@ impl Vault {
                 })
                 .collect(),
             never: self.never.clone(),
+            addresses: if self.addresses.is_empty() {
+                String::new()
+            } else {
+                self.encrypt(
+                    &serde_json::to_string(&self.addresses).map_err(std::io::Error::other)?,
+                )
+            },
         };
         let json = serde_json::to_vec_pretty(&file).map_err(std::io::Error::other)?;
         ion_keyring::write_private(path, &json)?;
@@ -529,6 +547,61 @@ impl Vault {
         csv::write(&rows)
     }
 
+    /// Saved addresses, most recently used first.
+    pub fn addresses(&self) -> Vec<&Address> {
+        let mut list: Vec<&Address> = self.addresses.iter().collect();
+        list.sort_by(|a, b| b.used.cmp(&a.used).then(a.id.cmp(&b.id)));
+        list
+    }
+
+    /// Whether a form sent with `address` is worth offering to save: it has
+    /// enough in it and no saved address already covers it.
+    pub fn address_is_new(&self, address: &Address) -> bool {
+        address.is_worth_saving() && !self.addresses.iter().any(|a| a.covers(address))
+    }
+
+    /// Save `address`: replaces the saved one with its id, or adds it.
+    /// Returns its id.
+    pub fn save_address(&mut self, address: &Address) -> Result<u64> {
+        let mut address = address.clone();
+        if let Some(saved) = self
+            .addresses
+            .iter_mut()
+            .find(|a| a.id == address.id && a.id != 0)
+        {
+            address.used = saved.used;
+            *saved = address.clone();
+        } else {
+            address.id = self.addresses.iter().map(|a| a.id).max().unwrap_or(0) + 1;
+            self.addresses.push(address.clone());
+        }
+        self.persist()?;
+        Ok(address.id)
+    }
+
+    pub fn remove_address(&mut self, id: u64) -> Result<bool> {
+        let before = self.addresses.len();
+        self.addresses.retain(|a| a.id != id);
+        let removed = self.addresses.len() != before;
+        if removed {
+            self.persist()?;
+        }
+        Ok(removed)
+    }
+
+    pub fn address(&self, id: u64) -> Option<&Address> {
+        self.addresses.iter().find(|a| a.id == id)
+    }
+
+    /// Note that address `id` was just filled in.
+    pub fn mark_address_used(&mut self, id: u64, now: i64) -> Result<()> {
+        if let Some(address) = self.addresses.iter_mut().find(|a| a.id == id) {
+            address.used = now;
+            self.persist()?;
+        }
+        Ok(())
+    }
+
     /// Weak passwords, and passwords shared between sites.
     pub fn checkup(&self) -> Checkup {
         let mut sites_by_password: HashMap<&str, BTreeSet<String>> = HashMap::new();
@@ -590,6 +663,19 @@ mod tests {
         assert_eq!(login.password, "hunter2-secret");
         assert_eq!(login.origin, "https://a.com");
         assert_eq!(vault.never_saved().collect::<Vec<_>>(), ["https://b.com"]);
+
+        // Addresses are encrypted along with the passwords.
+        let mut vault = vault;
+        let address = Address {
+            name: "Alice Secret".into(),
+            street: "1 Hidden Lane".into(),
+            ..Address::default()
+        };
+        let address_id = vault.save_address(&address).unwrap();
+        let text = std::fs::read_to_string(dir.join("passwords.json")).unwrap();
+        assert!(!text.contains("Hidden Lane"));
+        let vault = Vault::open(&dir, &keyring).unwrap();
+        assert_eq!(vault.address(address_id).unwrap().street, "1 Hidden Lane");
 
         // Another key can't read it, and says so instead of losing data.
         let other = ion_keyring::Keyring::memory();
@@ -697,6 +783,32 @@ mod tests {
         };
         assert_eq!(pairs(&copy), pairs(&vault));
         assert!(matches!(vault.import_csv("x,y\n", 0), Err(Error::Csv(_))));
+    }
+
+    #[test]
+    fn addresses_are_offered_once_and_edited_in_place() {
+        let mut vault = Vault::in_memory();
+        let home = Address {
+            name: "Ada".into(),
+            street: "1 Main St".into(),
+            city: "Town".into(),
+            ..Address::default()
+        };
+        assert!(vault.address_is_new(&home));
+        let id = vault.save_address(&home).unwrap();
+        // The same address with fewer fields is already covered.
+        assert!(!vault.address_is_new(&Address {
+            street: "1 main st".into(),
+            ..Address::default()
+        }));
+        let mut moved = vault.address(id).unwrap().clone();
+        moved.city = "City".into();
+        assert_eq!(vault.save_address(&moved).unwrap(), id);
+        assert_eq!(vault.addresses().len(), 1);
+        vault.mark_address_used(id, 5).unwrap();
+        assert_eq!(vault.address(id).unwrap().used, 5);
+        assert!(vault.remove_address(id).unwrap());
+        assert!(vault.addresses().is_empty());
     }
 
     #[test]

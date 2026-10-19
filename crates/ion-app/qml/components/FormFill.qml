@@ -5,10 +5,11 @@ import QtWebChannel
 import QtWebEngine
 import Ion
 
-// Saved passwords on one tab's pages: fills a site's login in as its page
-// loads, lists saved logins under a focused login field, suggests a strong
-// password for sign-up forms, and turns a sent form into a save or update
-// prompt (`prompt`, shown by the toolbar's PasswordsButton).
+// Saved passwords and addresses on one tab's pages: fills a site's login in
+// as its page loads, lists saved logins under a focused login field (and
+// saved addresses under an address field), suggests a strong password for
+// sign-up forms, and turns a sent form into a save or update prompt
+// (`prompt`, shown by the toolbar's PasswordsButton).
 //
 // The page side is `ion_passwords::PAGE_SCRIPT`, running in an isolated
 // world of the top frame, talking over `channel`; the page's own scripts
@@ -26,16 +27,17 @@ Item {
 
     // Whether the page has a login form (the key icon shows).
     property bool formOnPage: false
-    // A pending save or update offer: {kind: "save"|"update", id, username,
-    // password, url}, or null.
+    // A pending offer: {kind: "save"|"update", id, username, password, url},
+    // {kind: "address", address, url}, or null.
     property var prompt: null
     // Page loads since the prompt appeared; it lapses after a couple, so it
     // survives a sign-in's redirects but not browsing on.
     property int loadsSincePrompt: 0
     // Emitted when a fresh prompt is ready to show.
     signal promptRaised()
-    // Emitted when "Manage passwords" is picked in the field's list.
-    signal manageRequested()
+    // Emitted when "Manage…" is picked in the field's list: section
+    // "passwords" or "addresses".
+    signal manageRequested(string section)
 
     function dismissPrompt() {
         prompt = null
@@ -61,6 +63,12 @@ Item {
     }
     Component.onCompleted: install()
 
+    // The second line under an address in the list: "1 Main St, Town".
+    function addressDetail(a) {
+        return [a.street.split("\n")[0], a.city, a.postalCode, a.email]
+            .filter(part => part && part.length > 0 && part !== a.name).slice(0, 2).join(", ")
+    }
+
     function current(url) {
         return Passwords.sameOrigin(url, view.url.toString())
     }
@@ -77,6 +85,11 @@ Item {
         pageCall("fill(" + JSON.stringify(login.username) + ", " + JSON.stringify(login.password)
                  + ", " + (onlyEmpty ? "true" : "false") + ")")
         Passwords.markUsed(id)
+    }
+
+    function fillAddress(address) {
+        pageCall("fillAddress(" + JSON.stringify(address) + ")")
+        Passwords.markAddressUsed(address.id)
     }
 
     // Messages from the page script. The first argument is always the
@@ -98,6 +111,14 @@ Item {
             if (!root.current(url) || !view.visible)
                 return
             menu.showFor(kind, Qt.rect(x, y, width, height))
+        }
+
+        function addressSubmitted(url, json) {
+            if (!root.current(url) || !Passwords.addressIsNew(json))
+                return
+            root.prompt = { kind: "address", address: JSON.parse(json), url: view.url.toString() }
+            root.loadsSincePrompt = 0
+            root.promptRaised()
         }
 
         function fieldBlurred(url) {
@@ -151,7 +172,8 @@ Item {
         id: menu
 
         // Rows: {kind: "login", id, username, host, exact} | {kind:
-        // "generate", password} | {kind: "manage"}.
+        // "generate", password} | {kind: "address", address} | {kind:
+        // "manage", section}.
         property var rows: []
         property int highlighted: 0
         property rect field
@@ -160,6 +182,9 @@ Item {
             const list = []
             if (kind === "new") {
                 list.push({ kind: "generate", password: Passwords.generate() })
+            } else if (kind === "address") {
+                for (const address of JSON.parse(Passwords.addresses("")))
+                    list.push({ kind: "address", address: address })
             } else {
                 for (const login of JSON.parse(Passwords.matches(view.url.toString())))
                     list.push(Object.assign({ kind: "login" }, login))
@@ -168,7 +193,7 @@ Item {
                 close()
                 return
             }
-            list.push({ kind: "manage" })
+            list.push({ kind: "manage", section: kind === "address" ? "addresses" : "passwords" })
             rows = list
             highlighted = 0
             field = rect
@@ -195,8 +220,10 @@ Item {
                 root.fillLogin(row.id, false)
             else if (row.kind === "generate")
                 root.pageCall("fillNew(" + JSON.stringify(row.password) + ")")
+            else if (row.kind === "address")
+                root.fillAddress(row.address)
             else
-                root.manageRequested()
+                root.manageRequested(row.section)
         }
 
         readonly property real zoom: view?.zoomFactor ?? 1
@@ -249,7 +276,8 @@ Item {
                         spacing: Theme.spacing * 1.5
 
                         Text {
-                            text: row.modelData.kind === "generate" ? "✦" : row.modelData.kind === "manage" ? "⚙" : "⚿"
+                            text: row.modelData.kind === "generate" ? "✦" : row.modelData.kind === "manage" ? "⚙"
+                                : row.modelData.kind === "address" ? "⌂" : "⚿"
                             color: row.modelData.kind === "generate" ? Theme.accent : Theme.textMuted
                             font.pixelSize: Theme.fontSize + 1
                             Layout.alignment: Qt.AlignVCenter
@@ -261,7 +289,9 @@ Item {
                             Text {
                                 Layout.fillWidth: true
                                 text: row.modelData.kind === "generate" ? qsTr("Use a strong password")
-                                    : row.modelData.kind === "manage" ? qsTr("Manage passwords…")
+                                    : row.modelData.kind === "manage"
+                                      ? (row.modelData.section === "addresses" ? qsTr("Manage addresses…") : qsTr("Manage passwords…"))
+                                    : row.modelData.kind === "address" ? (row.modelData.address.name || row.modelData.address.summary)
                                     : row.modelData.username.length > 0 ? row.modelData.username
                                     : qsTr("(no username)")
                                 textFormat: Text.PlainText
@@ -273,6 +303,7 @@ Item {
                                 Layout.fillWidth: true
                                 visible: row.modelData.kind !== "manage"
                                 text: row.modelData.kind === "generate" ? row.modelData.password
+                                    : row.modelData.kind === "address" ? root.addressDetail(row.modelData.address)
                                     : row.modelData.exact ? "••••••••••" : qsTr("from %1").arg(row.modelData.host)
                                 textFormat: Text.PlainText
                                 color: Theme.textMuted

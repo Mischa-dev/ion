@@ -66,6 +66,7 @@ Item {
         case "bookmarks": Qt.callLater(() => commandPalette.show("*")); break
         case "import-browser-data": browser.showImport(); break
         case "passwords": browser.showPasswords(""); break
+        case "addresses": browser.showPasswords("", "addresses"); break
         case "generate-password": Passwords.copySecret(Passwords.generate()); break
         case "new-private-window": browser.openPrivateWindow(); break
         case "profiles": browser.showProfiles(); break

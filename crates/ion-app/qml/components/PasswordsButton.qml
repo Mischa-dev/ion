@@ -5,7 +5,8 @@ import Ion
 
 // Key next to the URL bar, shown on pages with a login form or saved logins.
 // After a sign-in it opens by itself to offer saving (or updating) the
-// password; otherwise it lists the site's saved logins to copy from.
+// password, and after an address form to offer saving the address;
+// otherwise it lists the site's saved logins to copy from.
 ToolButton {
     id: control
 
@@ -16,6 +17,7 @@ ToolButton {
 
     readonly property var fill: view?.passwords ?? null
     readonly property var prompt: fill?.prompt ?? null
+    readonly property bool addressPrompt: prompt?.kind === "address"
     readonly property string pageUrl: (view?.url ?? "").toString()
     readonly property string host: Passwords.host(pageUrl)
     // Saved logins for this page; reading revision refreshes after edits.
@@ -46,7 +48,7 @@ ToolButton {
     contentItem: Item {
         Text {
             anchors.centerIn: parent
-            text: "⚿"
+            text: control.addressPrompt ? "⌂" : "⚿"
             color: control.prompt ? Theme.accent : Theme.text
             font.pixelSize: Theme.fontSize + 3
         }
@@ -71,7 +73,8 @@ ToolButton {
 
     ToolTip.visible: hovered && !popup.opened
     ToolTip.delay: 600
-    ToolTip.text: control.prompt ? qsTr("Save password") : qsTr("Passwords for %1").arg(control.host)
+    ToolTip.text: control.addressPrompt ? qsTr("Save address")
+                : control.prompt ? qsTr("Save password") : qsTr("Passwords for %1").arg(control.host)
 
     Popup {
         id: popup
@@ -126,9 +129,63 @@ ToolButton {
         contentItem: ColumnLayout {
             spacing: Theme.spacing * 1.5
 
+            // Save an address.
+            ColumnLayout {
+                visible: control.addressPrompt
+                Layout.fillWidth: true
+                spacing: Theme.spacing * 1.5
+
+                Label {
+                    Layout.fillWidth: true
+                    text: qsTr("Save this address?")
+                    color: Theme.text
+                    font.pixelSize: Theme.fontSize + 1
+                    font.weight: Font.DemiBold
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: {
+                        const a = control.prompt?.address
+                        if (!a)
+                            return ""
+                        const place = [a.city, a.region, a.postalCode].filter(p => p.length > 0).join(" ")
+                        return [a.name, a.organization, a.street, place, a.country, a.email, a.phone]
+                            .filter(p => p && p.length > 0).join("\n")
+                    }
+                    textFormat: Text.PlainText
+                    color: Theme.text
+                    font.pixelSize: Theme.fontSize
+                    wrapMode: Text.Wrap
+                }
+                Caption {
+                    text: qsTr("Ion fills it in on forms that ask for an address. Saved encrypted, with your passwords.")
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Theme.spacing
+                    Item { Layout.fillWidth: true }
+                    DialogButton {
+                        text: qsTr("Not now")
+                        onClicked: {
+                            control.fill.dismissPrompt()
+                            popup.close()
+                        }
+                    }
+                    DialogButton {
+                        primary: true
+                        text: qsTr("Save")
+                        onClicked: {
+                            Passwords.saveAddress(JSON.stringify(control.prompt.address))
+                            control.fill.dismissPrompt()
+                            popup.close()
+                        }
+                    }
+                }
+            }
+
             // Save or update offer.
             ColumnLayout {
-                visible: control.prompt !== null
+                visible: control.prompt !== null && !control.addressPrompt
                 Layout.fillWidth: true
                 spacing: Theme.spacing * 1.5
 

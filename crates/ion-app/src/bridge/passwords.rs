@@ -180,6 +180,32 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "clearCopied"]
         fn clear_copied(self: &Passwords, text: &QString);
+
+        /// Saved addresses containing `query`, most recently used first, as
+        /// a JSON array of `ion_passwords::Address` plus a `summary`.
+        #[qinvokable]
+        fn addresses(self: Pin<&mut Passwords>, query: &QString) -> QString;
+
+        /// Whether an address sent in a form (JSON `Address`) is worth
+        /// offering to save: enough details, and not one already saved.
+        #[qinvokable]
+        #[cxx_name = "addressIsNew"]
+        fn address_is_new(self: Pin<&mut Passwords>, address: &QString) -> bool;
+
+        /// Save an address (JSON `Address`; id 0 adds one). Returns its id,
+        /// or -1.
+        #[qinvokable]
+        #[cxx_name = "saveAddress"]
+        fn save_address(self: Pin<&mut Passwords>, address: &QString) -> i32;
+
+        #[qinvokable]
+        #[cxx_name = "removeAddress"]
+        fn remove_address(self: Pin<&mut Passwords>, id: i32) -> bool;
+
+        /// Note that address `id` was just filled in.
+        #[qinvokable]
+        #[cxx_name = "markAddressUsed"]
+        fn mark_address_used(self: Pin<&mut Passwords>, id: i32);
     }
 }
 
@@ -187,7 +213,7 @@ use core::pin::Pin;
 
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::QString;
-use ion_passwords::{Proposal, Vault, display_host, origin_of};
+use ion_passwords::{Address, Proposal, Vault, display_host, origin_of};
 use serde_json::json;
 
 #[derive(Default)]
@@ -567,5 +593,67 @@ impl qobject::Passwords {
 
     fn clear_copied(&self, text: &QString) {
         qobject::clear_secret(text);
+    }
+
+    fn addresses(self: Pin<&mut Self>, query: &QString) -> QString {
+        let query = query.to_string().to_lowercase();
+        let json = self.with_vault(String::from("[]"), |vault| {
+            let list: Vec<_> = vault
+                .addresses()
+                .into_iter()
+                .filter(|a| {
+                    query.is_empty()
+                        || serde_json::to_string(a)
+                            .unwrap_or_default()
+                            .to_lowercase()
+                            .contains(&query)
+                })
+                .map(|a| {
+                    let mut value = serde_json::to_value(a).unwrap_or_default();
+                    value["summary"] = a.summary().into();
+                    value
+                })
+                .collect();
+            Ok(serde_json::Value::from(list).to_string())
+        });
+        QString::from(&json)
+    }
+
+    fn address_is_new(self: Pin<&mut Self>, address: &QString) -> bool {
+        if !self.enabled() {
+            return false;
+        }
+        let Ok(address) = serde_json::from_str::<Address>(&address.to_string()) else {
+            return false;
+        };
+        self.with_vault(false, |vault| Ok(vault.address_is_new(&address)))
+    }
+
+    fn save_address(mut self: Pin<&mut Self>, address: &QString) -> i32 {
+        let Ok(address) = serde_json::from_str::<Address>(&address.to_string()) else {
+            return -1;
+        };
+        let id = self.as_mut().with_vault(-1, |vault| {
+            Ok(i32::try_from(vault.save_address(&address)?).unwrap_or(-1))
+        });
+        self.changed();
+        id
+    }
+
+    fn remove_address(mut self: Pin<&mut Self>, id: i32) -> bool {
+        let Ok(id) = u64::try_from(id) else {
+            return false;
+        };
+        let done = self
+            .as_mut()
+            .with_vault(false, |vault| vault.remove_address(id));
+        self.changed();
+        done
+    }
+
+    fn mark_address_used(self: Pin<&mut Self>, id: i32) {
+        if let Ok(id) = u64::try_from(id) {
+            self.with_vault((), |vault| vault.mark_address_used(id, now_ms()));
+        }
     }
 }

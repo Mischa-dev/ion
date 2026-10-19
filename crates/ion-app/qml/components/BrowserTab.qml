@@ -23,7 +23,7 @@ WebEngineView {
     // The page's menu asked an agent about the selection (`@ion …`).
     signal askAgent(string input)
     // A login field's list asked for the password manager.
-    signal managePasswords()
+    signal managePasswords(string section)
 
     // False for tabs a page opened (window.open), whose blank document the
     // page fills in itself; those must not be covered by the new-tab page.
@@ -166,7 +166,7 @@ WebEngineView {
     FormFill {
         id: formFill
         view: view
-        onManageRequested: view.managePasswords()
+        onManageRequested: section => view.managePasswords(section)
     }
     AdblockCosmetics { view: view }
     FindBar { id: findBar; view: view }

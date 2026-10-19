@@ -209,6 +209,12 @@ pub const COMMANDS: &[Command] = &[
         &[],
     ),
     command(
+        "addresses",
+        "Addresses",
+        "autofill shipping billing home contact forms saved",
+        &[],
+    ),
+    command(
         "generate-password",
         "Copy a strong new password",
         "generate random secure create",

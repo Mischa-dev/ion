@@ -45,6 +45,16 @@ subdomains of the same registrable domain are offered but not autofilled.
 checkup for weak and reused passwords, and CSV import/export. Import reads
 exports from Chrome, Edge, Brave, Firefox, Safari, Bitwarden and 1Password.
 
+**Addresses.** After you send a form with an address (shipping, billing,
+contact details), the key icon offers to save it, unless it is already saved.
+Focus a field of an address form and saved addresses are listed under it;
+picking one fills every empty field of the form, including state and country
+menus. Fields are recognised by their `autocomplete` tokens, else by their
+name, id, placeholder and label. Login and sign-up forms (anything with a
+password field) and payment card fields are left alone. Addresses are
+encrypted in the same file as passwords, and edited on the manager's
+Addresses page (palette: "Addresses"). Turned off with `passwords.enable`.
+
 **Other secrets.** `ion_keyring::global()` stores any named secret
 (`get`/`set`/`delete`/`get_or_create`) for the rest of Ion, for example an
 agent's API key.

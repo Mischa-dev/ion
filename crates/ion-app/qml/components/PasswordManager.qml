@@ -6,11 +6,15 @@ import Ion
 
 // The password manager: every saved login, searchable, with a checkup for
 // weak and reused passwords; reveal, copy, edit and delete; import from a
-// CSV export of another browser or manager, and export.
+// CSV export of another browser or manager, and export. Its second page
+// holds saved addresses (AddressBook).
 Popup {
     id: root
 
     property string query: ""
+    // "passwords" or "addresses".
+    property string section: "passwords"
+    readonly property bool onAddresses: section === "addresses"
     // "all", "weak" or "reused".
     property string filter: "all"
     property int selected: -1
@@ -41,7 +45,9 @@ Popup {
     }
     readonly property var current: logins.find(l => l.id === selected) ?? null
 
-    function show(text) {
+    function show(text, page) {
+        section = page || "passwords"
+        addressBook.reset()
         query = text
         search.text = text
         filter = "all"
@@ -158,20 +164,47 @@ Popup {
             Layout.fillWidth: true
             spacing: Theme.spacing
 
-            Label {
-                text: qsTr("Passwords")
-                color: Theme.text
-                font.pixelSize: Theme.fontSize + 4
-                font.weight: Font.DemiBold
-            }
-            Label {
-                text: root.checkup.total !== undefined ? root.checkup.total : ""
-                color: Theme.textMuted
-                font.pixelSize: Theme.fontSize + 1
+            // The two pages, as headings to switch between.
+            Repeater {
+                model: [
+                    { page: "passwords", title: qsTr("Passwords"), count: root.checkup.total },
+                    { page: "addresses", title: qsTr("Addresses"), count: addressBook.addresses.length }
+                ]
+                delegate: AbstractButton {
+                    id: pageButton
+                    required property var modelData
+                    readonly property bool here: root.section === modelData.page
+                    focusPolicy: Qt.NoFocus
+                    rightPadding: Theme.spacing * 2
+                    onClicked: {
+                        root.section = modelData.page
+                        root.message = ""
+                        search.text = ""
+                    }
+                    contentItem: Row {
+                        spacing: Theme.spacing
+                        Label {
+                            id: pageTitle
+                            text: pageButton.modelData.title
+                            color: pageButton.here ? Theme.text : Theme.textMuted
+                            font.pixelSize: Theme.fontSize + 4
+                            font.weight: Font.DemiBold
+                        }
+                        Label {
+                            anchors.baseline: pageTitle.baseline
+                            text: pageButton.modelData.count !== undefined && pageButton.modelData.count > 0
+                                  ? pageButton.modelData.count : ""
+                            color: Theme.textMuted
+                            font.pixelSize: Theme.fontSize + 1
+                        }
+                    }
+                    HoverHandler { cursorShape: Qt.PointingHandCursor }
+                }
             }
             Item { Layout.fillWidth: true }
-            DialogButton { text: qsTr("Import…"); onClicked: importPicker.open() }
+            DialogButton { visible: !root.onAddresses; text: qsTr("Import…"); onClicked: importPicker.open() }
             DialogButton {
+                visible: !root.onAddresses
                 text: qsTr("Export…")
                 enabled: (root.checkup.total ?? 0) > 0
                 onClicked: exportConfirm.open()
@@ -195,32 +228,47 @@ Popup {
             IonTextField {
                 id: search
                 Layout.fillWidth: true
-                placeholderText: qsTr("Search sites and usernames")
-                onTextChanged: root.query = text
+                placeholderText: root.onAddresses ? qsTr("Search addresses") : qsTr("Search sites and usernames")
+                onTextChanged: {
+                    if (root.onAddresses)
+                        addressBook.query = text
+                    else
+                        root.query = text
+                }
                 Keys.onDownPressed: list.forceActiveFocus()
             }
             Chip {
+                visible: !root.onAddresses
                 text: qsTr("All")
                 selectedChip: root.filter === "all"
                 onClicked: root.filter = "all"
             }
             Chip {
                 text: qsTr("%n weak", "", root.checkup.weak ?? 0)
-                visible: (root.checkup.weak ?? 0) > 0
+                visible: !root.onAddresses && (root.checkup.weak ?? 0) > 0
                 tint: Theme.warning
                 selectedChip: root.filter === "weak"
                 onClicked: root.filter = "weak"
             }
             Chip {
                 text: qsTr("%n reused", "", root.checkup.reused ?? 0)
-                visible: (root.checkup.reused ?? 0) > 0
+                visible: !root.onAddresses && (root.checkup.reused ?? 0) > 0
                 tint: Theme.warning
                 selectedChip: root.filter === "reused"
                 onClicked: root.filter = "reused"
             }
         }
 
+        AddressBook {
+            id: addressBook
+            visible: root.onAddresses
+            active: root.opened
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+        }
+
         RowLayout {
+            visible: !root.onAddresses
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: Theme.spacing * 2

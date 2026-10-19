@@ -126,8 +126,9 @@ ApplicationWindow {
     }
 
     // The password manager, its search set to `query` ("" for everything).
-    function showPasswords(query) {
-        passwordManager.show(query || "")
+    // `section` is "passwords" (the default) or "addresses".
+    function showPasswords(query, section) {
+        passwordManager.show(query || "", section || "passwords")
     }
 
     // Keyboard focus follows the visible page (so Space, arrows and Find work
@@ -451,7 +452,7 @@ ApplicationWindow {
                     }
                     onOpenInNewTab: target => window.openTab(target, false)
                     onAskAgent: input => window.askAgent(input)
-                    onManagePasswords: window.showPasswords(Passwords.host(url.toString()))
+                    onManagePasswords: section => window.showPasswords(section === "addresses" ? "" : Passwords.host(url.toString()), section)
                 }
             }
         }
