@@ -238,7 +238,21 @@ fn quantity(text: &str) -> Option<(f64, &'static Unit)> {
             !(c.is_ascii_digit() || c == '.' || c == ',' || (i == 0 && (c == '-' || c == '+')))
         })
         .map(|(i, _)| i)?;
-    let number: String = text[..split].chars().filter(|c| *c != ',').collect();
+    let number = &text[..split];
+    // Commas only as thousands separators: "1,5 km" isn't 15 km.
+    let whole = number.split('.').next().unwrap_or_default();
+    let mut groups = whole.trim_start_matches(['-', '+']).split(',');
+    let first = groups.next().unwrap_or_default();
+    if (whole.contains(',')
+        && (first.is_empty() || first.len() > 3 || groups.any(|g| g.len() != 3)))
+        || number
+            .split('.')
+            .skip(1)
+            .any(|fraction| fraction.contains(','))
+    {
+        return None;
+    }
+    let number: String = number.chars().filter(|c| *c != ',').collect();
     let value: f64 = number.parse().ok()?;
     Some((value, find(text[split..].trim())?))
 }
@@ -318,6 +332,18 @@ mod tests {
         assert_eq!(text("1 hour in seconds").as_deref(), Some("1 h = 3600 s"));
         assert_eq!(text("1500 ms to s").as_deref(), Some("1500 ms = 1.5 s"));
         assert_eq!(text("1,000 ft = m").as_deref(), Some("1000 ft = 304.8 m"));
+        assert_eq!(
+            text("1,000,000 m to km").as_deref(),
+            Some("1000000 m = 1000 km")
+        );
+        for malformed in [
+            "1,5 km to mi",
+            "10,00 km to mi",
+            ",5 km to mi",
+            "1.5,0 km to mi",
+        ] {
+            assert_eq!(text(malformed), None, "{malformed}");
+        }
         assert_eq!(
             text("180 deg to rad").as_deref(),
             Some("180° = 3.14159 rad")

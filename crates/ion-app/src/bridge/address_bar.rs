@@ -65,6 +65,20 @@ pub mod qobject {
         #[cxx_name = "suggestUrl"]
         fn suggest_url(self: &AddressBar, input: &QString) -> QString;
 
+        /// Whether to look for `pageUrl`'s own search (OpenSearch): true
+        /// once per site that has none remembered yet.
+        #[qinvokable]
+        #[cxx_name = "wantsSiteSearch"]
+        fn wants_site_search(self: &AddressBar, page_url: &QString) -> bool;
+
+        /// Look up, in the background, the search that the OpenSearch
+        /// file at `descriptionUrl` (linked from `pageUrl`) describes, and
+        /// remember it as a bang for that site. Only the page's own site is
+        /// asked, redirects included.
+        #[qinvokable]
+        #[cxx_name = "discoverSiteSearch"]
+        fn discover_site_search(self: &AddressBar, page_url: &QString, description_url: &QString);
+
         /// The suggestions in a search engine's `body`, without `query`.
         #[qinvokable]
         #[cxx_name = "parseSuggestions"]
@@ -72,10 +86,16 @@ pub mod qobject {
     }
 }
 
+use std::collections::HashSet;
+use std::path::PathBuf;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+
 use cxx_qt_lib::{QList, QString, QStringList, QVariant};
 use ion_bangs::Action;
 use ion_core::engines;
 use ion_core::navigation::Resolved;
+use ion_omnibox::opensearch::{self, SiteEngine, SiteEngines};
 use ion_omnibox::{Page, Sources};
 
 use super::palette::{current_palette, entries, history_entries, rows, strings};
@@ -87,6 +107,107 @@ const MAX_SUGGEST_INPUT: usize = 120;
 
 #[derive(Default)]
 pub struct AddressBarRust;
+
+/// Sites' own searches, loaded from `site-searches.json` on first use, and
+/// the hosts looked at since startup or the last history clear.
+struct SiteSearches {
+    engines: SiteEngines,
+    tried: HashSet<String>,
+    path: Option<PathBuf>,
+}
+
+static SITE_SEARCHES: Mutex<Option<SiteSearches>> = Mutex::new(None);
+/// Bumped whenever a site search is added, so bang tables get rebuilt.
+static SITE_SEARCHES_REVISION: AtomicU64 = AtomicU64::new(0);
+
+/// Site-search lookups running at once, and the most allowed: past that a
+/// page's search is skipped this run, so a site can't pile up threads.
+static DISCOVERIES: AtomicUsize = AtomicUsize::new(0);
+const MAX_DISCOVERIES: usize = 4;
+
+fn with_site_searches<T>(f: impl FnOnce(&mut SiteSearches) -> T) -> T {
+    let mut guard = SITE_SEARCHES.lock().unwrap_or_else(|e| e.into_inner());
+    let searches = guard.get_or_insert_with(|| {
+        let path = ion_session::paths::data_dir().map(|d| d.join("site-searches.json"));
+        let engines = path
+            .as_deref()
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .and_then(|json| SiteEngines::from_json(&json).ok())
+            .unwrap_or_default();
+        SiteSearches {
+            engines,
+            tried: HashSet::new(),
+            path,
+        }
+    });
+    f(searches)
+}
+
+impl SiteSearches {
+    /// Saves the engines and has bang tables rebuilt.
+    fn changed(&self) {
+        SITE_SEARCHES_REVISION.fetch_add(1, Ordering::Relaxed);
+        if let Some(path) = &self.path
+            && let Err(err) =
+                ion_session::paths::write_atomic(path, self.engines.to_json().as_bytes())
+        {
+            eprintln!("ion: could not save site searches: {err}");
+        }
+    }
+}
+
+/// Forgets the searches learned on `site` and its subdomains, or on every
+/// site: they record where the person has been, so they go with history.
+pub fn forget_site_searches(site: Option<&str>) {
+    with_site_searches(|s| {
+        match site {
+            Some(site) => {
+                s.engines.forget_site(site);
+            }
+            None => s.engines.clear(),
+        }
+        s.tried.clear();
+        // Always rewritten, even when nothing was known: a file Ion
+        // couldn't read may still name sites.
+        s.changed();
+    })
+}
+
+/// The sites' searches found so far and a revision that changes with them.
+pub fn site_searches() -> (u64, Vec<SiteEngine>) {
+    with_site_searches(|s| {
+        (
+            SITE_SEARCHES_REVISION.load(Ordering::Relaxed),
+            s.engines.iter().cloned().collect(),
+        )
+    })
+}
+
+/// The host of an http(s) page, without `www.`.
+fn page_host(page_url: &str) -> Option<String> {
+    let url = url::Url::parse(page_url).ok()?;
+    if !matches!(url.scheme(), "https" | "http") {
+        return None;
+    }
+    Some(url.host_str()?.trim_start_matches("www.").to_lowercase())
+}
+
+/// Remembers the search described by OpenSearch `xml`, found on `page_url`.
+fn learn_site_search(page_url: &str, xml: &str) {
+    let Some(host) = page_host(page_url) else {
+        return;
+    };
+    let Some(engine) = opensearch::parse_for_page(xml, page_url) else {
+        return;
+    };
+    with_site_searches(|s| {
+        // Only answers to a look this run asked for: clearing history
+        // forgets the pending ones too.
+        if s.tried.contains(&host) && s.engines.add(engine) {
+            s.changed();
+        }
+    });
+}
 
 /// `History.search()`'s or `History.chosen()`'s JSON as pages.
 fn pages(json: &str, weight_key: &str) -> Vec<Page> {
@@ -196,6 +317,28 @@ impl qobject::AddressBar {
                 .unwrap_or_default()
                 .as_str(),
         )
+    }
+
+    fn wants_site_search(&self, page_url: &QString) -> bool {
+        let Some(host) = page_host(&page_url.to_string()) else {
+            return false;
+        };
+        with_site_searches(|s| !s.engines.knows(&host) && s.tried.insert(host))
+    }
+
+    fn discover_site_search(&self, page_url: &QString, description_url: &QString) {
+        let page = page_url.to_string();
+        let description = description_url.to_string();
+        if DISCOVERIES.fetch_add(1, Ordering::SeqCst) >= MAX_DISCOVERIES {
+            DISCOVERIES.fetch_sub(1, Ordering::SeqCst);
+            return;
+        }
+        std::thread::spawn(move || {
+            if let Some(xml) = opensearch::fetch(&page, &description) {
+                learn_site_search(&page, &xml);
+            }
+            DISCOVERIES.fetch_sub(1, Ordering::SeqCst);
+        });
     }
 
     fn parse_suggestions(&self, body: &QString, query: &QString) -> QStringList {

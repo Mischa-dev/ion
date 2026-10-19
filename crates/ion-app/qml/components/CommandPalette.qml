@@ -9,7 +9,8 @@ import Ion
 //
 // Tabs and history come from the `Tabs` and `History` singletons, bookmarks
 // from `Bookmarks`. `browser` (the main window) provides openTab(url),
-// runCommand(id) and canRunCommand(id) (commands live in Commands.qml) and
+// runCommand(id), canRunCommand(id), copyText(text) (commands live in
+// Commands.qml) and
 // currentView.
 Popup {
     id: root
@@ -91,6 +92,9 @@ Popup {
         case "run":
             Keymap.noteUsed(item.value)
             browser.runCommand(item.value)
+            break
+        case "copy":
+            browser.copyText(item.value)
             break
         case "set":
             for (let i = 0; i + 1 < item.value.length; i += 2) {

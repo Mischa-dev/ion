@@ -214,6 +214,23 @@ impl BangTable {
         Ok(())
     }
 
+    /// Add a bang named `name` unless `trigger` is already taken, as for a
+    /// site's own search found while browsing. Returns whether it was added.
+    pub fn add_if_absent(&mut self, trigger: &str, name: &str, template: &str) -> bool {
+        if self.get(trigger.trim().trim_start_matches('!')).is_some()
+            || self.insert(trigger, template).is_err()
+        {
+            return false;
+        }
+        if let Some(bang) = self
+            .bangs
+            .get_mut(&trigger.trim().trim_start_matches('!').to_lowercase())
+        {
+            bang.name = name.to_owned();
+        }
+        true
+    }
+
     /// Remove a bang; returns whether it existed.
     pub fn remove(&mut self, trigger: &str) -> bool {
         self.bangs.remove(&trigger.to_lowercase()).is_some()
@@ -274,6 +291,20 @@ mod tests {
 
     fn expand(input: &str) -> Option<String> {
         BangTable::default().expand(input)
+    }
+
+    #[test]
+    fn site_searches_never_replace_existing_bangs() {
+        let mut table = BangTable::default();
+        assert!(!table.add_if_absent("gh", "Elsewhere", "https://elsewhere.example/?q={}"));
+        assert_eq!(table.get("gh").unwrap().name, "GitHub");
+        assert!(table.add_if_absent(
+            "youtube.com",
+            "YouTube",
+            "https://www.youtube.com/results?search_query={}"
+        ));
+        assert_eq!(table.get("YouTube.com").unwrap().name, "YouTube");
+        assert!(!table.add_if_absent("bad one", "Bad", "https://x.example/?q={}"));
     }
 
     #[test]

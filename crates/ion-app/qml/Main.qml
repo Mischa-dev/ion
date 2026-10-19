@@ -674,6 +674,7 @@ ApplicationWindow {
     CommandPalette { id: palette; browser: window }
     // Tab search (Ctrl/Cmd+Shift+A).
     TabSearch { id: tabSearch; browser: window }
+    SiteSearchDiscovery { id: siteSearch }
 
     // Picture-in-picture: a tab's video in its own small window.
     PictureInPicture {
@@ -932,8 +933,11 @@ ApplicationWindow {
                     }
                     onLoadingChanged: info => {
                         if (info.status === WebEngineView.LoadSucceededStatus) {
-                            if (!window.privateWindow)
+                            // Private windows leave no history and learn no site searches.
+                            if (!window.privateWindow) {
                                 History.recordVisit(info.url.toString(), title)
+                                siteSearch.check(view, info.url)
+                            }
                             Performance.mark("first-page")
                             Performance.event("page-loaded")
                         }
@@ -1034,6 +1038,7 @@ ApplicationWindow {
     function runCommand(id) { commands.run(id) }
     // What the side-panel command reopens when nothing is showing.
     function lastPanel() { return sidePanel.lastOpen }
+    function copyText(text) { commands.copyText(text) }
     function canRunCommand(id) { return commands.available(id) }
 
     ShortcutEditor { id: shortcutEditor }

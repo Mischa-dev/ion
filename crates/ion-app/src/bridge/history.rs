@@ -174,6 +174,7 @@ impl qobject::History {
             .rust_mut()
             .inputs
             .forget_site(&site.to_string());
+        super::address_bar::forget_site_searches(Some(&site.to_string()));
         if removed > 0 || forgot {
             self.changed();
         }
@@ -224,6 +225,7 @@ impl qobject::History {
     fn clear(mut self: Pin<&mut Self>) {
         self.as_mut().rust_mut().history.clear();
         self.as_mut().rust_mut().inputs.clear();
+        super::address_bar::forget_site_searches(None);
         self.changed();
     }
 

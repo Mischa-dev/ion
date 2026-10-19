@@ -36,7 +36,9 @@ pub fn format(value: f64) -> String {
         let (mantissa, exponent) = text.split_once('e').unwrap_or((&text, "0"));
         return format!("{}e{exponent}", trim_zeros(mantissa));
     }
-    if (value - value.round()).abs() < 1e-9 * magnitude.max(1.0) {
+    // Within a few units in the last place of a whole number: rounding
+    // error, as in 0.1 * 3 * 10, not a real fraction.
+    if (value - value.round()).abs() <= 8.0 * f64::EPSILON * magnitude.max(1.0) {
         return format!("{}", value.round() as i64);
     }
     let decimals = (11 - magnitude.log10().floor() as i32).clamp(0, 17) as usize;
@@ -69,12 +71,15 @@ fn looks_like_an_identifier(input: &str) -> bool {
     let one_kind = SEPARATORS
         .iter()
         .any(|kind| input.matches(*kind).count() == separators);
-    // One dash reads as a phone number only in its shape: three digits,
-    // then four ("555-1234").
-    let phone = groups.len() == 2 && groups[0].len() == 3 && groups[1].len() == 4;
-    // "1/2", "10-3" and "100-50" are sums; "555-1234", "1.2.3" and
-    // "10/19/2026" aren't.
-    one_kind && (separators >= 2 || (input.contains('-') && phone))
+    // One dash reads as a phone number or a month only in their shapes:
+    // three digits then four ("555-1234"), or a year then a month ("2026-10").
+    let pair = |first: usize, second: usize| {
+        groups.len() == 2 && groups[0].len() == first && groups[1].len() == second
+    };
+    let month = pair(4, 2) && matches!(groups[1].parse::<u8>(), Ok(1..=12));
+    // "1/2", "10-3" and "100-50" are sums; "555-1234", "2026-10", "1.2.3"
+    // and "10/19/2026" aren't.
+    one_kind && (separators >= 2 || (input.contains('-') && (pair(3, 4) || month)))
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -414,6 +419,8 @@ mod tests {
         assert_eq!(calc("10^20").as_deref(), Some("1e20"));
         assert_eq!(calc("2^-30").as_deref(), Some("9.3132257462e-10"));
         assert_eq!(calc("0.1 + 0.2").as_deref(), Some("0.3"));
+        assert_eq!(calc("0.1 * 3 * 10").as_deref(), Some("3"));
+        assert_eq!(calc("1000000000 + 0.5").as_deref(), Some("1000000000.5"));
     }
 
     #[test]
@@ -426,6 +433,7 @@ mod tests {
             "hello",
             "covid-19",
             "2026-10-19",
+            "2026-10",
             "555-1234",
             "+1-555-1234",
             "+44-20-7946-0958",
@@ -451,6 +459,7 @@ mod tests {
         assert_eq!(calc("10-3").as_deref(), Some("7"));
         assert_eq!(calc("100-50").as_deref(), Some("50"));
         assert_eq!(calc("1000-1").as_deref(), Some("999"));
+        assert_eq!(calc("2026-13").as_deref(), Some("2013"));
         assert_eq!(calc("10 - 3 - 2").as_deref(), Some("5"));
     }
 }

@@ -1408,8 +1408,10 @@ version = "0.1.0"
 dependencies = [
  "ion-bangs",
  "ion-core",
+ "psl",
  "serde",
  "serde_json",
+ "ureq",
  "url",
 ]
 
