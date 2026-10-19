@@ -2,11 +2,13 @@
 //!
 //! - [`https`]: HTTPS-first navigation with session fallbacks.
 //! - [`fingerprint_script`]: the page script that resists fingerprinting.
+//! - [`window`]: private windows and profiles.
 //!
 //! Tracker blocking itself is `ion-adblock`; third-party cookies and Global
 //! Privacy Control are applied by the app's `Privacy` bridge.
 
 pub mod https;
+pub mod window;
 
 pub use https::{Https, HttpsMode, Upgrade};
 

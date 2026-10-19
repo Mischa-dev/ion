@@ -91,6 +91,37 @@ pub mod qobject {
         #[cxx_name = "globalPrivacyControl"]
         fn global_privacy_control(self: &Privacy) -> bool;
 
+        /// "normal", "private" or "profile": what kind of window this is.
+        #[qinvokable]
+        #[cxx_name = "windowKind"]
+        fn window_kind(self: &Privacy) -> QString;
+
+        /// The profile's name ("Work"), "Private", or "" for the default.
+        #[qinvokable]
+        #[cxx_name = "profileName"]
+        fn profile_name(self: &Privacy) -> QString;
+
+        /// The browser profile's storage name: "" (off the record) in a
+        /// private window.
+        #[qinvokable]
+        #[cxx_name = "storageName"]
+        fn storage_name(self: &Privacy) -> QString;
+
+        /// Open a private window, a separate process, with `urls` in it.
+        #[qinvokable]
+        #[cxx_name = "openPrivateWindow"]
+        fn open_private_window(self: &Privacy, urls: &QStringList) -> bool;
+
+        /// Open (or switch to) profile `name`, creating it if new. "" opens
+        /// the default profile. False if the name isn't usable.
+        #[qinvokable]
+        #[cxx_name = "openProfile"]
+        fn open_profile(self: &Privacy, name: &QString) -> bool;
+
+        /// The profiles created so far, by name.
+        #[qinvokable]
+        fn profiles(self: &Privacy) -> QStringList;
+
         /// Delete every cookie in `profile`, signing out of all sites.
         #[qinvokable]
         #[cxx_name = "clearCookies"]
@@ -118,6 +149,42 @@ pub fn https_upgrade(url: &str) -> Option<String> {
     match https().upgrade(url, https_mode(), std::time::Instant::now()) {
         ion_privacy::Upgrade::To(target) => Some(target),
         ion_privacy::Upgrade::Keep => None,
+    }
+}
+
+/// The default profile's data folder, also from inside another profile
+/// (whose `ION_DATA_DIR` points at `<base>/profiles/<name>`).
+fn base_data_dir() -> Option<std::path::PathBuf> {
+    let dir = ion_session::paths::data_dir()?;
+    Some(match ion_privacy::window::mode() {
+        ion_privacy::window::Mode::Profile(_) => dir.parent()?.parent()?.to_path_buf(),
+        _ => dir,
+    })
+}
+
+/// Start another Ion window with `args`. A profile's folder is chosen by its
+/// `--profile` argument, so the child starts from the default data folder.
+fn spawn_window(args: &[String]) -> bool {
+    let Ok(exe) = std::env::current_exe() else {
+        return false;
+    };
+    let mut command = std::process::Command::new(exe);
+    command.args(args);
+    if let (ion_privacy::window::Mode::Profile(_), Some(base)) =
+        (ion_privacy::window::mode(), base_data_dir())
+    {
+        command.env(ion_session::paths::DATA_DIR_ENV, base);
+    }
+    match command.spawn() {
+        Ok(mut child) => {
+            // Reap it when it quits, so it doesn't linger as a zombie.
+            std::thread::spawn(move || child.wait());
+            true
+        }
+        Err(err) => {
+            eprintln!("ion: could not open a new window: {err}");
+            false
+        }
     }
 }
 
@@ -164,7 +231,12 @@ pub fn clear_profile_files() {
     if files.is_empty() {
         return;
     }
-    let dir = qobject::profile_storage_path(&cxx_qt_lib::QString::from("Default")).to_string();
+    let storage = ion_privacy::window::mode().storage_name();
+    // A private window keeps nothing on disk.
+    if storage.is_empty() {
+        return;
+    }
+    let dir = qobject::profile_storage_path(&cxx_qt_lib::QString::from(&storage)).to_string();
     for name in files {
         let file = std::path::Path::new(&dir).join(name);
         if let Err(err) = std::fs::remove_file(&file)
@@ -183,6 +255,58 @@ impl qobject::Privacy {
             .clear_on_exit
             .iter()
             .map(|data| cxx_qt_lib::QString::from(data.as_str()))
+            .collect()
+    }
+
+    fn window_kind(&self) -> cxx_qt_lib::QString {
+        use ion_privacy::window::Mode;
+        cxx_qt_lib::QString::from(match ion_privacy::window::mode() {
+            Mode::Normal => "normal",
+            Mode::Private => "private",
+            Mode::Profile(_) => "profile",
+        })
+    }
+
+    fn profile_name(&self) -> cxx_qt_lib::QString {
+        cxx_qt_lib::QString::from(ion_privacy::window::mode().label())
+    }
+
+    fn storage_name(&self) -> cxx_qt_lib::QString {
+        cxx_qt_lib::QString::from(&ion_privacy::window::mode().storage_name())
+    }
+
+    fn open_private_window(&self, urls: &cxx_qt_lib::QStringList) -> bool {
+        let mut args = ion_privacy::window::Mode::Private.args();
+        args.extend(urls.iter().map(|u| u.to_string()));
+        spawn_window(&args)
+    }
+
+    fn open_profile(&self, name: &cxx_qt_lib::QString) -> bool {
+        use ion_privacy::window::{Mode, clean_name};
+        let name = name.to_string();
+        let mode = if name.trim().is_empty() {
+            Mode::Normal
+        } else {
+            match clean_name(&name) {
+                Some(name) => Mode::Profile(name),
+                None => return false,
+            }
+        };
+        if let (Mode::Profile(_), Some(base)) = (&mode, base_data_dir())
+            && let Err(err) = std::fs::create_dir_all(mode.data_dir(&base))
+        {
+            eprintln!("ion: could not create the profile folder: {err}");
+            return false;
+        }
+        spawn_window(&mode.args())
+    }
+
+    fn profiles(&self) -> cxx_qt_lib::QStringList {
+        base_data_dir()
+            .map(|base| ion_privacy::window::profiles(&base))
+            .unwrap_or_default()
+            .iter()
+            .map(|name| cxx_qt_lib::QString::from(name.as_str()))
             .collect()
     }
 

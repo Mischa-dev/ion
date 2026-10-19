@@ -16,6 +16,8 @@ Rectangle {
     signal bookmarkToggled()
     // The password manager, searching for `query`.
     signal passwordsRequested(string query)
+    // The profiles list, from the private/profile badge.
+    signal profilesRequested()
 
     implicitHeight: Theme.urlBarHeight + Theme.spacing * 2
 
@@ -169,6 +171,7 @@ Rectangle {
             onClicked: bar.view.resetZoom()
         }
 
+        WindowBadge { onProfilesRequested: bar.profilesRequested() }
         PasswordsButton {
             view: bar.view
             onManageRequested: query => bar.passwordsRequested(query)

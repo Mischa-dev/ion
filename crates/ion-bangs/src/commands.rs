@@ -105,6 +105,18 @@ pub const COMMANDS: &[Command] = &[
         "",
     ),
     command(
+        "new-private-window",
+        "New private window",
+        "incognito secret anonymous history off the record",
+        "Ctrl+Shift+N",
+    ),
+    command(
+        "profiles",
+        "Switch profile",
+        "profiles accounts work personal separate cookies sign in containers",
+        "",
+    ),
+    command(
         "passwords",
         "Passwords",
         "logins keys keychain saved accounts manager vault credentials",

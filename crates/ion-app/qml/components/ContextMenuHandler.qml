@@ -22,11 +22,13 @@ Menu {
     // Copied from the request, which the engine may reuse once handled.
     property string selectedText
     property url mediaUrl
+    property url linkUrl
 
     function show(request) {
         request.accepted = true
         selectedText = request.selectedText
         mediaUrl = request.mediaUrl
+        linkUrl = request.linkUrl
         while (menu.count > 0)
             menu.takeItem(0).destroy()
 
@@ -43,6 +45,10 @@ Menu {
             const at = ids.indexOf("searchSelection")
             ids.splice(at >= 0 ? at + 1 : ids.length, 0, "explainSelection")
         }
+        // A link can open in a private window, where it leaves no trace.
+        const linkAt = ids.indexOf("openLinkInNewTab")
+        if (linkAt >= 0)
+            ids.splice(linkAt + 1, 0, "openLinkInPrivateWindow")
         for (const id of ids) {
             if (id === "-")
                 menu.addItem(separatorComponent.createObject(menu))
@@ -58,6 +64,7 @@ Menu {
         case "forward": return qsTr("Forward")
         case "reload": return qsTr("Reload")
         case "openLinkInNewTab": return qsTr("Open Link in New Tab")
+        case "openLinkInPrivateWindow": return qsTr("Open Link in Private Window")
         case "copyLink": return qsTr("Copy Link")
         case "saveLink": return qsTr("Save Link As…")
         case "openImageInNewTab": return qsTr("Open Image in New Tab")
@@ -106,6 +113,7 @@ Menu {
         case "forward": v.goForward(); break
         case "reload": v.reload(); break
         case "openLinkInNewTab": v.triggerWebAction(WebEngineView.OpenLinkInNewTab); break
+        case "openLinkInPrivateWindow": Privacy.openPrivateWindow([linkUrl.toString()]); break
         case "copyLink": v.triggerWebAction(WebEngineView.CopyLinkToClipboard); break
         case "saveLink": v.triggerWebAction(WebEngineView.DownloadLinkToDisk); break
         case "openImageInNewTab": menu.openInNewTab(mediaUrl); break

@@ -71,3 +71,19 @@ breaks (blocking and fingerprinting resistance).
   site and session but differs across both; WebGL hides the GPU's name;
   `hardwareConcurrency` and `deviceMemory` report 8; the Battery API is gone.
 - **Global Privacy Control**: `Sec-GPC: 1` and `navigator.globalPrivacyControl`.
+
+## Private windows and profiles
+
+Both are separate Ion processes (`crates/ion-privacy/src/window.rs`), so
+nothing is shared with the main window by accident.
+
+- **Private window** (`ion --private`, Ctrl+Shift+N, "Open Link in Private
+  Window"): an off-the-record browser profile, so cookies, cache and site
+  storage live in memory and are gone when it closes; no history is
+  recorded and the tabs are never saved. Bookmarks and saved passwords
+  still work. Every private launch is a new window.
+- **Profiles** (`ion --profile=Work`, palette "Switch profile", or the badge
+  next to the toolbar buttons): a separate persistent profile with its own
+  sign-ins, cookies, history, bookmarks, passwords and sessions, kept in
+  `<data dir>/profiles/<name>` and the engine's `Profile-<name>` storage.
+  The settings file is shared. One process runs per profile.

@@ -9,7 +9,7 @@ import Ion
 //
 // Tabs and history come from the `Tabs` and `History` singletons; `browser`
 // (the main window) provides openTab(url), newTab(), closeTab(i),
-// focusUrlBar(), toggleBookmark(), showImport(), showPasswords(), showExtensions(),
+// focusUrlBar(), toggleBookmark(), showImport(), showPasswords(), openPrivateWindow(), showProfiles(), showExtensions(),
 // askAgent(input), startAgentQuestion(), toggleAgentSidebar(),
 // showAgentActivity(), profile and currentView. Bookmarks come from the `Bookmarks`
 // singleton.
@@ -136,6 +136,8 @@ Popup {
         case "bookmarks": Qt.callLater(() => root.show("*")); break
         case "import-browser-data": browser.showImport(); break
         case "passwords": browser.showPasswords(""); break
+        case "new-private-window": browser.openPrivateWindow(); break
+        case "profiles": browser.showProfiles(); break
         case "generate-password": Passwords.copySecret(Passwords.generate()); break
         case "clear-cookies": Privacy.clearCookies(browser.profile); break
         case "clear-cache": browser.profile.clearHttpCache(); break

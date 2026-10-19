@@ -22,12 +22,16 @@ ApplicationWindow {
     height: 820
     visible: true
     color: Theme.background
-    title: currentView && currentView.title ? currentView.title + " — Ion" : "Ion"
+    // A private window or another profile says so in its title.
+    readonly property bool privateWindow: Privacy.windowKind() === "private"
+    readonly property string appTitle: Privacy.profileName().length > 0 ? "Ion — " + Privacy.profileName() : "Ion"
+    title: currentView && currentView.title ? currentView.title + " — " + appTitle : appTitle
 
     // Persistent profile: cookies, cache and storage survive restarts.
     WebEngineProfilePrototype {
         id: profilePrototype
-        storageName: "Default"
+        // "Default", a profile's own, or "" (off the record) in a private window.
+        storageName: Privacy.storageName()
         // Site permissions are decided and remembered by Ion's safety model
         // (Safety, docs/SAFETY.md), so the engine keeps none of its own.
         persistentPermissionsPolicy: WebEngineProfile.PersistentPermissionsPolicy.AskEveryTime
@@ -108,6 +112,15 @@ ApplicationWindow {
         fullScreen.toggleWindow()
     }
 
+    // A private window (a process of its own), with `target` in it if given.
+    function openPrivateWindow(target) {
+        Privacy.openPrivateWindow(target ? [target.toString()] : [])
+    }
+
+    function showProfiles() {
+        profilesDialog.show()
+    }
+
     function showImport() {
         importDialog.show()
     }
@@ -169,7 +182,8 @@ ApplicationWindow {
             extensionPaths = Extensions.paths()
             extensionPaths.forEach(path => extensionManager.loadExtension(path))
         }
-        if (Config.value("general.restoreSession")) {
+        // A private window starts empty and is never saved.
+        if (Config.value("general.restoreSession") && !window.privateWindow) {
             // Restoring replaces every tab; keep any opened while waiting
             // (Ctrl+T, a URL handed over by a second launch).
             const early = []
@@ -198,8 +212,8 @@ ApplicationWindow {
         Adblock.attach(window.profile)
         Privacy.apply(window.profile)
         // Again at start, in case the last quit was cut short; the rest of
-        // startup waits for it.
-        if (clearOnExit(true))
+        // startup waits for it. A private window has nothing to clear.
+        if (!window.privateWindow && clearOnExit(true))
             waitingForCacheClear = true
         else
             finishStartup()
@@ -251,7 +265,7 @@ ApplicationWindow {
         // Not before startup restores the saved session, or it would be
         // overwritten by tabs opened while waiting.
         function onSessionChanged() {
-            if (window.startupFinished)
+            if (window.startupFinished && !window.privateWindow)
                 sessionSaveTimer.restart()
         }
     }
@@ -269,6 +283,8 @@ ApplicationWindow {
         function onAboutToQuit() {
             // Before startup restores it, the tab list would overwrite the
             // saved session.
+            if (window.privateWindow)
+                return
             if (window.startupFinished)
                 Tabs.saveSession()
             History.save()
@@ -289,6 +305,7 @@ ApplicationWindow {
 
     ImportDialog { id: importDialog }
     PasswordManager { id: passwordManager }
+    ProfilesDialog { id: profilesDialog }
     ExtensionsDialog { id: extensionsDialog; browser: window }
 
     // Per-site CSS and userscripts, installed on the profile.
@@ -323,6 +340,7 @@ ApplicationWindow {
             agentSidebar: agentSidebar
             onBookmarkToggled: window.toggleBookmark()
             onPasswordsRequested: query => window.showPasswords(query)
+            onProfilesRequested: window.showProfiles()
         }
     }
 
@@ -414,14 +432,15 @@ ApplicationWindow {
                             return
                         // The new-tab page has no title of its own; the strip says "New Tab".
                         Tabs.setTitle(index, showNewTabPage && Basics.isNewTabUrl(url) ? "" : title)
-                        History.updateTitle(url.toString(), title)
+                        if (!window.privateWindow)
+                            History.updateTitle(url.toString(), title)
                     }
                     onIconChanged: {
                         if (!deferred)
                             Tabs.setIcon(index, icon.toString())
                     }
                     onLoadingChanged: info => {
-                        if (info.status === WebEngineView.LoadSucceededStatus)
+                        if (info.status === WebEngineView.LoadSucceededStatus && !window.privateWindow)
                             History.recordVisit(info.url.toString(), title)
                     }
                     onNewTabRequested: request => {
@@ -463,6 +482,7 @@ ApplicationWindow {
     Shortcut { sequences: [StandardKey.AddTab]; onActivated: window.newTab() }
     Shortcut { sequences: [StandardKey.Close]; onActivated: window.closeTab(Tabs.currentIndex) }
     Shortcut { sequence: "Ctrl+Shift+T"; onActivated: Tabs.reopenClosedTab() }
+    Shortcut { sequence: "Ctrl+Shift+N"; onActivated: window.openPrivateWindow() }
     Shortcut { sequences: ["Ctrl+L", "Alt+D", "F6"]; onActivated: window.focusUrlBar() }
     Shortcut { sequences: ["Ctrl+Tab", "Ctrl+PgDown"]; onActivated: Tabs.cycle(1) }
     Shortcut { sequences: ["Ctrl+Shift+Tab", "Ctrl+PgUp"]; onActivated: Tabs.cycle(-1) }
