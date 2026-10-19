@@ -41,17 +41,19 @@ pub mod qobject {
         #[qinvokable]
         fn reload(self: Pin<&mut Sites>);
 
-        /// Tell Ion the engine's default user agent (the profile's
-        /// `httpUserAgent` before any override), which the `"chrome"` preset
-        /// is made from. Call before `scripts()`.
         /// Whether pages at `a` and `b` are sent the same user agent.
         #[qinvokable]
         #[cxx_name = "sameUserAgent"]
         fn same_user_agent(self: &Sites, a: &QString, b: &QString) -> bool;
 
+        /// Tell Ion the engine's default user agent (the profile's
+        /// `httpUserAgent` before Ion changes it), which Ion's default and
+        /// the presets are made from. Only the first call counts. Returns
+        /// the user agent to set as the profile's own. Call before
+        /// `scripts()`.
         #[qinvokable]
         #[cxx_name = "setEngineUserAgent"]
-        fn set_engine_user_agent(self: &Sites, user_agent: &QString);
+        fn set_engine_user_agent(self: &Sites, user_agent: &QString) -> QString;
 
         /// Create the userscripts folder if needed. False if it can't be.
         #[qinvokable]
@@ -98,12 +100,9 @@ pub fn engine_user_agent() -> &'static str {
 }
 
 /// The user agent to send for requests made by pages at `url`, when
-/// `[sites]` overrides it.
+/// `[sites]` or a built-in quirk overrides Ion's default.
 pub fn user_agent_for(url: &str) -> Option<String> {
     let config = ion_config::global().config();
-    if config.sites.values().all(|site| site.user_agent.is_none()) {
-        return None;
-    }
     ion_sites::agent::for_url(&config.sites, url, engine_user_agent())
 }
 
@@ -112,8 +111,9 @@ impl qobject::Sites {
         user_agent_for(&a.to_string()) == user_agent_for(&b.to_string())
     }
 
-    fn set_engine_user_agent(&self, user_agent: &QString) {
+    fn set_engine_user_agent(&self, user_agent: &QString) -> QString {
         let _ = ENGINE_USER_AGENT.set(user_agent.to_string());
+        QString::from(ion_sites::agent::default_user_agent(engine_user_agent()).as_str())
     }
 
     fn javascript_enabled(&self, url: &QString) -> bool {

@@ -22,7 +22,7 @@ use crate::fuzzy;
 use crate::settings::{SettingOption, SettingValue};
 
 /// Most results returned for one query.
-pub const MAX_RESULTS: usize = 50;
+pub const MAX_RESULTS: usize = 100;
 /// Most suggestions shown under the URL bar.
 pub const SUGGESTIONS: usize = 6;
 
@@ -51,6 +51,11 @@ pub struct Sources<'a> {
     pub sessions: &'a [String],
     /// Settings that can be changed in one step.
     pub settings: &'a [SettingOption],
+    /// The keys shown for commands, by id, when remapped from their
+    /// defaults; an empty string hides the hint.
+    pub hints: &'a [(&'static str, String)],
+    /// Commands run lately, most recent first; they lead the command list.
+    pub recent: &'a [String],
 }
 
 /// What kind of thing a result is; QML picks the icon from it.
@@ -138,7 +143,10 @@ impl Palette {
             bookmarks,
             sessions,
             settings,
+            hints,
+            recent,
         } = *sources;
+        let commands = |query: &str| commands(query, hints, recent);
         let input = input.trim_start();
 
         if let Some(rest) = input.strip_prefix('>') {
@@ -484,30 +492,53 @@ fn setting_items(settings: &[SettingOption], query: &str) -> Vec<Item> {
         .collect()
 }
 
-fn commands(query: &str) -> Vec<Item> {
+/// Points the most recently run command gains; older ones gain less.
+const RECENT_BONUS: i32 = 3;
+
+fn commands(query: &str, hints: &[(&'static str, String)], recent: &[String]) -> Vec<Item> {
     let matcher = fuzzy::Matcher::new(query);
-    COMMANDS
+    let mut items: Vec<(usize, Item)> = COMMANDS
         .iter()
+        .filter(|command| !command.hidden)
         .filter_map(|command| {
             let Command {
                 id,
                 title,
                 keywords,
-                shortcut,
+                keys,
+                ..
             } = *command;
-            let score = matcher
+            let mut score = matcher
                 .score(title)
                 .max(matcher.score(&format!("{title} {keywords}")))?;
-            Some(Item {
+            let used = recent.iter().position(|r| r == id);
+            // Typed queries rank recent commands a little higher; an empty
+            // one lists them first (below).
+            if let Some(rank) = used
+                && !query.is_empty()
+            {
+                score += (RECENT_BONUS - rank as i32).max(1);
+            }
+            let hint = match hints.iter().find(|(hint_id, _)| *hint_id == id) {
+                Some((_, hint)) => hint.clone(),
+                None => keys.first().copied().unwrap_or_default().to_owned(),
+            };
+            let item = Item {
                 kind: Kind::Command,
                 title: title.to_owned(),
                 subtitle: String::new(),
-                hint: shortcut.to_owned(),
+                hint,
                 action: Action::Run(id),
                 score,
-            })
+            };
+            Some((used.unwrap_or(usize::MAX), item))
         })
-        .collect()
+        .collect();
+    // With nothing typed, recently used commands come first, newest first.
+    if query.is_empty() {
+        items.sort_by_key(|(used, _)| *used);
+    }
+    items.into_iter().map(|(_, item)| item).collect()
 }
 
 /// Best first; equal scores keep source order (tabs, history, sessions,
@@ -573,8 +604,13 @@ mod tests {
                 bookmarks: &bookmarks,
                 sessions: &sessions,
                 settings: &settings,
+                ..Sources::default()
             },
         )
+    }
+
+    fn visible_commands() -> usize {
+        COMMANDS.iter().filter(|c| !c.hidden).count()
     }
 
     #[test]
@@ -593,7 +629,7 @@ mod tests {
     #[test]
     fn empty_query_lists_tabs_then_commands() {
         let items = query("");
-        assert_eq!(items.len(), 3 + COMMANDS.len());
+        assert_eq!(items.len(), 3 + visible_commands());
         assert_eq!(items[0].action, Action::SwitchTab(0));
         assert_eq!(items[1].hint, "Current");
         assert_eq!(items[2].title, "New tab");
@@ -646,7 +682,7 @@ mod tests {
     #[test]
     fn angle_prefix_lists_only_commands_and_settings() {
         let items = query(">");
-        assert!(items.len() > COMMANDS.len());
+        assert!(items.len() > visible_commands());
         assert!(
             items
                 .iter()
@@ -655,6 +691,46 @@ mod tests {
         assert_eq!(items[0].action, Action::Run(COMMANDS[0].id));
         let items = query("> quit");
         assert_eq!(items[0].action, Action::Run("quit"));
+    }
+
+    #[test]
+    fn shortcut_only_commands_stay_out_of_the_list() {
+        assert!(query(">").iter().all(|i| i.action != Action::Run("tab-1")));
+        assert!(
+            query("palette")
+                .iter()
+                .all(|i| i.action != Action::Run("palette"))
+        );
+    }
+
+    #[test]
+    fn hints_show_remapped_keys() {
+        assert_eq!(query("> reload page")[0].hint, "Ctrl+R");
+        let hints = [("reload", "F9".to_string()), ("stop", String::new())];
+        let sources = Sources {
+            hints: &hints,
+            ..Sources::default()
+        };
+        let items = palette().query("> reload page", &sources);
+        assert_eq!(items[0].hint, "F9");
+        let items = palette().query("> stop loading", &sources);
+        assert_eq!(items[0].hint, "");
+    }
+
+    #[test]
+    fn recent_commands_come_first() {
+        let recent = ["screenshot".to_string(), "reader-mode".to_string()];
+        let sources = Sources {
+            recent: &recent,
+            ..Sources::default()
+        };
+        let items = palette().query(">", &sources);
+        assert_eq!(items[0].action, Action::Run("screenshot"));
+        assert_eq!(items[1].action, Action::Run("reader-mode"));
+        assert_eq!(items[2].action, Action::Run(COMMANDS[0].id));
+        // A typed query still ranks by match first.
+        let items = palette().query("new tab", &sources);
+        assert_eq!(items[0].action, Action::Run("new-tab"));
     }
 
     #[test]

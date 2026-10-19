@@ -358,6 +358,29 @@ pub mod qobject {
         #[cxx_name = "restoreLastSession"]
         fn restore_last_session(self: Pin<&mut Tabs>) -> bool;
 
+        /// Mark Ion as running. True when the last run ended without a
+        /// clean quit (a crash); `restoreCrashedSession()` then brings its
+        /// tabs back.
+        #[qinvokable]
+        #[cxx_name = "beginRun"]
+        fn begin_run(self: &Tabs) -> bool;
+
+        /// Mark a clean quit. Call after the last `saveSession()`.
+        #[qinvokable]
+        #[cxx_name = "endRun"]
+        fn end_run(self: &Tabs);
+
+        /// Replace the tabs with the ones open when the last run crashed.
+        /// False if there were none.
+        #[qinvokable]
+        #[cxx_name = "restoreCrashedSession"]
+        fn restore_crashed_session(self: Pin<&mut Tabs>) -> bool;
+
+        /// Forget the tabs kept from a crashed run.
+        #[qinvokable]
+        #[cxx_name = "discardCrashedSession"]
+        fn discard_crashed_session(self: &Tabs);
+
         /// Write the open tabs to disk for the next start.
         #[qinvokable]
         #[cxx_name = "saveSession"]
@@ -1212,6 +1235,48 @@ impl qobject::Tabs {
                 warn("could not restore the last session", err);
                 false
             }
+        }
+    }
+
+    fn begin_run(&self) -> bool {
+        self.store.as_ref().is_some_and(|store| {
+            store
+                .begin_run()
+                .map_err(|err| warn("could not mark Ion as running", err))
+                .unwrap_or(false)
+        })
+    }
+
+    fn end_run(&self) {
+        if let Some(store) = &self.store
+            && let Err(err) = store.end_run()
+        {
+            warn("could not mark a clean quit", err);
+        }
+    }
+
+    fn restore_crashed_session(self: Pin<&mut Self>) -> bool {
+        let Some(store) = self.store.clone() else {
+            return false;
+        };
+        let restored = match store.load_crashed() {
+            Ok(Some(session)) if !session.tabs.is_empty() => {
+                self.replace_with(&session);
+                true
+            }
+            Ok(_) => false,
+            Err(err) => {
+                warn("could not restore the tabs from before the crash", err);
+                false
+            }
+        };
+        let _ = store.discard_crashed();
+        restored
+    }
+
+    fn discard_crashed_session(&self) {
+        if let Some(store) = &self.store {
+            let _ = store.discard_crashed();
         }
     }
 
