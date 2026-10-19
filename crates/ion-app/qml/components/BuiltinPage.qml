@@ -22,6 +22,12 @@ Loader {
     visible: active
     source: active ? "qrc:/qt/qml/Ion/qml/pages/" + files[page] + ".qml" : ""
 
+    // Ctrl+F on one of these pages focuses its own search field.
+    function focusSearch() {
+        if (item && item.focusSearch)
+            item.focusSearch()
+    }
+
     onLoaded: {
         item.view = Qt.binding(() => loader.view)
         item.path = Qt.binding(() => Pages.pathOf(loader.view.url))

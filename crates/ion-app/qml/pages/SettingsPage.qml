@@ -53,7 +53,7 @@ Rectangle {
         currentSection = current
     }
 
-    // Actions from `Control::Action` rows.
+    // Actions from `Control::Action` rows: Settings' own, or command ids.
     function run(action) {
         if (action.startsWith("open:")) {
             browser.openTab(action.slice(5))
@@ -79,11 +79,9 @@ Rectangle {
         case "command-palette":
             browser.showPalette()
             break
-        case "clear-browsing-data":
-            browser.showClearData()
-            break
         default:
-            console.warn("Settings: unknown action", action)
+            // Anything else is a command id (`ion_bangs::commands`).
+            browser.runCommand(action)
         }
     }
 
@@ -379,13 +377,10 @@ Rectangle {
         }
     }
 
-    // Ctrl+F searches the settings, like a page's find bar.
-    Shortcut {
-        sequences: [StandardKey.Find]
-        enabled: page.view !== null && page.view.visible
-        onActivated: {
-            search.forceActiveFocus()
-            search.selectAll()
-        }
+    // The find command (Commands.qml) searches the settings instead of
+    // opening the page's find bar.
+    function focusSearch() {
+        search.forceActiveFocus()
+        search.selectAll()
     }
 }

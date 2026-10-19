@@ -21,6 +21,16 @@ pub fn section(_: &Context) -> Section {
                     },
                 )
                 .keywords("shortcuts commands palette ctrl+k"),
+                Setting::new(
+                    "keyboard.shortcuts",
+                    "Keyboard shortcuts",
+                    Control::Action {
+                        action: "keyboard-shortcuts".into(),
+                        button: "Change shortcuts".into(),
+                    },
+                )
+                .help("Pick new keys for any command. They are saved to [shortcuts] in overrides.toml.")
+                .keywords("keys keybindings hotkeys remap customize"),
             ],
         )],
     )

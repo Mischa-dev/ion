@@ -100,10 +100,6 @@ Item {
     }
 
     Shortcut {
-        sequences: [StandardKey.FullScreen, "F11"]
-        onActivated: controller.toggleWindow()
-    }
-    Shortcut {
         sequences: ["Esc"]
         enabled: controller.pageActive
         onActivated: controller.pageView.triggerWebAction(WebEngineView.ExitFullScreen)
