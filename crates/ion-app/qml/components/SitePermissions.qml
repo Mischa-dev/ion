@@ -32,14 +32,14 @@ IconButton {
     }
 
     visible: stored.length > 0
-    glyph: stored.length > 0 ? Basics.permissionGlyph(stored[0].type) : ""
+    iconName: "sliders"
     tip: panel.opened ? "" : qsTr("Site permissions")
     onClicked: panel.opened ? panel.close() : panel.open()
 
     background: Rectangle {
         radius: Theme.radius
-        color: control.down || panel.opened ? Theme.surfaceRaised
-             : control.hovered ? Theme.surfaceHover : "transparent"
+        color: control.down || panel.opened ? Theme.pressOverlay
+             : control.hovered ? Theme.hoverOverlay : "transparent"
     }
 
     Popup {
@@ -57,12 +57,7 @@ IconButton {
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
         onOpened: changed = false
 
-        background: Rectangle {
-            radius: Theme.radius
-            color: Theme.surface
-            border.width: 1
-            border.color: Theme.border
-        }
+        background: IonSurface {}
 
         enter: Transition {
             NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.animationMs }
@@ -127,7 +122,7 @@ IconButton {
                     IconButton {
                         implicitWidth: Theme.urlBarHeight * 0.8
                         implicitHeight: implicitWidth
-                        glyph: "↺"
+                        iconName: "restore"
                         tip: qsTr("Ask next time")
                         onClicked: panel.apply(row.modelData.type, "reset")
                     }

@@ -251,13 +251,13 @@ Popup {
                     }
 
                     IconButton {
-                        glyph: "+"
+                        iconName: "plus"
                         tip: qsTr("Add a shortcut")
                         opacity: hover.hovered || row.ListView.isCurrentItem ? 1 : 0
                         onClicked: root.record(row.modelData.id, "")
                     }
                     IconButton {
-                        glyph: "↺"
+                        iconName: "restore"
                         tip: qsTr("Back to %1").arg(row.modelData.defaults.length > 0
                             ? row.modelData.defaults.map(k => Keymap.display(k)).join(", ") : qsTr("no shortcut"))
                         visible: row.modelData.customized

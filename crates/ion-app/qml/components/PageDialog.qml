@@ -122,12 +122,7 @@ Popup {
     focus: true
     closePolicy: Popup.CloseOnEscape
 
-    background: Rectangle {
-        radius: Theme.radius
-        color: Theme.surface
-        border.color: Theme.border
-        border.width: 1
-    }
+    background: IonSurface {}
 
     Overlay.modal: Rectangle {
         color: Theme.background
