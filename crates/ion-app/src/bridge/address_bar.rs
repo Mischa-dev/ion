@@ -192,7 +192,7 @@ fn learn_site_search(page_url: &str, xml: &str) {
     let Some(host) = page_host(page_url) else {
         return;
     };
-    let Some(engine) = opensearch::parse(xml, &host) else {
+    let Some(engine) = opensearch::parse_for_page(xml, page_url) else {
         return;
     };
     with_site_searches(|s| {

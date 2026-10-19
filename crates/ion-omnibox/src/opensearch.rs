@@ -63,6 +63,18 @@ fn registrable_domain(host: &str) -> Option<&str> {
     psl::domain_str(host)
 }
 
+/// The site's search from an OpenSearch description `xml` found on the page
+/// at `page_url`. Like [`parse`], and an HTTPS page's search has to stay on
+/// HTTPS, so learning it never sends your words in the clear.
+pub fn parse_for_page(xml: &str, page_url: &str) -> Option<SiteEngine> {
+    let page = url::Url::parse(page_url).ok()?;
+    let engine = parse(xml, page.host_str()?)?;
+    if page.scheme() == "https" && !engine.template.starts_with("https:") {
+        return None;
+    }
+    Some(engine)
+}
+
 /// The site's search from an OpenSearch description `xml` fetched for a page
 /// on `page_host`. The results page has to be on the same site.
 pub fn parse(xml: &str, page_host: &str) -> Option<SiteEngine> {
@@ -578,6 +590,16 @@ mod tests {
                 .resolve(&uri, &config, timeout)
                 .is_ok()
         );
+    }
+
+    #[test]
+    fn a_secure_page_never_learns_a_plain_http_search() {
+        let xml = r#"<OpenSearchDescription><ShortName>Docs</ShortName>
+            <Url type="text/html" template="http://docs.example.com/s?q={searchTerms}"/>
+            </OpenSearchDescription>"#;
+        assert_eq!(parse_for_page(xml, "https://docs.example.com/"), None);
+        let engine = parse_for_page(xml, "http://docs.example.com/").unwrap();
+        assert_eq!(engine.template, "http://docs.example.com/s?q={}");
     }
 
     #[test]
