@@ -389,20 +389,44 @@ ApplicationWindow {
                 return
             }
             const point = view.mapFromItem(null, x, y)
-            view.runJavaScript(`(function (x, y) {
+            view.runJavaScript(`(function check(doc, x, y) {
                 let back = false, forward = false
-                for (let e = document.elementFromPoint(x, y); e && e !== document.body
-                        && e !== document.documentElement; e = e.parentElement) {
-                    if (e.scrollWidth <= e.clientWidth + 1)
+                for (let e = doc.elementFromPoint(x, y); e && e !== doc.body
+                        && e !== doc.documentElement; e = e.parentElement) {
+                    if (e.tagName === "IFRAME" || e.tagName === "FRAME") {
+                        // Look inside a same-origin frame; a cross-origin
+                        // one can't be seen into, so it keeps the gesture.
+                        let inner = null
+                        try { inner = e.contentDocument } catch (error) {}
+                        if (!inner)
+                            return [true, true]
+                        const box = e.getBoundingClientRect()
+                        const found = check(inner, x - box.left - e.clientLeft, y - box.top - e.clientTop)
+                        back = back || found[0]
+                        forward = forward || found[1]
                         continue
-                    const overflow = getComputedStyle(e).overflowX
-                    if (overflow !== "auto" && overflow !== "scroll")
+                    }
+                    const max = e.scrollWidth - e.clientWidth
+                    if (max <= 1)
                         continue
-                    back = back || e.scrollLeft > 0
-                    forward = forward || e.scrollLeft + e.clientWidth < e.scrollWidth - 1
+                    const style = doc.defaultView.getComputedStyle(e)
+                    if (style.overflowX !== "auto" && style.overflowX !== "scroll")
+                        continue
+                    // Right-to-left boxes count scrollLeft from the right
+                    // edge, going negative.
+                    const left = style.direction === "rtl" ? max + e.scrollLeft : e.scrollLeft
+                    back = back || left > 0
+                    forward = forward || left < max - 1
+                }
+                // A frame's own page scrolls too (the top page's doesn't
+                // count: Ion checks its edges itself).
+                const page = doc !== document && doc.scrollingElement
+                if (page && page.scrollWidth - page.clientWidth > 1) {
+                    back = back || page.scrollLeft > 0
+                    forward = forward || page.scrollLeft + page.clientWidth < page.scrollWidth - 1
                 }
                 return [back, forward]
-            })(${point.x / view.zoomFactor}, ${point.y / view.zoomFactor})`,
+            })(document, ${point.x / view.zoomFactor}, ${point.y / view.zoomFactor})`,
                 WebEngineScript.ApplicationWorld, result => {
                     // Arrives as a list, not a JS Array.
                     const found = result && result.length === 2 ? [!!result[0], !!result[1]] : [false, false]
