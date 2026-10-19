@@ -34,13 +34,47 @@ pub struct Config {
     /// subdomains; the most specific key wins. `"*"` covers every site.
     pub sites: BTreeMap<String, Site>,
     pub privacy: Privacy,
+    pub passwords: Passwords,
     pub keyboard: Keyboard,
+    pub gestures: Gestures,
     /// Unpacked Chrome extension folders (Manifest V3) loaded at startup,
     /// on top of those in Ion's own extensions folder.
     pub extensions: Vec<String>,
     pub agents: Agents,
     pub safety: Safety,
     pub ai: Ai,
+}
+
+/// `[gestures]`: touchpad and mouse gestures.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Gestures {
+    /// Swipe two fingers sideways on a touchpad to go back or forward.
+    pub swipe: bool,
+    /// What pinching on a touchpad does.
+    pub pinch: PinchAction,
+}
+
+impl Default for Gestures {
+    fn default() -> Self {
+        Self {
+            swipe: true,
+            pinch: PinchAction::Zoom,
+        }
+    }
+}
+
+/// What a touchpad pinch does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PinchAction {
+    /// Page zoom, remembered per site like Ctrl+scroll.
+    #[default]
+    Zoom,
+    /// Chromium's magnifier: the page keeps its layout.
+    Magnify,
+    /// Nothing.
+    Off,
 }
 
 /// One shortcut remap: a key sequence or several.
@@ -83,6 +117,12 @@ pub struct Privacy {
     /// Browsing data deleted when Ion quits (and, in case quitting was cut
     /// short, when it next starts).
     pub clear_on_exit: Vec<BrowsingData>,
+    /// Load http pages over https: `"upgrade"` falls back to http quietly
+    /// when a site has no https, `"strict"` asks first, `"off"` never tries.
+    pub https_only: String,
+    /// Add noise to what fingerprinting scripts read (canvas, WebGL, audio)
+    /// and report common hardware values, so sites can't recognise you.
+    pub fingerprinting: bool,
 }
 
 impl Default for Privacy {
@@ -91,6 +131,28 @@ impl Default for Privacy {
             global_privacy_control: true,
             block_third_party_cookies: true,
             clear_on_exit: Vec::new(),
+            https_only: "upgrade".into(),
+            fingerprinting: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Passwords {
+    /// Offer to save passwords typed into sites.
+    pub enable: bool,
+    /// Fill a site's saved login in by itself when the login page loads and
+    /// there is exactly one; otherwise it is picked from the list under the
+    /// field. Plain-http pages always wait to be picked.
+    pub autofill: bool,
+}
+
+impl Default for Passwords {
+    fn default() -> Self {
+        Self {
+            enable: true,
+            autofill: true,
         }
     }
 }
@@ -660,6 +722,17 @@ mod tests {
             Some("firefox")
         );
         assert!(config.privacy.global_privacy_control);
+    }
+
+    #[test]
+    fn gestures_default_on_and_parse() {
+        let config: Config = toml::from_str("").unwrap();
+        assert!(config.gestures.swipe);
+        assert_eq!(config.gestures.pinch, PinchAction::Zoom);
+        let config: Config =
+            toml::from_str("[gestures]\nswipe = false\npinch = \"magnify\"").unwrap();
+        assert!(!config.gestures.swipe);
+        assert_eq!(config.gestures.pinch, PinchAction::Magnify);
     }
 
     #[test]

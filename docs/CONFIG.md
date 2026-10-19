@@ -101,11 +101,24 @@ lists = ["easylist", "easyprivacy", "ublock-filters"]
 vim = false                  # j/k scroll, gg/G, d/u, H/L back/forward,
                              # f/F link hints (F opens in a new tab)
 
+[gestures]
+swipe = true                 # two fingers sideways on a touchpad: back/forward
+pinch = "zoom"               # "zoom" (page zoom, kept per site), "magnify"
+                             # (Chromium's magnifier, layout unchanged) or "off"
+
 [privacy]
 globalPrivacyControl = true  # Sec-GPC header and navigator.globalPrivacyControl
 blockThirdPartyCookies = true
 clearOnExit = []             # any of "cookies", "cache", "history" (the cache
                              # is cleared as Ion next starts)
+httpsOnly = "upgrade"        # try https first: "upgrade" falls back to http
+                             # quietly, "strict" asks first, "off"
+fingerprinting = true        # noise on canvas/WebGL/audio readouts, common
+                             # hardware values; off per site with the shield
+
+[passwords]                  # saved in the system keyring's protection (docs/PRIVACY.md)
+enable = true                # offer to save passwords typed into sites
+autofill = true              # fill a site's only saved login when its page loads
 
 [ai]                         # Ion Agent: @ion or !ai in the address bar
 enable = false               # off until you turn it on

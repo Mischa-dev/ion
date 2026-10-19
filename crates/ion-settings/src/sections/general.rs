@@ -4,7 +4,7 @@ pub fn section(_: &Context) -> Section {
     Section::new(
         "general",
         "General",
-        "⌂",
+        "home",
         "How Ion starts and looks after your tabs.",
         vec![
             Group::new(
@@ -44,6 +44,30 @@ pub fn section(_: &Context) -> Section {
                     )
                     .help("Frees memory from tabs you haven't looked at; they reload when you return. 0 keeps every tab awake.")
                     .keywords("suspend discard memory performance sleep"),
+                ],
+            ),
+            Group::new(
+                "Extensions",
+                vec![
+                    Setting::new(
+                        "extensions.manage",
+                        "Chrome extensions",
+                        Control::Action {
+                            action: "extensions".into(),
+                            button: "Manage extensions".into(),
+                        },
+                    )
+                    .help("Unpacked Manifest V3 extensions, from Ion's extensions folder.")
+                    .keywords("addons add-ons plugins chrome mv3 ublock"),
+                    Setting::new(
+                        "extensions",
+                        "More extension folders",
+                        Control::List {
+                            placeholder: "/path/to/unpacked-extension".into(),
+                        },
+                    )
+                    .help("Loaded at startup, on top of Ion's own extensions folder.")
+                    .keywords("addons unpacked folder path"),
                 ],
             ),
         ],

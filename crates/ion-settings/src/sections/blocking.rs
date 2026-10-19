@@ -4,7 +4,7 @@ pub fn section(_: &Context) -> Section {
     Section::new(
         "blocking",
         "Ads and trackers",
-        "⊘",
+        "shield",
         "Ion blocks ads and trackers on every site, before they load.",
         vec![Group::new(
             "",
