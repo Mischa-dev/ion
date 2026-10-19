@@ -19,10 +19,16 @@ Rectangle {
     z: 1
     width: Math.min(label.implicitWidth + Theme.spacing * 4, parent.width - Theme.spacing * 4)
     height: label.implicitHeight + Theme.spacing * 2
-    radius: Theme.radius
+    radius: Theme.radiusLarge
     color: Theme.surfaceRaised
-    border.width: 1
+    border.width: Theme.hairline
     border.color: Theme.border
+
+    IonShadow {
+        anchors.fill: parent
+        z: -1
+        radius: parent.radius
+    }
     opacity: 0
     visible: opacity > 0
 

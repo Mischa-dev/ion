@@ -7,6 +7,7 @@ import Ion
 IonMenu {
     // Not `menu`: inside a MenuItem that name is the item's own (sub)menu.
     id: root
+    icons: true
 
     required property var browser
     // For "New workspace…" from the move submenu.
@@ -40,6 +41,7 @@ IonMenu {
 
     IonMenuItem {
         text: root.browser.verticalTabs ? qsTr("New tab below") : qsTr("New tab to the right")
+        iconName: "plus"
         onTriggered: {
             Tabs.openTabAt(root.index + 1, "", true)
             root.browser.focusUrlBar()
@@ -50,14 +52,17 @@ IonMenu {
 
     IonMenuItem {
         text: qsTr("Reload")
+        iconName: "reload"
         onTriggered: root.view?.reload()
     }
     IonMenuItem {
         text: qsTr("Duplicate")
+        iconName: "copy"
         onTriggered: Tabs.openTabAt(root.index + 1, Tabs.urlAt(root.index), true)
     }
     IonMenuItem {
         text: root.view?.audioMuted ? qsTr("Unmute tab") : qsTr("Mute tab")
+        iconName: root.view?.audioMuted ? "volume" : "mute"
         onTriggered: {
             if (root.view)
                 root.view.audioMuted = !root.view.audioMuted
@@ -65,6 +70,7 @@ IonMenu {
     }
     IonMenuItem {
         text: qsTr("Suspend")
+        iconName: "pause"
         // The current tab is always awake; see general.suspendTabsAfter.
         enabled: !root.isCurrent && !(root.view?.suspended ?? true)
         onTriggered: Tabs.setSuspended(root.index, true)
@@ -90,6 +96,7 @@ IonMenu {
 
         IonMenuItem {
             text: qsTr("New workspace…")
+            iconName: "plus"
             onTriggered: root.workspaceMenu.create(root.index)
         }
     }
@@ -98,6 +105,7 @@ IonMenu {
 
     IonMenuItem {
         text: qsTr("Close tab")
+        iconName: "close"
         onTriggered: root.browser.closeTab(root.index)
     }
     IonMenuItem {
@@ -118,6 +126,7 @@ IonMenu {
     }
     IonMenuItem {
         text: qsTr("Reopen closed tab")
+        iconName: "restore"
         enabled: Tabs.closedCount > 0
         onTriggered: Tabs.reopenClosedTab()
     }

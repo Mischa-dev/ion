@@ -333,25 +333,40 @@ ApplicationWindow {
             viewsRevision: window.viewsRevision
         }
 
-        NavigationBar {
-            id: navBar
+        // With horizontal tabs the toolbar spans the window under them.
+        LayoutItemProxy {
             Layout.fillWidth: true
-            view: window.currentView
-            downloads: downloads
-            agentSidebar: agentSidebar
-            onBookmarkToggled: window.toggleBookmark()
+            visible: !window.verticalTabs
+            target: navBar
         }
+    }
+
+    // One toolbar, placed by a LayoutItemProxy: under the tab strip, or over
+    // the page beside the vertical tab sidebar, which then runs full height.
+    NavigationBar {
+        id: navBar
+        view: window.currentView
+        downloads: downloads
+        agentSidebar: agentSidebar
+        onBookmarkToggled: window.toggleBookmark()
     }
 
     SessionMenu { id: sessionMenu }
     TabMenu { id: tabMenu; browser: window; workspaceMenu: workspaceMenu }
     WorkspaceMenu { id: workspaceMenu }
 
-    RowLayout {
+    // Sidebars run full height on either side; the middle column holds the
+    // toolbar (vertical tabs only) over the page.
+    GridLayout {
         anchors.fill: parent
-        spacing: 0
+        columns: 3
+        rowSpacing: 0
+        columnSpacing: 0
 
         VerticalTabStrip {
+            Layout.row: 0
+            Layout.column: 0
+            Layout.rowSpan: 2
             Layout.fillHeight: true
             // Above the page, which an expanded collapsed sidebar covers.
             z: 1
@@ -374,10 +389,41 @@ ApplicationWindow {
             viewsRevision: window.viewsRevision
         }
 
-        // One web view per tab, stacked; only the current one is visible.
+        LayoutItemProxy {
+            Layout.row: 0
+            Layout.column: 1
+            Layout.fillWidth: true
+            visible: window.verticalTabs && !fullScreen.active
+            target: navBar
+        }
+
+        // One web view per tab, stacked; only the current one is visible. The
+        // page sits in the chrome as a rounded card, edge to edge in fullscreen.
         Item {
+            id: pageArea
+
+            readonly property bool framed: !fullScreen.active
+            Layout.row: 1
+            Layout.column: 1
             Layout.fillWidth: true
             Layout.fillHeight: true
+            Layout.leftMargin: framed && !window.verticalTabs ? Theme.spacing * 1.5 : 0
+            Layout.rightMargin: framed ? Theme.spacing * 1.5 : 0
+            Layout.bottomMargin: framed ? Theme.spacing * 1.5 : 0
+
+            IonShadow {
+                anchors.fill: parent
+                visible: pageArea.framed
+                radius: Theme.radiusLarge
+                spread: Theme.spacing * 1.5
+                offset: Theme.hairline
+                strength: 0.5
+            }
+            PageFrame {
+                anchors.fill: parent
+                z: 100
+                visible: pageArea.framed
+            }
 
             Repeater {
                 id: views
@@ -467,6 +513,9 @@ ApplicationWindow {
 
         AgentSidebar {
             id: agentSidebar
+            Layout.row: 0
+            Layout.column: 2
+            Layout.rowSpan: 2
             Layout.fillHeight: true
             Layout.preferredWidth: implicitWidth
             view: window.currentView

@@ -162,10 +162,16 @@ Item {
         anchors.bottomMargin: Theme.spacing * 3
         width: row.implicitWidth + Theme.spacing * 3
         height: row.implicitHeight + Theme.spacing * 2
-        radius: Theme.radius
+        radius: Theme.radiusLarge
         color: Theme.surface
         border.color: Theme.border
-        border.width: 1
+        border.width: Theme.hairline
+
+        IonShadow {
+            anchors.fill: parent
+            z: -1
+            radius: parent.radius
+        }
         // Hidden at once while capturing so it never ends up in a screenshot.
         opacity: tool.toastShown ? 1 : 0
         visible: opacity > 0 && !tool.busy

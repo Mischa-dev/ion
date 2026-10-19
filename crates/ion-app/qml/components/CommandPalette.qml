@@ -120,14 +120,14 @@ Popup {
     onOpened: field.forceActiveFocus()
 
     Overlay.modal: Rectangle {
-        color: Qt.rgba(Theme.background.r, Theme.background.g, Theme.background.b, Theme.scrimOpacity)
+        color: Theme.scrim
     }
 
     background: IonSurface {}
 
     enter: Transition {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.animationMs }
-        NumberAnimation { property: "scale"; from: 0.97; to: 1; duration: Theme.animationSlowMs; easing.type: Easing.OutCubic }
+        NumberAnimation { property: "scale"; from: Theme.popupStartScale; to: 1; duration: Theme.animationSlowMs; easing.type: Theme.easeOut }
     }
     exit: Transition {
         NumberAnimation { property: "opacity"; from: 1; to: 0; duration: Theme.animationMs }
@@ -135,25 +135,43 @@ Popup {
 
     contentItem: ColumnLayout {
         spacing: Theme.spacing
+        // Rows scrolled out of the list never draw below the card.
+        clip: true
 
         TextField {
             id: field
             Layout.fillWidth: true
-            implicitHeight: Theme.urlBarHeight
             color: Theme.text
             placeholderText: qsTr("Search tabs, bookmarks, history, commands, settings and !bangs")
             placeholderTextColor: Theme.textMuted
             selectionColor: Theme.accent
             selectedTextColor: Theme.onAccent
-            font.pixelSize: Theme.fontSize
-            leftPadding: Theme.spacing * 2
+            leftPadding: Theme.spacing * 3 + Theme.iconSize
             rightPadding: Theme.spacing * 2
             verticalAlignment: TextInput.AlignVCenter
             selectByMouse: true
+            implicitHeight: Theme.urlBarHeight + Theme.spacing * 2
+            font.pixelSize: Theme.fontSizeLarge
 
             background: Rectangle {
                 radius: Theme.radius
-                color: Theme.surfaceRaised
+                color: "transparent"
+
+                Icon {
+                    x: Theme.spacing * 2
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "search"
+                    color: Theme.textMuted
+                }
+                // Hairline between the query and the results.
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: -Theme.spacing / 2
+                    height: Theme.hairline
+                    color: Theme.border
+                }
             }
 
             onTextChanged: if (root.opened || root.visible) root.refresh()

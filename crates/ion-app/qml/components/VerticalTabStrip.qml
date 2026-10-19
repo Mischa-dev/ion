@@ -58,7 +58,7 @@ Item {
         clip: true
         color: Theme.background
 
-        Behavior on width { NumberAnimation { duration: Theme.animationMs; easing.type: Easing.OutCubic } }
+        Behavior on width { NumberAnimation { duration: Theme.animationMs; easing.type: Theme.easeOut } }
 
         HoverHandler {
             onHoveredChanged: {
@@ -84,7 +84,8 @@ Item {
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: Theme.spacing
-            spacing: Theme.spacing / 2
+            anchors.topMargin: Theme.spacing / 2
+            spacing: Theme.spacing
 
             RowLayout {
                 Layout.fillWidth: true
@@ -119,6 +120,9 @@ Item {
                 Layout.fillHeight: true
                 spacing: Theme.spacing / 2
                 clip: true
+                // Room for the current tab's shadow inside the clip.
+                topMargin: Theme.spacing / 2
+                bottomMargin: Theme.spacing / 2
                 boundsBehavior: Flickable.StopAtBounds
                 // Rows keep their model index in `row`; the list's own indexes
                 // only count this workspace's tabs.
@@ -138,6 +142,7 @@ Item {
 
                 add: Transition {
                     NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.animationSlowMs; easing.type: Easing.OutCubic }
+                    NumberAnimation { property: "scale"; from: Theme.popupStartScale; to: 1; duration: Theme.animationSlowMs; easing.type: Theme.easeOut }
                 }
                 remove: Transition {
                     NumberAnimation { property: "opacity"; to: 0; duration: Theme.animationMs }
@@ -158,14 +163,28 @@ Item {
                         return strip.views ? strip.views.itemAt(row) : null
                     }
 
-                    width: list.width
+                    x: Theme.spacing / 2
+                    width: list.width - Theme.spacing
                     height: Theme.tabHeight
                     radius: Theme.radius
-                    z: tabMouse.dragging ? 1 : 0
-                    color: tabMouse.dragging ? Theme.surfaceHover
-                         : current ? Theme.surface : tabMouse.containsMouse ? Theme.surfaceRaised : "transparent"
+                    z: tabMouse.dragging ? 2 : current ? 1 : 0
+                    // The current tab is a raised card; others are flat until hovered.
+                    color: current || tabMouse.dragging ? Theme.surface
+                         : tabMouse.containsMouse ? Theme.hoverOverlay : "transparent"
+                    border.width: current ? Theme.hairline : 0
+                    border.color: Theme.border
 
                     Behavior on color { ColorAnimation { duration: Theme.animationMs } }
+
+                    IonShadow {
+                        anchors.fill: parent
+                        z: -1
+                        visible: tab.current || tabMouse.dragging
+                        radius: tab.radius
+                        spread: tabMouse.dragging ? Theme.shadowRadius / 2 : Theme.spacing / 2
+                        offset: Theme.hairline
+                        strength: tabMouse.dragging ? 0.8 : 0.3
+                    }
 
                     TabDragArea {
                         id: tabMouse
@@ -196,6 +215,7 @@ Item {
                             text: tab.title.length > 0 ? tab.title : tab.url.length > 0 ? tab.url : qsTr("New Tab")
                             color: tab.current ? Theme.text : Theme.textMuted
                             font.pixelSize: Theme.fontSize
+                            font.weight: tab.current ? Theme.weightMedium : Font.Normal
                             elide: Text.ElideRight
                         }
 
@@ -203,6 +223,7 @@ Item {
                             Layout.preferredWidth: Theme.tabHeight - Theme.spacing * 2
                             Layout.preferredHeight: Theme.tabHeight - Theme.spacing * 2
                             iconName: "close"
+                            iconSize: Theme.iconSize - 4
                             tip: qsTr("Close tab")
                             visible: strip.expanded && (tab.current || tabMouse.containsMouse || hovered)
                             onClicked: strip.closeRequested(tab.row)

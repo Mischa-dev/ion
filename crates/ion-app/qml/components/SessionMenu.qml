@@ -33,17 +33,20 @@ Item {
 
     IonMenu {
         id: menu
+        icons: true
         palette: root.palette
 
         onAboutToShow: root.names = Tabs.sessionNames()
 
         IonMenuItem {
             text: qsTr("Reopen closed tab")
+            iconName: "restore"
             enabled: Tabs.closedCount > 0
             onTriggered: Tabs.reopenClosedTab()
         }
         IonMenuItem {
             text: qsTr("Vertical tabs")
+            iconName: "sidebar"
             checkable: true
             // Writes `ui.tabs` to the local config, like any other setting.
             checked: Config.tabLayout === "vertical"
@@ -54,6 +57,7 @@ Item {
 
         IonMenuItem {
             text: qsTr("Save session as…")
+            iconName: "download"
             onTriggered: saveDialog.open()
         }
 

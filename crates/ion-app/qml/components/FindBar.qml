@@ -50,10 +50,16 @@ Rectangle {
     anchors.margins: Theme.spacing * 2
     width: Math.min(parent.width - Theme.spacing * 4, Theme.tabMaxWidth * 1.8)
     height: Theme.urlBarHeight + Theme.spacing * 2
-    radius: Theme.radius
+    radius: Theme.radiusLarge
     color: Theme.surface
     border.color: Theme.border
-    border.width: 1
+    border.width: Theme.hairline
+
+    IonShadow {
+        anchors.fill: parent
+        z: -1
+        radius: parent.radius
+    }
 
     Connections {
         target: bar.view
@@ -89,9 +95,9 @@ Rectangle {
 
             background: Rectangle {
                 radius: Theme.radius
-                color: Theme.surfaceRaised
-                border.width: field.activeFocus ? 1 : 0
-                border.color: Theme.accent
+                color: field.activeFocus ? Theme.surface : Theme.surfaceRaised
+                border.width: field.activeFocus ? Theme.hairline * 2 : 0
+                border.color: Theme.focusRing
             }
 
             Text {

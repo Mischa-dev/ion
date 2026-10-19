@@ -129,10 +129,16 @@ ColumnLayout {
 
             Layout.fillWidth: true
             implicitHeight: content.implicitHeight + Theme.spacing * 3
-            radius: Theme.radius
+            radius: Theme.radiusLarge
             color: toastMouse.containsMouse ? Theme.surfaceRaised : Theme.surface
             border.color: Theme.border
-            border.width: 1
+            border.width: Theme.hairline
+
+            IonShadow {
+                anchors.fill: parent
+                z: -1
+                radius: parent.radius
+            }
 
             // The page closing the notification (or replacing it by tag)
             // removes the toast too.

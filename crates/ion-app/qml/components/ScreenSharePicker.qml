@@ -177,7 +177,7 @@ Popup {
                 }
                 background: Rectangle {
                     radius: Theme.radius
-                    color: source.hovered ? Theme.surfaceHover : "transparent"
+                    color: source.hovered ? Theme.hoverOverlay : "transparent"
                 }
             }
         }
