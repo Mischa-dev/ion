@@ -12,6 +12,7 @@ WebEngineView {
 
     // Reader mode for this tab: `reader.toggle()`, `reader.active`.
     readonly property alias reader: readerMode
+    readonly property alias findBar: findBar
 
     // Emitted when the page asks for a new tab or window (target=_blank, window.open).
     signal newTabRequested(var request)
@@ -139,7 +140,7 @@ WebEngineView {
 
     NewTabPage { view: view }
     AdblockCosmetics { view: view }
-    FindBar { view: view }
+    FindBar { id: findBar; view: view }
     PermissionPrompt { view: view; tabId: view.tabId }
     ScreenSharePicker { view: view }
     PageDialog { view: view }
