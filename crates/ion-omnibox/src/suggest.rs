@@ -368,7 +368,10 @@ fn match_score(terms: &[String], title: &str, url: &str) -> Option<i32> {
 
     let mut total = 0;
     for (i, term) in terms.iter().enumerate() {
-        let points = if host.starts_with(term.as_str()) {
+        let points = if term.contains('/') && address.starts_with(term.as_str()) {
+            // A typed or pasted address with a path: the page itself.
+            16
+        } else if host.starts_with(term.as_str()) {
             // The site itself: "git" → github.com.
             if i == 0 { 16 } else { 10 }
         } else if host
@@ -634,6 +637,15 @@ mod tests {
                 .iter()
                 .all(|i| i.action != Action::SwitchTab(0))
         );
+    }
+
+    #[test]
+    fn full_addresses_with_paths_match_their_page() {
+        let terms = |text: &str| vec![normalize(text)];
+        let url = "https://github.com/Mischa-dev/ion";
+        assert!(match_score(&terms("https://github.com/Mischa-dev/ion"), "Ion", url).is_some());
+        assert!(match_score(&terms("github.com/mischa-dev"), "Ion", url).is_some());
+        assert!(match_score(&terms("https://gitlab.com/Mischa-dev/ion"), "Ion", url).is_none());
     }
 
     #[test]

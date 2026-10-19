@@ -69,9 +69,12 @@ fn looks_like_an_identifier(input: &str) -> bool {
     let one_kind = SEPARATORS
         .iter()
         .any(|kind| input.matches(*kind).count() == separators);
-    let long_group = groups.iter().any(|group| group.len() >= 3);
-    // "1/2" and "10-3" are sums; "555-1234", "1.2.3" and "10/19/2026" aren't.
-    one_kind && (separators >= 2 || (input.contains('-') && long_group))
+    // One dash reads as a phone number only in its shape: three digits,
+    // then four ("555-1234").
+    let phone = groups.len() == 2 && groups[0].len() == 3 && groups[1].len() == 4;
+    // "1/2", "10-3" and "100-50" are sums; "555-1234", "1.2.3" and
+    // "10/19/2026" aren't.
+    one_kind && (separators >= 2 || (input.contains('-') && phone))
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -446,6 +449,8 @@ mod tests {
     #[test]
     fn short_dashed_sums_still_count() {
         assert_eq!(calc("10-3").as_deref(), Some("7"));
+        assert_eq!(calc("100-50").as_deref(), Some("50"));
+        assert_eq!(calc("1000-1").as_deref(), Some("999"));
         assert_eq!(calc("10 - 3 - 2").as_deref(), Some("5"));
     }
 }

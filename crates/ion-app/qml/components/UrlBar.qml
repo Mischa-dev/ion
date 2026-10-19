@@ -162,7 +162,8 @@ TextField {
         suggestions = AddressBar.suggest(input, typed, tabs.titles, tabs.urls, Tabs.currentIndex,
                                          history, bookmarks, chosen, engine)
         list.currentIndex = previous ? Math.max(0, suggestions.findIndex(
-            s => s.title === previous.title && s.action === previous.action)) : 0
+            s => s.kind === previous.kind && s.action === previous.action
+                && s.value === previous.value && s.title === previous.title)) : 0
     }
 
     // Ask the search engine for suggestions, a beat after typing settles.
