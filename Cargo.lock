@@ -1313,6 +1313,7 @@ dependencies = [
  "ion-core",
  "ion-input",
  "ion-keyring",
+ "ion-omnibox",
  "ion-panels",
  "ion-passwords",
  "ion-platform",
@@ -1386,6 +1387,17 @@ version = "0.1.0"
 dependencies = [
  "keyring",
  "serde_json",
+]
+
+[[package]]
+name = "ion-omnibox"
+version = "0.1.0"
+dependencies = [
+ "ion-bangs",
+ "ion-core",
+ "serde",
+ "serde_json",
+ "url",
 ]
 
 [[package]]

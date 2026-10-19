@@ -36,6 +36,14 @@ const fn command(
     }
 }
 
+/// Commands that only make sense with Ion Agent turned on (`ai.enable`).
+pub const AGENT_COMMANDS: &[&str] = &[
+    "ask-agent",
+    "summarize-page",
+    "agent-sidebar",
+    "agent-activity",
+];
+
 const fn shortcut(id: &'static str, title: &'static str, keys: &'static [&'static str]) -> Command {
     Command {
         id,
