@@ -21,6 +21,18 @@ pub struct ProcessMemory {
 /// `root` and all its descendants, root first.
 pub fn tree(root: u32) -> Vec<ProcessMemory> {
     let mut tree = descendants(root, list());
+    if tree.first().is_none_or(|p| p.pid != root) {
+        // The listing missed it (another process's view, a sandbox).
+        tree.insert(
+            0,
+            ProcessMemory {
+                pid: root,
+                parent: 0,
+                name: String::new(),
+                kib: 0,
+            },
+        );
+    }
     // Measuring is the slow part (PSS walks the page tables), so only the
     // tree's processes are measured.
     for process in &mut tree {
@@ -74,26 +86,6 @@ pub fn parse_smaps_rollup(text: &str) -> Option<u64> {
     })
 }
 
-/// Rows of `ps -A -o pid=,ppid=,rss=,comm=` (RSS in KiB).
-pub fn parse_ps(text: &str) -> Vec<ProcessMemory> {
-    text.lines()
-        .filter_map(|line| {
-            let mut words = line.split_whitespace();
-            let pid = words.next()?.parse().ok()?;
-            let parent = words.next()?.parse().ok()?;
-            let kib = words.next()?.parse().ok()?;
-            let command = words.collect::<Vec<_>>().join(" ");
-            let name = command.rsplit('/').next().unwrap_or_default().to_owned();
-            Some(ProcessMemory {
-                pid,
-                parent,
-                name,
-                kib,
-            })
-        })
-        .collect()
-}
-
 /// Every process with its parent; memory is filled in by [`measure`].
 #[cfg(target_os = "linux")]
 fn list() -> Vec<ProcessMemory> {
@@ -133,18 +125,74 @@ fn measure(pid: u32) -> Option<u64> {
     Some(pages * page_kib)
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 fn measure(_pid: u32) -> Option<u64> {
     None
 }
 
+/// Every process Ion may inspect (its own user's), from libproc. `ps` would
+/// do the same but can't run inside some sandboxes, the Nix build's included.
 #[cfg(target_os = "macos")]
 fn list() -> Vec<ProcessMemory> {
-    std::process::Command::new("/bin/ps")
-        .args(["-A", "-o", "pid=,ppid=,rss=,comm="])
-        .output()
-        .map(|out| parse_ps(&String::from_utf8_lossy(&out.stdout)))
-        .unwrap_or_default()
+    // SAFETY: a null buffer only asks for the count.
+    let count = unsafe { libc::proc_listallpids(std::ptr::null_mut(), 0) };
+    if count <= 0 {
+        return Vec::new();
+    }
+    // Room for processes started between the two calls.
+    let mut pids: Vec<libc::c_int> = vec![0; count as usize + 64];
+    let bytes = (pids.len() * std::mem::size_of::<libc::c_int>()) as libc::c_int;
+    // SAFETY: `pids` holds `bytes` bytes; the call returns how many pids it
+    // wrote.
+    let written = unsafe { libc::proc_listallpids(pids.as_mut_ptr().cast(), bytes) };
+    pids.truncate(written.clamp(0, pids.len() as libc::c_int) as usize);
+    pids.into_iter().filter_map(task_info).collect()
+}
+
+/// Parent, name and resident size of one process; `None` for another user's.
+#[cfg(target_os = "macos")]
+fn task_info(pid: libc::c_int) -> Option<ProcessMemory> {
+    let size = std::mem::size_of::<libc::proc_taskallinfo>() as libc::c_int;
+    // SAFETY: proc_taskallinfo is plain integers, so all zeroes is valid.
+    let mut info: libc::proc_taskallinfo = unsafe { std::mem::zeroed() };
+    // SAFETY: `info` is `size` bytes; proc_pidinfo writes at most that and
+    // returns how many bytes it wrote.
+    let written = unsafe {
+        libc::proc_pidinfo(
+            pid,
+            libc::PROC_PIDTASKALLINFO,
+            0,
+            (&mut info as *mut libc::proc_taskallinfo).cast(),
+            size,
+        )
+    };
+    if written != size {
+        return None;
+    }
+    let text = |chars: &[libc::c_char]| {
+        let bytes: Vec<u8> = chars
+            .iter()
+            .take_while(|&&c| c != 0)
+            .map(|&c| c as u8)
+            .collect();
+        String::from_utf8_lossy(&bytes).into_owned()
+    };
+    let mut name = text(&info.pbsd.pbi_name[..]);
+    if name.is_empty() {
+        name = text(&info.pbsd.pbi_comm[..]);
+    }
+    Some(ProcessMemory {
+        pid: pid as u32,
+        parent: info.pbsd.pbi_ppid,
+        name,
+        kib: info.ptinfo.pti_resident_size / 1024,
+    })
+}
+
+/// Resident size; see [`task_info`].
+#[cfg(target_os = "macos")]
+fn measure(pid: u32) -> Option<u64> {
+    task_info(pid as libc::c_int).map(|p| p.kib)
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
@@ -183,15 +231,9 @@ mod tests {
     }
 
     #[test]
-    fn parses_smaps_and_ps() {
+    fn parses_smaps_rollup() {
         let smaps = "55d0-7ffd ---p 00000000 00:00 0 [rollup]\nRss: 2048 kB\nPss: 1500 kB\n";
         assert_eq!(parse_smaps_rollup(smaps), Some(1500));
-        let ps = "  501     1  81234 /Applications/Ion.app/Contents/MacOS/ion\n  502   501 40000 /x/QtWebEngineProcess.app/Contents/MacOS/QtWebEngineProcess\n";
-        let rows = parse_ps(ps);
-        assert_eq!(rows.len(), 2);
-        assert_eq!(rows[1].parent, 501);
-        assert_eq!(rows[1].name, "QtWebEngineProcess");
-        assert_eq!(rows[0].kib, 81234);
     }
 
     #[test]
