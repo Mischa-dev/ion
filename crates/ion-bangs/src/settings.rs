@@ -5,7 +5,7 @@
 //! overrides through `Config.set`, so they apply live and persist; the base
 //! config (and so the Nix config) is left untouched.
 
-use ion_config::{Config, Density, PinchAction, TabLayout, ThemeSource};
+use ion_config::{Autoplay, Config, Density, PinchAction, TabLayout, ThemeSource};
 use ion_core::engines::{ENGINES, Engine};
 
 /// A value to store under a config key.
@@ -217,6 +217,19 @@ pub fn options<'a>(
         active: false,
     });
 
+    for (policy, title) in [
+        (Autoplay::Muted, "Autoplay: silent video only"),
+        (Autoplay::Allow, "Autoplay: allow sound"),
+        (Autoplay::Block, "Autoplay: block all media"),
+    ] {
+        options.push(SettingOption {
+            title: title.into(),
+            keywords: "settings media video audio sound autoplay play",
+            changes: vec![("media.autoplay", text(policy.as_str()))],
+            active: config.media.autoplay == policy,
+        });
+    }
+
     for &Engine { name, template, .. } in ENGINES {
         options.push(SettingOption {
             title: format!("Search with {name}"),
@@ -262,6 +275,7 @@ mod tests {
                 "Comfortable density",
                 "Horizontal tabs",
                 "Pinch: zoom the page",
+                "Autoplay: silent video only",
                 "Search with DuckDuckGo",
             ]
         );

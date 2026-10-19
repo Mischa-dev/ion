@@ -130,6 +130,11 @@ fingerprinting = true        # noise on canvas/WebGL/audio readouts, common
 enable = true                # offer to save passwords typed into sites
 autofill = true              # fill a site's only saved login when its page loads
 
+[media]
+autoplay = "muted"           # what pages may play before you click or type:
+                             # "allow", "muted" (silent video only; sound waits
+                             # for you) or "block" (nothing)
+
 [ai]                         # Ion Agent: @ion or !ai in the address bar
 enable = false               # off until you turn it on
 provider = "openai"          # "openai" (any OpenAI-compatible API) or "anthropic"
@@ -158,6 +163,7 @@ javascript = true            # "*" covers every site, the most specific wins
                              # Firefox, Safari and custom strings blank client
                              # hints. accounts.google.com gets "firefox" built
                              # in (docs/compat.md); set "default" to undo it
+# autoplay = "allow"         # overrides media.autoplay for this site
 ```
 
 ## User scripts and styles

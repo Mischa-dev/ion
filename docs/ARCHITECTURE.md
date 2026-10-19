@@ -33,6 +33,7 @@ crates/
   ion-sites/              per-site settings ([sites] in config), user scripts and styles,
                           user agent and site quirks, links that open other apps
   ion-reader/             reader mode: article extraction and the themed reader page
+  ion-media/              autoplay policy, picture-in-picture and system media controls
   ion-safety/             permissions and agent trust: decisions, prompts, activity log
   ion-agent/              Ion Agent's runtime: tasks, browser tools, model access
   ion-panels/             the side panel: web panels and notes (clippings)

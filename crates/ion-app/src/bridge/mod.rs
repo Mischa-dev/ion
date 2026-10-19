@@ -17,6 +17,7 @@ pub mod gestures;
 pub mod history;
 pub mod keymap;
 pub mod load_error;
+pub mod media;
 pub mod notifications;
 pub mod omnibox;
 pub mod pages;

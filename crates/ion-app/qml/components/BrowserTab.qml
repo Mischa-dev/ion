@@ -73,13 +73,21 @@ WebEngineView {
         }
         siteCssScript = script
     }
-    function runInFrames(frame, script) {
-        frame.runJavaScript(script, WebEngineScript.ApplicationWorld)
+    // `script` in `frame` and all its subframes, in Ion's world unless
+    // `world` says otherwise.
+    function runInFrames(frame, script, world) {
+        const target = world ?? WebEngineScript.ApplicationWorld
+        frame.runJavaScript(script, target)
         for (const child of frame.children)
-            runInFrames(child, script)
+            runInFrames(child, script, target)
     }
 
-    Component.onCompleted: applyPageTheme()
+    Component.onCompleted: {
+        applyPageTheme()
+        // The default policy until the first navigation; a page a script
+        // opens and fills itself (window.open("")) never has one.
+        applyAutoplay("about:blank")
+    }
 
     // A site of its own may darken differently.
     onUrlChanged: {
@@ -102,6 +110,7 @@ WebEngineView {
     // Ion's when this tab's first load starts. Later loads don't reset it.
     property bool pageSchemeRestored: false
     onLoadingChanged: info => {
+        autoplayLoading(info)
         if (info.status === WebEngineView.LoadSucceededStatus)
             snapshotSoon.restart()
         else if (info.status === WebEngineView.LoadStartedStatus && !visible)
@@ -306,6 +315,82 @@ WebEngineView {
         }
         view.navigationEnd = target
         view.settings.javascriptEnabled = Sites.javascriptEnabled(target)
+        if (!target.startsWith("about:"))
+            view.autoplayInherited = ""
+        view.applyAutoplay(target)
+        autoplayCheck.restart()
+    }
+
+    // A navigation can still be called off after it's requested (a
+    // beforeunload prompt, a download): the page that stays keeps its own
+    // autoplay policy. A load that starts takes its destination's; one that
+    // ends, or never starts, goes back to the committed page's.
+    Timer {
+        id: autoplayCheck
+        interval: 1500
+        onTriggered: view.applyAutoplay(view.autoplayUrl())
+    }
+    function autoplayLoading(info) {
+        if (info.status === WebEngineView.LoadStartedStatus) {
+            autoplayCheck.stop()
+            applyAutoplay(info.url.toString())
+        } else {
+            applyAutoplay(autoplayUrl())
+        }
+    }
+
+    // A blank popup's opener, whose site's policy the popup keeps while it
+    // stays blank (set by Main.qml when it adopts the popup).
+    property string autoplayInherited: ""
+    // The URL whose policy the open page follows.
+    function autoplayUrl() {
+        const current = url.toString()
+        return autoplayInherited.length > 0 && (current.length === 0 || current.startsWith("about:"))
+            ? autoplayInherited : current
+    }
+
+    // The policy last applied, to spot a settings change that affects the
+    // open page.
+    property string autoplayPolicy: ""
+
+    // `[media] autoplay` or a `[sites]` entry changed: the open page follows
+    // at once. "block" is enforced in its frames now; the engine's gesture
+    // rule for sound takes effect from the page's next load.
+    Connections {
+        target: Config
+        function onRevisionChanged() {
+            if (view.loading)
+                return
+            const before = view.autoplayPolicy
+            view.applyAutoplay(view.autoplayUrl())
+            if (view.autoplayPolicy === before)
+                return
+            if (view.autoplayPolicy === "block")
+                view.runInFrames(view.mainFrame, Media.blockAutoplayScript, WebEngineScript.MainWorld)
+            else if (before === "block")
+                view.runInFrames(view.mainFrame, Media.unblockAutoplayScript, WebEngineScript.MainWorld)
+        }
+    }
+
+    // `[media] autoplay` for the page about to load. The engine's gesture
+    // rule lets silent media play and holds sound back; "block" adds a page
+    // script that holds silent media back too.
+    function applyAutoplay(target) {
+        const policy = Media.autoplay(target)
+        autoplayPolicy = policy
+        settings.playbackRequiresUserGesture = policy !== "allow"
+        const installed = userScripts.find("ion-autoplay-block")
+        if (policy === "block" && installed.length === 0) {
+            const script = WebEngine.script()
+            script.name = "ion-autoplay-block"
+            script.sourceCode = Media.blockAutoplayScript
+            script.injectionPoint = WebEngineScript.DocumentCreation
+            script.worldId = WebEngineScript.MainWorld
+            script.runsOnSubFrames = true
+            userScripts.insert(script)
+        } else if (policy !== "block" && installed.length > 0) {
+            userScripts.remove(installed[0])
+        }
     }
 
     Connections {
