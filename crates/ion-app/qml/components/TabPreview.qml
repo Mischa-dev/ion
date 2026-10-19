@@ -17,6 +17,8 @@ Popup {
     // Open to the right of the tab (the sidebar) instead of below it.
     property bool beside: false
     property bool wanted: false
+    // Turned off with `ui.tabPreviews = false`.
+    readonly property bool allowed: { Config.revision; return Config.value("ui.tabPreviews") !== false }
 
     readonly property string site: {
         const match = url.match(/^[a-z][a-z0-9+.-]*:\/\/([^\/?#]*)/)
@@ -40,7 +42,7 @@ Popup {
 
     Timer {
         interval: Theme.hoverDelayMs * 2
-        running: card.wanted && !card.opened
+        running: card.wanted && card.allowed && !card.opened
         onTriggered: card.open()
     }
     onWantedChanged: if (!wanted) close()
