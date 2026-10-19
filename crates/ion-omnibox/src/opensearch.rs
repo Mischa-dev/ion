@@ -37,13 +37,21 @@ impl SiteEngine {
     }
 }
 
-/// The name part of a host: `wikipedia` for `en.wikipedia.org`, `youtube`
-/// for `m.youtube.com`. `None` for country-code second levels like `co.uk`.
+/// The name part of a host: `wikipedia` for `en.wikipedia.org`, `bbc` for
+/// `news.bbc.co.uk`, `project` for `project.github.io`. Public-suffix aware,
+/// so shared hosts don't hand one tenant the platform's name.
 pub fn site_label(host: &str) -> Option<&str> {
-    let labels: Vec<&str> = host.split('.').collect();
-    let label = *labels.get(labels.len().checked_sub(2)?)?;
-    const GENERIC: &[&str] = &["co", "com", "org", "net", "ac", "gov", "edu", "ne", "or"];
-    (label.len() >= 3 && !GENERIC.contains(&label)).then_some(label)
+    let label = registrable_domain(host)?.split('.').next()?;
+    (label.len() >= 3).then_some(label)
+}
+
+/// The part of `host` one owner registered (`bbc.co.uk`), or `None` for IP
+/// addresses and bare suffixes.
+fn registrable_domain(host: &str) -> Option<&str> {
+    if host.parse::<std::net::IpAddr>().is_ok() {
+        return None;
+    }
+    psl::domain_str(host)
 }
 
 /// The site's search from an OpenSearch description `xml` fetched for a page
@@ -88,12 +96,7 @@ pub fn parse(xml: &str, page_host: &str) -> Option<SiteEngine> {
 /// Whether two hosts belong to one site: equal, or one a subdomain of the
 /// other's registrable part.
 fn same_site(a: &str, b: &str) -> bool {
-    let base = |host: &str| {
-        let labels: Vec<&str> = host.split('.').collect();
-        let keep = if site_label(host).is_some() { 2 } else { 3 };
-        labels[labels.len().saturating_sub(keep)..].join(".")
-    };
-    a == b || base(a) == base(b)
+    a == b || registrable_domain(a).is_some_and(|base| registrable_domain(b) == Some(base))
 }
 
 /// Drop `name={param}` / `name={param?}` pairs left in a template.
@@ -295,10 +298,17 @@ mod tests {
     }
 
     #[test]
-    fn site_labels_skip_country_second_levels() {
-        assert_eq!(site_label("news.bbc.co.uk"), None);
+    fn site_labels_follow_the_public_suffix_list() {
+        assert_eq!(site_label("news.bbc.co.uk"), Some("bbc"));
+        assert_eq!(site_label("en.wikipedia.org"), Some("wikipedia"));
         assert_eq!(site_label("github.com"), Some("github"));
+        // A GitHub Pages site isn't GitHub.
+        assert_eq!(site_label("project.github.io"), Some("project"));
         assert_eq!(site_label("localhost"), None);
+        assert_eq!(site_label("127.0.0.1"), None);
+        assert!(same_site("docs.example.co.uk", "example.co.uk"));
+        assert!(!same_site("a.github.io", "b.github.io"));
+        assert!(!same_site("example.co.uk", "other.co.uk"));
     }
 
     #[test]

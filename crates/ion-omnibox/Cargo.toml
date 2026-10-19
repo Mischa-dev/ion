@@ -9,6 +9,7 @@ publish.workspace = true
 [dependencies]
 ion-bangs.workspace = true
 ion-core.workspace = true
+psl = "2"
 serde_json.workspace = true
 serde.workspace = true
 url.workspace = true
