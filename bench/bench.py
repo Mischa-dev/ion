@@ -220,15 +220,18 @@ class Browser:
     def stop(self) -> None:
         if not self.proc:
             return
+        # SIGTERM to the browser alone quits it the normal way, so the next
+        # run doesn't start as a crash recovery; its helpers exit with it.
         try:
-            os.killpg(self.proc.pid, signal.SIGTERM)
+            self.proc.send_signal(signal.SIGTERM)
             self.proc.wait(timeout=10)
-        except (ProcessLookupError, subprocess.TimeoutExpired):
-            try:
-                os.killpg(self.proc.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            self.proc.wait()
+        except subprocess.TimeoutExpired:
+            pass
+        try:
+            os.killpg(self.proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        self.proc.wait()
         self.proc = None
         time.sleep(0.5)
 
