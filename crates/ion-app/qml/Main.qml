@@ -388,6 +388,13 @@ ApplicationWindow {
                 block(gesture, false, false)
                 return
             }
+            // A popup over the page (downloads, menus) keeps the gesture.
+            for (const item of window.Overlay.overlay?.children ?? []) {
+                if (item.visible && item.contains(item.mapFromItem(null, x, y))) {
+                    block(gesture, true, true)
+                    return
+                }
+            }
             const point = view.mapFromItem(null, x, y)
             view.runJavaScript(`(function check(doc, x, y) {
                 let back = false, forward = false

@@ -44,7 +44,8 @@ pub mod qobject {
         fn pause(self: Pin<&mut Gestures>);
 
         /// A pinch step (0 begin, 1 zoom by `delta`, 2 end), from the event
-        /// filter. Returns whether to swallow it.
+        /// filter. Returns whether to swallow it: zoom steps Ion handles,
+        /// never begin or end.
         #[qinvokable]
         fn pinch(self: Pin<&mut Gestures>, stage: i32, delta: f64, x: f64, y: f64) -> bool;
 
@@ -228,13 +229,15 @@ impl qobject::Gestures {
                 self.zoom(factor, false);
                 true
             }
-            2 => match self.as_mut().rust_mut().pinch.take() {
-                Some(pinch) => {
+            // Begin and end always reach the page, so its own gesture
+            // handling sees a whole (empty) gesture; only zoom steps are
+            // taken.
+            2 => {
+                if let Some(pinch) = self.as_mut().rust_mut().pinch.take() {
                     self.zoom(pinch.end(&ion_basics::zoom::STEPS), true);
-                    true
                 }
-                None => false,
-            },
+                false
+            }
             _ => false,
         }
     }
