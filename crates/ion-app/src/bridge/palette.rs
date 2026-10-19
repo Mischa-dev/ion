@@ -53,14 +53,18 @@ use ion_bangs::{Action, BangTable, Item, Palette, SettingValue, Sources, TabEntr
 use ion_config::Config;
 use ion_core::navigation::{Omnibox, SearchEngine};
 
-/// Ion's built-in bangs plus the `[bangs]` table from config, rebuilt only
-/// when the config changes. Shared by the URL bar and the palette.
+/// Ion's built-in bangs plus the `[bangs]` table from config and the
+/// searches of sites you've visited, rebuilt only when one of those changes.
+/// Shared by the URL bar and the palette.
 pub fn current_bangs() -> Arc<BangTable> {
-    static CACHE: Mutex<Option<(Arc<Config>, Arc<BangTable>)>> = Mutex::new(None);
+    type Cached = (Arc<Config>, u64, Arc<BangTable>);
+    static CACHE: Mutex<Option<Cached>> = Mutex::new(None);
     let config = ion_config::global().config();
+    let (revision, sites) = super::address_bar::site_searches();
     let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
-    if let Some((seen, table)) = cache.as_ref()
+    if let Some((seen, seen_revision, table)) = cache.as_ref()
         && Arc::ptr_eq(seen, &config)
+        && *seen_revision == revision
     {
         return table.clone();
     }
@@ -69,8 +73,14 @@ pub fn current_bangs() -> Arc<BangTable> {
     for error in table.apply(entries) {
         eprintln!("ion: config: {error}");
     }
+    // Sites' own searches fill in triggers nobody else uses.
+    for site in &sites {
+        for trigger in site.triggers() {
+            table.add_if_absent(&trigger, &site.name, &site.template);
+        }
+    }
     let table = Arc::new(table);
-    *cache = Some((config, table.clone()));
+    *cache = Some((config, revision, table.clone()));
     table
 }
 

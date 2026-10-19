@@ -4,6 +4,7 @@
 //!   ([`units`]), shown as the first suggestion.
 //! - [`inputs`]: what people picked after typing what, so `gm` learns to mean
 //!   the mail page you always choose.
+//! - [`opensearch`]: site searches found on visited sites, used as bangs.
 //! - [`remote`]: reading search engines' suggestion responses.
 //! - [`suggest`]: ranking open tabs, bookmarks, history, quick actions and
 //!   search suggestions for the dropdown under the address bar.
@@ -14,6 +15,7 @@
 pub mod answer;
 pub mod calc;
 pub mod inputs;
+pub mod opensearch;
 pub mod remote;
 pub mod suggest;
 pub mod units;

@@ -65,6 +65,18 @@ pub mod qobject {
         #[cxx_name = "suggestUrl"]
         fn suggest_url(self: &AddressBar, input: &QString) -> QString;
 
+        /// Whether to look for `pageUrl`'s own search (OpenSearch): true
+        /// once per site that has none remembered yet.
+        #[qinvokable]
+        #[cxx_name = "wantsSiteSearch"]
+        fn wants_site_search(self: &AddressBar, page_url: &QString) -> bool;
+
+        /// Remember the search described by OpenSearch `xml`, found on
+        /// `pageUrl`, as a bang for that site. Returns whether it was new.
+        #[qinvokable]
+        #[cxx_name = "addSiteSearch"]
+        fn add_site_search(self: &AddressBar, page_url: &QString, xml: &QString) -> bool;
+
         /// The suggestions in a search engine's `body`, without `query`.
         #[qinvokable]
         #[cxx_name = "parseSuggestions"]
@@ -72,10 +84,16 @@ pub mod qobject {
     }
 }
 
+use std::collections::HashSet;
+use std::path::PathBuf;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use cxx_qt_lib::{QList, QString, QStringList, QVariant};
 use ion_bangs::Action;
 use ion_core::engines;
 use ion_core::navigation::Resolved;
+use ion_omnibox::opensearch::{self, SiteEngine, SiteEngines};
 use ion_omnibox::{Page, Sources};
 
 use super::palette::{current_palette, entries, history_entries, rows, strings};
@@ -87,6 +105,55 @@ const MAX_SUGGEST_INPUT: usize = 120;
 
 #[derive(Default)]
 pub struct AddressBarRust;
+
+/// Sites' own searches, loaded from `site-searches.json` on first use, and
+/// the hosts already looked at this run.
+struct SiteSearches {
+    engines: SiteEngines,
+    tried: HashSet<String>,
+    path: Option<PathBuf>,
+}
+
+static SITE_SEARCHES: Mutex<Option<SiteSearches>> = Mutex::new(None);
+/// Bumped whenever a site search is added, so bang tables get rebuilt.
+static SITE_SEARCHES_REVISION: AtomicU64 = AtomicU64::new(0);
+
+fn with_site_searches<T>(f: impl FnOnce(&mut SiteSearches) -> T) -> T {
+    let mut guard = SITE_SEARCHES.lock().unwrap_or_else(|e| e.into_inner());
+    let searches = guard.get_or_insert_with(|| {
+        let path = ion_session::paths::data_dir().map(|d| d.join("site-searches.json"));
+        let engines = path
+            .as_deref()
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .and_then(|json| SiteEngines::from_json(&json).ok())
+            .unwrap_or_default();
+        SiteSearches {
+            engines,
+            tried: HashSet::new(),
+            path,
+        }
+    });
+    f(searches)
+}
+
+/// The sites' searches found so far and a revision that changes with them.
+pub fn site_searches() -> (u64, Vec<SiteEngine>) {
+    with_site_searches(|s| {
+        (
+            SITE_SEARCHES_REVISION.load(Ordering::Relaxed),
+            s.engines.iter().cloned().collect(),
+        )
+    })
+}
+
+/// The host of an http(s) page, without `www.`.
+fn page_host(page_url: &str) -> Option<String> {
+    let url = url::Url::parse(page_url).ok()?;
+    if !matches!(url.scheme(), "https" | "http") {
+        return None;
+    }
+    Some(url.host_str()?.trim_start_matches("www.").to_lowercase())
+}
 
 /// `History.search()`'s or `History.chosen()`'s JSON as pages.
 fn pages(json: &str, weight_key: &str) -> Vec<Page> {
@@ -196,6 +263,35 @@ impl qobject::AddressBar {
                 .unwrap_or_default()
                 .as_str(),
         )
+    }
+
+    fn wants_site_search(&self, page_url: &QString) -> bool {
+        let Some(host) = page_host(&page_url.to_string()) else {
+            return false;
+        };
+        with_site_searches(|s| !s.engines.knows(&host) && s.tried.insert(host))
+    }
+
+    fn add_site_search(&self, page_url: &QString, xml: &QString) -> bool {
+        let Some(host) = page_host(&page_url.to_string()) else {
+            return false;
+        };
+        let Some(engine) = opensearch::parse(&xml.to_string(), &host) else {
+            return false;
+        };
+        with_site_searches(|s| {
+            if !s.engines.add(engine) {
+                return false;
+            }
+            SITE_SEARCHES_REVISION.fetch_add(1, Ordering::Relaxed);
+            if let Some(path) = &s.path
+                && let Err(err) =
+                    ion_session::paths::write_atomic(path, s.engines.to_json().as_bytes())
+            {
+                eprintln!("ion: could not save site searches: {err}");
+            }
+            true
+        })
     }
 
     fn parse_suggestions(&self, body: &QString, query: &QString) -> QStringList {

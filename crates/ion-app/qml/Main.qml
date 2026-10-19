@@ -546,6 +546,7 @@ ApplicationWindow {
     CommandPalette { id: palette; browser: window }
     // Tab search (Ctrl/Cmd+Shift+A).
     TabSearch { id: tabSearch; browser: window }
+    SiteSearchDiscovery { id: siteSearch }
 
     ImportDialog { id: importDialog }
     PasswordManager { id: passwordManager }
@@ -727,8 +728,11 @@ ApplicationWindow {
                             Tabs.setIcon(index, icon.toString())
                     }
                     onLoadingChanged: info => {
-                        if (info.status === WebEngineView.LoadSucceededStatus && !window.privateWindow)
+                        // Private windows leave no history and learn no site searches.
+                        if (info.status === WebEngineView.LoadSucceededStatus && !window.privateWindow) {
                             History.recordVisit(info.url.toString(), title)
+                            siteSearch.check(view, info.url)
+                        }
                     }
                     onNewTabRequested: request => {
                         const background = request.destination === WebEngineNewWindowRequest.InNewBackgroundTab
