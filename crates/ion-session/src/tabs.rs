@@ -313,6 +313,10 @@ impl TabList {
                 .filter_map(|&i| saved_ids.get(i).copied())
                 .take(SPLIT_MAX_PANES)
                 .collect();
+            let essential = |id: &TabId| list.tabs.iter().any(|t| t.id == *id && t.essential);
+            if tabs.iter().any(essential) {
+                continue;
+            }
             let taken = |id: &TabId| list.splits.iter().any(|s| s.tabs.contains(id));
             if tabs.iter().any(taken) || tabs.iter().enumerate().any(|(i, t)| tabs[..i].contains(t))
             {
@@ -1438,6 +1442,11 @@ impl TabList {
     /// same, or the split already has [`SPLIT_MAX_PANES`].
     pub fn split_tabs(&mut self, index: usize, other: usize) -> Option<SplitId> {
         let (a, b) = (self.tabs.get(index)?.id, self.tabs.get(other)?.id);
+        // Essentials show in every workspace; a split shows one workspace's
+        // tabs, so they stay out.
+        if self.tabs[index].essential || self.tabs[other].essential {
+            return None;
+        }
         if a == b || self.split_of(index).is_some_and(|s| s.tabs.contains(&b)) {
             return self.split_of(index).map(|s| s.id);
         }
@@ -1544,6 +1553,36 @@ impl TabList {
 
     /// Swap the pane showing the tab at `index` with its neighbour `step`
     /// places along (−1 or 1). False at either end.
+    /// Put the pane of the tab at `index` right before (or `after`) the
+    /// pane of the tab at `anchor`, keeping its size. False unless both are
+    /// in the same split view.
+    pub fn place_pane(&mut self, index: usize, anchor: usize, after: bool) -> bool {
+        let (Some(id), Some(by)) = (
+            self.tabs.get(index).map(|t| t.id),
+            self.tabs.get(anchor).map(|t| t.id),
+        ) else {
+            return false;
+        };
+        let Some(split) = self
+            .splits
+            .iter_mut()
+            .find(|s| s.tabs.contains(&id) && s.tabs.contains(&by))
+        else {
+            return false;
+        };
+        if id == by {
+            return false;
+        }
+        let from = split.tabs.iter().position(|&t| t == id).unwrap_or(0);
+        let size = split.sizes.remove(from);
+        split.tabs.remove(from);
+        let at = split.tabs.iter().position(|&t| t == by).unwrap_or(0) + usize::from(after);
+        split.tabs.insert(at, id);
+        split.sizes.insert(at, size);
+        self.splits_revision += 1;
+        true
+    }
+
     pub fn move_pane(&mut self, index: usize, step: isize) -> bool {
         let Some(id) = self.tabs.get(index).map(|t| t.id) else {
             return false;
@@ -1845,6 +1884,42 @@ mod tests {
             l.note_current(5);
         }
         assert_eq!(l.search(|_| Some(0)), [2, 1, 0]);
+    }
+
+    #[test]
+    fn essentials_never_join_splits() {
+        let mut l = list(&["a", "b", "c"]);
+        let e = l.pin(2, Pin::Everywhere).unwrap();
+        assert_eq!(l.split_tabs(1, e), None);
+        assert_eq!(l.split_tabs(e, 1), None);
+        let mut session = l.to_session();
+        session.splits.push(crate::session::SavedSplit {
+            tabs: vec![e, 1],
+            sizes: vec![0.5, 0.5],
+            vertical: false,
+        });
+        assert!(TabList::from_session(&session).current_split().is_none());
+        assert!(TabList::from_session(&session).split_of(1).is_none());
+    }
+
+    #[test]
+    fn placing_a_pane_puts_it_beside_the_anchor() {
+        let mut l = list(&["a", "b", "c"]);
+        l.split_tabs(0, 1).unwrap();
+        l.split_tabs(1, 2).unwrap();
+        let order = |l: &TabList| -> Vec<usize> {
+            l.split_of(0)
+                .unwrap()
+                .tabs
+                .iter()
+                .filter_map(|&id| l.index_of(id))
+                .collect()
+        };
+        assert_eq!(order(&l), [0, 1, 2]);
+        assert!(l.place_pane(2, 0, false));
+        assert_eq!(order(&l), [2, 0, 1]);
+        assert!(l.place_pane(2, 1, true));
+        assert_eq!(order(&l), [0, 1, 2]);
     }
 
     #[test]

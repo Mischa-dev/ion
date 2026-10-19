@@ -84,8 +84,10 @@ IonMenu {
     IonMenuItem {
         text: qsTr("Put to sleep")
         // Tabs on screen (the current one and its split's panes) stay awake;
-        // see general.suspendTabsAfter. Their views are the visible ones.
+        // see general.suspendTabsAfter. Their views are the visible ones. So
+        // do tabs holding a dialog for when they are shown.
         enabled: !(root.view?.visible ?? true) && !(root.view?.suspended ?? true)
+                 && !(root.view?.needsAttention ?? false)
         onTriggered: Tabs.setSuspended(root.index, true)
     }
 
@@ -93,7 +95,8 @@ IonMenu {
 
     IonMenuItem {
         text: qsTr("Open in split view")
-        visible: !root.isCurrent && !root.split && root.splitHasRoom
+        visible: !root.isCurrent && !root.split && root.splitHasRoom && root.pin !== 2
+                 && Tabs.pinnedAt(Tabs.currentIndex) !== 2
         height: visible ? implicitHeight : 0
         onTriggered: Tabs.splitTabs(Tabs.currentIndex, root.index)
     }

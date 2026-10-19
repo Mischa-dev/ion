@@ -159,9 +159,9 @@ ApplicationWindow {
         // A full split view (four panes) takes no more; the page stays put.
         if (Tabs.splitTabs(Tabs.currentIndex, index) < 0)
             return
-        // It joins after the current pane; the first half puts it before.
-        if (side === "left" || side === "top")
-            Tabs.movePane(index, -1)
+        // Next to the current pane, on the side the hint showed; a tab already
+        // in the split moves there too.
+        Tabs.placePane(index, Tabs.currentIndex, side === "right" || side === "bottom")
         Tabs.activate(index)
     }
 
@@ -174,8 +174,11 @@ ApplicationWindow {
             return
         }
         const current = Tabs.currentIndex
+        // Essentials show in every workspace, so they never share the page.
+        if (Tabs.pinnedAt(current) === 2)
+            return
         const previous = previousTab()
-        if (previous >= 0) {
+        if (previous >= 0 && Tabs.pinnedAt(previous) !== 2) {
             Tabs.splitTabs(current, previous)
         } else {
             const index = Tabs.openTabNextToCurrent("", false)

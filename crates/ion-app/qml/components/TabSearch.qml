@@ -36,6 +36,14 @@ Popup {
             list.positionViewAtBeginning()
     }
 
+    // Results hold row indexes, so redo them when tabs open, close or move
+    // while the popup is up (a page can open one in the background).
+    Connections {
+        target: Tabs
+        enabled: root.opened
+        function onSessionChanged() { Qt.callLater(root.refresh) }
+    }
+
     function choose(item) {
         if (!item)
             return
