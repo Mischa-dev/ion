@@ -93,6 +93,25 @@ pub fn parse(xml: &str, page_host: &str) -> Option<SiteEngine> {
     })
 }
 
+/// Whether Ion may fetch the OpenSearch description at `description`, linked
+/// from the page at `page`: only from the page's own site, and not over plain
+/// HTTP from an HTTPS page. A page can link anything, and the fetch isn't
+/// held to the web's origin rules, so this keeps it from reaching other hosts.
+pub fn may_fetch(page: &str, description: &str) -> bool {
+    let (Ok(page), Ok(description)) = (url::Url::parse(page), url::Url::parse(description)) else {
+        return false;
+    };
+    let secure_enough = match (page.scheme(), description.scheme()) {
+        ("https", scheme) => scheme == "https",
+        ("http", scheme) => matches!(scheme, "http" | "https"),
+        _ => false,
+    };
+    let (Some(page_host), Some(host)) = (page.host_str(), description.host_str()) else {
+        return false;
+    };
+    secure_enough && same_site(&page_host.to_lowercase(), &host.to_lowercase())
+}
+
 /// Whether two hosts belong to one site: equal, or one a subdomain of the
 /// other's registrable part.
 fn same_site(a: &str, b: &str) -> bool {
@@ -295,6 +314,30 @@ mod tests {
         let no_query = r#"<Url type="text/html" template="https://youtube.com/"/>"#;
         assert_eq!(parse(no_query, "youtube.com"), None);
         assert_eq!(parse("not xml", "youtube.com"), None);
+    }
+
+    #[test]
+    fn descriptions_are_fetched_only_from_the_pages_own_site() {
+        let page = "https://en.wikipedia.org/wiki/Rust";
+        assert!(may_fetch(
+            page,
+            "https://en.wikipedia.org/w/opensearch_desc.php"
+        ));
+        assert!(may_fetch(page, "https://wikipedia.org/opensearch.xml"));
+        assert!(!may_fetch(page, "http://en.wikipedia.org/opensearch.xml"));
+        assert!(!may_fetch(page, "https://127.0.0.1/opensearch.xml"));
+        assert!(!may_fetch(page, "https://intranet.local/opensearch.xml"));
+        assert!(!may_fetch(page, "https://evil.example/opensearch.xml"));
+        assert!(!may_fetch(
+            "https://a.github.io/",
+            "https://b.github.io/os.xml"
+        ));
+        assert!(may_fetch(
+            "http://localhost:8000/",
+            "http://localhost:8000/os.xml"
+        ));
+        assert!(!may_fetch("http://10.0.0.1/", "http://10.0.0.2/os.xml"));
+        assert!(!may_fetch(page, "file:///etc/passwd"));
     }
 
     #[test]

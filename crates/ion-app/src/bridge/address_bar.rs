@@ -71,6 +71,16 @@ pub mod qobject {
         #[cxx_name = "wantsSiteSearch"]
         fn wants_site_search(self: &AddressBar, page_url: &QString) -> bool;
 
+        /// Whether the OpenSearch file at `descriptionUrl`, linked from
+        /// `pageUrl`, may be fetched: only from the page's own site.
+        #[qinvokable]
+        #[cxx_name = "maySiteSearchFrom"]
+        fn may_site_search_from(
+            self: &AddressBar,
+            page_url: &QString,
+            description_url: &QString,
+        ) -> bool;
+
         /// Remember the search described by OpenSearch `xml`, found on
         /// `pageUrl`, as a bang for that site. Returns whether it was new.
         #[qinvokable]
@@ -302,6 +312,10 @@ impl qobject::AddressBar {
             return false;
         };
         with_site_searches(|s| !s.engines.knows(&host) && s.tried.insert(host))
+    }
+
+    fn may_site_search_from(&self, page_url: &QString, description_url: &QString) -> bool {
+        opensearch::may_fetch(&page_url.to_string(), &description_url.to_string())
     }
 
     fn add_site_search(&self, page_url: &QString, xml: &QString) -> bool {

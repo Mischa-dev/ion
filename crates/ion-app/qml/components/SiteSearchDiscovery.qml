@@ -18,11 +18,14 @@ QtObject {
         if (!AddressBar.wantsSiteSearch(page))
             return
         view.runJavaScript(findLink, WebEngineScript.ApplicationWorld, href => {
-            if (typeof href !== "string" || !/^https?:\/\//.test(href))
+            // Only the page's own site: this request isn't held to the
+            // web's origin rules.
+            if (typeof href !== "string" || !AddressBar.maySiteSearchFrom(page, href))
                 return
             const xhr = new XMLHttpRequest()
             xhr.onreadystatechange = () => {
-                if (xhr.readyState === XMLHttpRequest.DONE && xhr.status === 200)
+                if (xhr.readyState === XMLHttpRequest.DONE && xhr.status === 200
+                        && AddressBar.maySiteSearchFrom(page, xhr.responseURL || href))
                     AddressBar.addSiteSearch(page, xhr.responseText)
             }
             xhr.open("GET", href)

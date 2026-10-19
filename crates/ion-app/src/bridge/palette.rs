@@ -73,9 +73,17 @@ pub fn current_bangs() -> Arc<BangTable> {
     for error in table.apply(entries) {
         eprintln!("ion: config: {error}");
     }
-    // Sites' own searches fill in triggers nobody else uses.
+    // Sites' own searches fill in triggers nobody else uses, and never one
+    // `[bangs]` names, even to remove it.
     for site in &sites {
         for trigger in site.triggers() {
+            if config
+                .bangs
+                .keys()
+                .any(|k| k.eq_ignore_ascii_case(&trigger))
+            {
+                continue;
+            }
             table.add_if_absent(&trigger, &site.name, &site.template);
         }
     }
