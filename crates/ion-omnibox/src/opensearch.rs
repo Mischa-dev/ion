@@ -373,13 +373,14 @@ fn tags<'a>(xml: &'a str, name: &'a str) -> impl Iterator<Item = &'a str> {
     })
 }
 
+/// The text of the first element named `name` (with or without a namespace
+/// prefix).
 fn element_text<'a>(xml: &'a str, name: &str) -> Option<&'a str> {
-    let start = xml.find(&format!("<{name}"))?;
-    let after = &xml[start..];
-    let open_end = after.find('>')? + 1;
-    let rest = &after[open_end..];
-    let close = rest.find("</")?;
-    Some(&rest[..close])
+    xml.split('<').skip(1).find_map(|chunk| {
+        let (tag, text) = chunk.split_once('>')?;
+        let tag_name = tag.split_whitespace().next()?;
+        (tag_name.rsplit(':').next()? == name && !tag.ends_with('/')).then_some(text)
+    })
 }
 
 fn attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
@@ -725,6 +726,17 @@ mod tests {
             template="https://example.com/s?q={searchTerms}&amp;hl={language}"/>
             </OpenSearchDescription>"#;
         let engine = parse(xml, "example.com").unwrap();
+        assert_eq!(engine.template, "https://example.com/s?q={}&hl=de");
+    }
+
+    #[test]
+    fn prefixed_elements_are_read_too() {
+        let xml = r#"<os:OpenSearchDescription xmlns:os="http://a9.com/-/spec/opensearch/1.1/">
+            <os:ShortName>Docs</os:ShortName><os:Language>de</os:Language>
+            <os:Url type="text/html" template="https://example.com/s?q={searchTerms}&amp;hl={language}"/>
+            </os:OpenSearchDescription>"#;
+        let engine = parse(xml, "example.com").unwrap();
+        assert_eq!(engine.name, "Docs");
         assert_eq!(engine.template, "https://example.com/s?q={}&hl=de");
     }
 
