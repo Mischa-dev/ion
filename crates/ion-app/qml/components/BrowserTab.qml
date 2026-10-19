@@ -15,6 +15,8 @@ WebEngineView {
     // Saved passwords on this tab's pages: `passwords.prompt`, `passwords.formOnPage`.
     readonly property alias passwords: formFill
     readonly property alias findBar: findBar
+    // A dialog (alert, sign-in…) is waiting for this tab to be shown.
+    readonly property bool needsAttention: pageDialog.waiting
     // Ion's own page drawn over this tab, if any (`builtinPage.active`).
     readonly property alias builtinPage: builtinPage
 
@@ -109,6 +111,10 @@ WebEngineView {
     property bool pageSchemeRestored: false
     onLoadingChanged: info => {
         autoplayLoading(info)
+        if (info.status === WebEngineView.LoadSucceededStatus)
+            snapshotSoon.restart()
+        else if (info.status === WebEngineView.LoadStartedStatus && !visible)
+            snapshot = ""
         // Ion's own error page covers Chromium's until something replaces it;
         // a load that only starts, or is stopped, leaves Chromium's in place.
         // HTTPS-first: the https page Ion asked for failed; go back to http
@@ -181,6 +187,36 @@ WebEngineView {
     function zoomOut() { setZoom(Zoom.stepOut(zoomFactor)) }
     function resetZoom() { setZoom(1.0) }
 
+    // A small picture of the page for the tab strips' hover previews, taken
+    // while the tab is on screen: after each load and every so often. Kept as
+    // the grab result, which owns the image `snapshot` points to.
+    // None at all while previews are off (ui.tabPreviews).
+    property url snapshot: ""
+    property var snapshotResult: null
+    readonly property bool snapshots: { Config.revision; return Config.value("ui.tabPreviews") !== false }
+    onSnapshotsChanged: if (!snapshots) { snapshot = ""; snapshotResult = null }
+    function takeSnapshot() {
+        if (!snapshots || !visible || width <= 0 || height <= 0 || loadError.visible)
+            return
+        grabToImage(result => {
+            snapshotResult = result
+            snapshot = result.url
+        }, Qt.size(Theme.previewWidth * Screen.devicePixelRatio,
+                   Math.round(Theme.previewWidth * Screen.devicePixelRatio * height / width)))
+    }
+    Timer {
+        id: snapshotSoon
+        interval: Theme.noticeMs / 2
+        onTriggered: view.takeSnapshot()
+    }
+    Timer {
+        interval: Theme.snapshotMs
+        repeat: true
+        running: view.snapshots && view.visible && Qt.application.state === Qt.ApplicationActive
+        onTriggered: view.takeSnapshot()
+    }
+    onVisibleChanged: if (visible) snapshotSoon.restart()
+
     // Saves the visible area (or the whole page) as a PNG in the downloads
     // folder and copies it to the clipboard.
     function takeScreenshot(fullPage) { screenshotTool.capture(fullPage) }
@@ -197,7 +233,7 @@ WebEngineView {
     PermissionPrompt { view: view; tabId: view.tabId }
     ExternalAppPrompt { id: externalApp; view: view }
     ScreenSharePicker { view: view }
-    PageDialog { view: view }
+    PageDialog { id: pageDialog; view: view }
     WebAuthDialog { view: view }
     ScreenshotTool {
         id: screenshotTool
