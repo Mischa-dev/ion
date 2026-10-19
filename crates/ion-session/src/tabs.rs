@@ -554,16 +554,30 @@ impl TabList {
     }
 
     /// Close the tab at `index`. The current tab stays current; closing the
-    /// current tab activates the next tab to its right in the same strip,
-    /// else the nearest one to its left, else the nearest tab at all.
+    /// current tab activates another pane of its split view, else the next
+    /// tab to its right in the same strip, else the nearest one to its left,
+    /// else the nearest tab at all.
     pub fn close(&mut self, index: usize) -> Option<Tab> {
         if index >= self.tabs.len() {
             return None;
         }
         let strip = self.strip_of(index);
+        // The pane after it (or before, for the last) keeps the split on screen.
+        let pane = self.split_of(index).and_then(|s| {
+            let at = s.tabs.iter().position(|&id| id == self.tabs[index].id)?;
+            s.tabs
+                .get(at + 1)
+                .or(at.checked_sub(1).and_then(|b| s.tabs.get(b)))
+                .copied()
+        });
         let tab = self.tabs.remove(index);
         if index < self.current {
             self.current -= 1;
+        } else if let Some(i) = pane
+            .filter(|_| index == self.current)
+            .and_then(|id| self.index_of(id))
+        {
+            self.current = i;
         } else if index == self.current && !self.tabs.is_empty() {
             let same = |t: &Tab| t.essential || t.workspace == strip;
             self.current = self.tabs[index..]
@@ -963,6 +977,11 @@ impl TabList {
     pub fn pin(&mut self, index: usize, pin: Pin) -> Option<usize> {
         let to = self.pin_target(index, pin)?;
         let workspace = self.current_workspace();
+        // Becoming or ceasing to be an Essential changes which workspaces
+        // show the tab; a split view shows one workspace's tabs.
+        if self.tabs[index].essential != (pin == Pin::Everywhere) {
+            self.unsplit(index);
+        }
         let tab = &mut self.tabs[index];
         if tab.essential && pin != Pin::Everywhere {
             tab.workspace = workspace;
@@ -980,6 +999,14 @@ impl TabList {
     /// address, best first: higher scores, then the most recently used. The
     /// address counts a little less than the title, and without its scheme.
     pub fn search(&self, score: impl Fn(&str) -> Option<i32>) -> Vec<usize> {
+        // Ties in `last_active` (one-second steps, panes stamped together)
+        // go to the tab current more recently.
+        let rank = |i: usize| {
+            self.recent
+                .iter()
+                .position(|&id| id == self.tabs[i].id)
+                .unwrap_or(usize::MAX)
+        };
         let mut hits: Vec<(i32, u64, usize)> = self
             .tabs
             .iter()
@@ -994,7 +1021,12 @@ impl TabList {
                 Some((s, recency, i))
             })
             .collect();
-        hits.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.cmp(&a.1)).then(a.2.cmp(&b.2)));
+        hits.sort_by(|a, b| {
+            b.0.cmp(&a.0)
+                .then(b.1.cmp(&a.1))
+                .then(rank(a.2).cmp(&rank(b.2)))
+                .then(a.2.cmp(&b.2))
+        });
         hits.into_iter().map(|(_, _, i)| i).collect()
     }
 
@@ -1782,6 +1814,37 @@ mod tests {
         let to = l.move_to_workspace(2, work).unwrap();
         assert!(l.split_of(to).is_none());
         assert_eq!(l.split_of(0).unwrap().tabs.len(), 2);
+    }
+
+    #[test]
+    fn closing_the_current_pane_keeps_its_split_on_screen() {
+        let mut l = list(&["a", "b", "c", "d"]);
+        l.split_tabs(0, 2).unwrap();
+        l.split_tabs(0, 3).unwrap();
+        l.activate(1);
+        l.activate(0);
+        l.close(0);
+        assert_eq!(urls(&l)[l.current().unwrap()], "d");
+        assert!(l.current_split().is_some());
+    }
+
+    #[test]
+    fn making_a_pane_an_essential_takes_it_out_of_the_split() {
+        let mut l = list(&["a", "b", "c"]);
+        l.split_tabs(1, 2).unwrap();
+        let e = l.pin(2, Pin::Everywhere).unwrap();
+        assert!(l.split_of(e).is_none());
+        assert!(l.current_split().is_none());
+    }
+
+    #[test]
+    fn blank_search_puts_the_previous_tab_first_within_one_second() {
+        let mut l = list(&["a", "b", "c"]);
+        for i in [0, 1, 2] {
+            l.activate(i);
+            l.note_current(5);
+        }
+        assert_eq!(l.search(|_| Some(0)), [2, 1, 0]);
     }
 
     #[test]
