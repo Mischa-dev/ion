@@ -50,9 +50,15 @@ TextField {
     Connections {
         target: Config
         function onRevisionChanged() {
+            if (field.request) {
+                field.request.abort()
+                field.request = null
+            }
             field.remoteCache = {}
             field.remote = []
             field.remoteQuery = ""
+            if (field.activeFocus)
+                field.fetchRemote()
         }
     }
     // QML has no clipboard API; an invisible text field copies answers.
