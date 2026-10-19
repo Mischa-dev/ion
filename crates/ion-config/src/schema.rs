@@ -36,12 +36,45 @@ pub struct Config {
     pub privacy: Privacy,
     pub passwords: Passwords,
     pub keyboard: Keyboard,
+    pub gestures: Gestures,
     /// Unpacked Chrome extension folders (Manifest V3) loaded at startup,
     /// on top of those in Ion's own extensions folder.
     pub extensions: Vec<String>,
     pub agents: Agents,
     pub safety: Safety,
     pub ai: Ai,
+}
+
+/// `[gestures]`: touchpad and mouse gestures.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Gestures {
+    /// Swipe two fingers sideways on a touchpad to go back or forward.
+    pub swipe: bool,
+    /// What pinching on a touchpad does.
+    pub pinch: PinchAction,
+}
+
+impl Default for Gestures {
+    fn default() -> Self {
+        Self {
+            swipe: true,
+            pinch: PinchAction::Zoom,
+        }
+    }
+}
+
+/// What a touchpad pinch does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PinchAction {
+    /// Page zoom, remembered per site like Ctrl+scroll.
+    #[default]
+    Zoom,
+    /// Chromium's magnifier: the page keeps its layout.
+    Magnify,
+    /// Nothing.
+    Off,
 }
 
 /// One shortcut remap: a key sequence or several.
@@ -692,6 +725,17 @@ mod tests {
             Some("firefox")
         );
         assert!(config.privacy.global_privacy_control);
+    }
+
+    #[test]
+    fn gestures_default_on_and_parse() {
+        let config: Config = toml::from_str("").unwrap();
+        assert!(config.gestures.swipe);
+        assert_eq!(config.gestures.pinch, PinchAction::Zoom);
+        let config: Config =
+            toml::from_str("[gestures]\nswipe = false\npinch = \"magnify\"").unwrap();
+        assert!(!config.gestures.swipe);
+        assert_eq!(config.gestures.pinch, PinchAction::Magnify);
     }
 
     #[test]
