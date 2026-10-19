@@ -127,6 +127,51 @@ pub fn describe(domain: ErrorDomain, code: i32, url: &str, message: &str) -> Opt
     }
 }
 
+/// Why a tab's page process ended, as `WebEngineView.RenderProcessTerminationStatus`
+/// numbers it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Termination {
+    /// Exited normally; nothing to show.
+    Normal,
+    /// Exited with an error code.
+    Abnormal,
+    /// Crashed.
+    Crashed,
+    /// Killed from outside, most often by the system to free memory.
+    Killed,
+}
+
+impl Termination {
+    /// The status for QtWebEngine's `RenderProcessTerminationStatus` value.
+    pub fn from_qt(value: i32) -> Self {
+        match value {
+            0 => Self::Normal,
+            1 => Self::Abnormal,
+            3 => Self::Killed,
+            _ => Self::Crashed,
+        }
+    }
+}
+
+/// The page shown in place of a tab whose page process ended, or `None`
+/// when it ended normally (the tab is closing).
+pub fn crashed(termination: Termination, url: &str) -> Option<LoadError> {
+    let site = site_name(url);
+    // Chromium can't always tell a crash from a kill (the system ending the
+    // process to free memory looks the same from here), so one message
+    // covers both.
+    if termination == Termination::Normal {
+        return None;
+    }
+    let title = format!("{site} stopped working");
+    let detail = "This page's process ended unexpectedly, sometimes because the system \
+                  needed the memory. Your other tabs are fine. Reload to open it again.";
+    Some(LoadError {
+        title,
+        detail: detail.to_owned(),
+    })
+}
+
 /// The host of `url`, or the whole URL when it has none (a file, say).
 fn site_name(url: &str) -> String {
     match url::Url::parse(url) {
@@ -181,6 +226,17 @@ mod tests {
     fn no_page_for_stopped_loads_or_http_errors() {
         assert_eq!(title(ErrorDomain::Internal, -3, "https://a.com/"), None);
         assert_eq!(title(ErrorDomain::HttpStatus, 500, "https://a.com/"), None);
+    }
+
+    #[test]
+    fn crashed_pages_name_the_site() {
+        let page = crashed(Termination::from_qt(2), "https://www.youtube.com/watch?v=1").unwrap();
+        assert_eq!(page.title, "www.youtube.com stopped working");
+        assert!(page.detail.contains("Reload"));
+        let killed = crashed(Termination::from_qt(3), "https://a.com/").unwrap();
+        assert_eq!(killed.title, "a.com stopped working");
+        assert_eq!(crashed(Termination::from_qt(0), "https://a.com/"), None);
+        assert_eq!(Termination::from_qt(1), Termination::Abnormal);
     }
 
     #[test]

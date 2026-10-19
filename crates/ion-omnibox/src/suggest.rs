@@ -402,7 +402,7 @@ fn quick_actions(query: &str) -> Vec<Item> {
     let terms: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
     let mut actions: Vec<(i32, Item)> = COMMANDS
         .iter()
-        .filter(|command| command.id != "focus-url")
+        .filter(|command| !command.hidden && command.id != "focus-url")
         .filter_map(|command| {
             let title = command.title.to_lowercase();
             let words = format!("{title} {}", command.keywords);
@@ -422,7 +422,7 @@ fn quick_actions(query: &str) -> Vec<Item> {
                     kind: Kind::Command,
                     title: command.title.to_owned(),
                     subtitle: String::new(),
-                    hint: command.shortcut.to_owned(),
+                    hint: command.keys.first().copied().unwrap_or_default().to_owned(),
                     action: Action::Run(command.id),
                     score,
                 },
