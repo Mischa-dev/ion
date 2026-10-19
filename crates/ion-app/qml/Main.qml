@@ -322,7 +322,7 @@ ApplicationWindow {
             downloads: downloads
             agentSidebar: agentSidebar
             onBookmarkToggled: window.toggleBookmark()
-            onRunCommand: id => palette.run(id)
+            onRunCommand: id => window.runCommand(id)
         }
     }
 
