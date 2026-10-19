@@ -56,6 +56,24 @@ Item {
         groupTabs = counts
     }
     onWorkspaceChanged: refreshGroups()
+
+    // A tab dragged off the list: over a workspace's dot it would move there,
+    // anywhere else the window decides (split view over the page).
+    function dragOut(index, scenePos) {
+        switcher.dropId = index >= 0 ? switcher.idAt(scenePos) : -1
+        strip.tabDraggedOut(index, switcher.dropId >= 0 ? Qt.point(-1, -1) : scenePos)
+    }
+    function dropOut(index, scenePos) {
+        const id = switcher.idAt(scenePos)
+        switcher.dropId = -1
+        if (id < 0) {
+            strip.tabDroppedOut(index, scenePos)
+            return
+        }
+        // Tell the window the drag is over without opening anything.
+        strip.tabDroppedOut(-1, Qt.point(-1, -1))
+        Tabs.moveToWorkspace(index, id)
+    }
     Component.onCompleted: refreshGroups()
     Connections {
         target: Tabs
@@ -200,8 +218,8 @@ Item {
                         onCloseRequested: index => strip.closeRequested(index)
                         onMoveRequested: (from, to) => strip.moveRequested(from, to)
                         onMenuRequested: index => strip.tabMenuRequested(index)
-                        onDraggedOut: (index, pos) => strip.tabDraggedOut(index, pos)
-                        onDroppedOut: (index, pos) => strip.tabDroppedOut(index, pos)
+                        onDraggedOut: (index, pos) => strip.dragOut(index, pos)
+                        onDroppedOut: (index, pos) => strip.dropOut(index, pos)
                     }
                 }
             }
@@ -210,6 +228,24 @@ Item {
                 id: list
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+
+                // A sideways swipe on the tab list switches workspace (Arc).
+                WheelHandler {
+                    orientation: Qt.Horizontal
+                    acceptedDevices: PointerDevice.TouchPad
+                    property real travel: 0
+                    onWheel: event => {
+                        travel += event.pixelDelta.x !== 0 ? event.pixelDelta.x : event.angleDelta.x / 8
+                        if (Math.abs(travel) < Theme.tabHeight * 2)
+                            return
+                        if (!swipeRest.running)
+                            Tabs.cycleWorkspace(travel > 0 ? -1 : 1)
+                        travel = 0
+                        swipeRest.restart()
+                    }
+                }
+                // One workspace per swipe: the rest of the gesture is ignored.
+                Timer { id: swipeRest; interval: Theme.animationSlowMs * 2 }
                 // Gaps are inside the delegates, so folded tabs leave none.
                 spacing: 0
                 clip: true
@@ -318,8 +354,8 @@ Item {
                         onCloseRequested: index => strip.closeRequested(index)
                         onMoveRequested: (from, to) => strip.moveRequested(from, to)
                         onMenuRequested: index => strip.tabMenuRequested(index)
-                        onDraggedOut: (index, pos) => strip.tabDraggedOut(index, pos)
-                        onDroppedOut: (index, pos) => strip.tabDroppedOut(index, pos)
+                        onDraggedOut: (index, pos) => strip.dragOut(index, pos)
+                        onDroppedOut: (index, pos) => strip.dropOut(index, pos)
                     }
 
                     Rectangle {
@@ -336,10 +372,19 @@ Item {
                 }
             }
 
-            WorkspaceButton {
+            RowLayout {
                 Layout.fillWidth: true
-                compact: !strip.expanded
-                onMenuRequested: anchor => strip.workspaceMenuRequested(anchor)
+                spacing: 0
+
+                WorkspaceButton {
+                    Layout.fillWidth: true
+                    compact: !strip.expanded
+                    onMenuRequested: anchor => strip.workspaceMenuRequested(anchor)
+                }
+                WorkspaceSwitcher {
+                    id: switcher
+                    visible: strip.expanded && workspaces.length > 1
+                }
             }
         }
     }

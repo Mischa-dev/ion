@@ -99,13 +99,16 @@ MouseArea {
 
     onReleased: mouse => {
         const to = target ? target.row : -1
-        // Dropped off the strip: say so before finish() reports the drag over.
-        if (outside)
-            area.droppedOut(index, mapToItem(null, mouse.x, mouse.y))
+        // Dropped off the strip: reported instead of the drag ending
+        // (draggedOut(-1)), and last, as handling it may destroy this tab.
+        const out = outside
+        const scenePos = mapToItem(null, mouse.x, mouse.y)
         outside = false
         finish()
         if (to >= 0)
             area.moveRequested(index, to)
+        else if (out)
+            area.droppedOut(index, scenePos)
     }
     onCanceled: finish()
 

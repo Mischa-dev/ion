@@ -52,6 +52,21 @@ used before the current one.
 The ⋯ menu's "Recently closed" lists the last ten closed tabs; any of them
 can be reopened, not only the latest (Ctrl/Cmd+Shift+T).
 
+## Workspaces
+
+Each workspace keeps its own tabs, pinned tabs and groups; Essentials are
+shared by all of them. With more than one workspace, the sidebar's foot
+shows a dot (or icon) per workspace next to the current one's name:
+
+- Click a dot to switch, or press Ctrl/Cmd+Alt+PgUp / PgDown.
+- Swipe sideways on the tab list with a touchpad to go to the next or
+  previous workspace, one per swipe.
+- Drop a dragged tab on a dot to move it to that workspace; the page stays
+  where it was.
+
+The workspace button opens the menu to add, rename, recolor, reorder or
+delete workspaces.
+
 ## Hover previews
 
 Resting the pointer on a tab shows a card with its full title, its site and
