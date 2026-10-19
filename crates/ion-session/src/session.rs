@@ -61,7 +61,7 @@ pub struct SavedWorkspace {
 }
 
 /// A snapshot of one window's tabs.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Session {
     #[serde(default = "default_version")]
     pub version: u32,
@@ -77,6 +77,22 @@ pub struct Session {
     /// Tab groups, named by their tabs' `group`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub groups: Vec<SavedGroup>,
+    /// Tabs shown side by side.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub splits: Vec<SavedSplit>,
+}
+
+/// A split view as stored on disk.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct SavedSplit {
+    /// Positions in [`Session::tabs`], in pane order.
+    pub tabs: Vec<usize>,
+    /// Each pane's share of the space, in the same order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sizes: Vec<f64>,
+    /// Stacked top to bottom rather than side by side.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub vertical: bool,
 }
 
 fn default_version() -> u32 {
@@ -99,6 +115,7 @@ impl Default for Session {
             current: 0,
             workspaces: Vec::new(),
             groups: Vec::new(),
+            splits: Vec::new(),
         }
     }
 }

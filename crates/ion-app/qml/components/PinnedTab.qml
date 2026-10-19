@@ -24,6 +24,8 @@ Rectangle {
     signal closeRequested(int index)
     signal moveRequested(int from, int to)
     signal menuRequested(int index)
+    signal draggedOut(int index, point scenePos)
+    signal droppedOut(int index, point scenePos)
 
     radius: Theme.radius
     z: tabMouse.dragging ? 1 : 0
@@ -43,6 +45,8 @@ Rectangle {
         onCloseRequested: index => tab.closeRequested(index)
         onMoveRequested: (from, to) => tab.moveRequested(from, to)
         onMenuRequested: index => tab.menuRequested(index)
+        onDraggedOut: (index, pos) => tab.draggedOut(index, pos)
+        onDroppedOut: (index, pos) => tab.droppedOut(index, pos)
     }
 
     TabIcon {

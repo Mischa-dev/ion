@@ -1,6 +1,6 @@
 //! The ordered list of open tabs.
 
-use crate::session::{SavedGroup, SavedTab, SavedWorkspace, Session};
+use crate::session::{SavedGroup, SavedSplit, SavedTab, SavedWorkspace, Session};
 use unicode_segmentation::UnicodeSegmentation;
 
 /// Stable identity of a tab for as long as it is open. Indices shift as tabs
@@ -12,6 +12,46 @@ pub type WorkspaceId = u32;
 
 /// Stable identity of a tab group, saved with the session.
 pub type GroupId = u32;
+
+/// Stable identity of a split view while it exists.
+pub type SplitId = u32;
+
+/// Most tabs one split view shows at once.
+pub const SPLIT_MAX_PANES: usize = 4;
+
+/// Smallest share of the space a pane of a split view can be given.
+pub const SPLIT_MIN_SIZE: f64 = 0.1;
+
+/// Tabs shown side by side (or stacked) while any of them is current.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Split {
+    pub id: SplitId,
+    /// In pane order, left to right (top to bottom when `vertical`).
+    pub tabs: Vec<TabId>,
+    /// Each pane's share of the space, summing to 1.
+    pub sizes: Vec<f64>,
+    pub vertical: bool,
+}
+
+/// `sizes` cut or padded to `n` panes, each at least [`SPLIT_MIN_SIZE`],
+/// scaled to sum to 1. Anything unusable gives equal panes.
+fn normalize_sizes(sizes: &[f64], n: usize) -> Vec<f64> {
+    if n == 0 {
+        return Vec::new();
+    }
+    let usable = sizes.len() == n && sizes.iter().all(|s| s.is_finite() && *s > 0.0);
+    if !usable {
+        return vec![1.0 / n as f64; n];
+    }
+    let total: f64 = sizes.iter().sum();
+    let mut out: Vec<f64> = sizes
+        .iter()
+        .map(|s| (s / total).max(SPLIT_MIN_SIZE))
+        .collect();
+    let total: f64 = out.iter().sum();
+    out.iter_mut().for_each(|s| *s /= total);
+    out
+}
 
 /// Name of the workspace every tab list starts with.
 pub const DEFAULT_WORKSPACE_NAME: &str = "Default";
@@ -137,6 +177,9 @@ pub struct TabList {
     groups: Vec<TabGroup>,
     /// Bumped whenever a group is added, removed or changed.
     groups_revision: u64,
+    splits: Vec<Split>,
+    /// Bumped whenever a split view is added, removed or changed.
+    splits_revision: u64,
 }
 
 impl Default for TabList {
@@ -157,6 +200,8 @@ impl Default for TabList {
             last_current: Vec::new(),
             groups: Vec::new(),
             groups_revision: 0,
+            splits: Vec::new(),
+            splits_revision: 0,
         }
     }
 }
@@ -254,6 +299,28 @@ impl TabList {
                     .filter(|&g| !pinned && list.groups.iter().any(|x| x.id == g)),
             });
         }
+        let saved_ids: Vec<TabId> = list.tabs.iter().map(|t| t.id).collect();
+        for saved in &session.splits {
+            let tabs: Vec<TabId> = saved
+                .tabs
+                .iter()
+                .filter_map(|&i| saved_ids.get(i).copied())
+                .take(SPLIT_MAX_PANES)
+                .collect();
+            let taken = |id: &TabId| list.splits.iter().any(|s| s.tabs.contains(id));
+            if tabs.iter().any(taken) || tabs.iter().enumerate().any(|(i, t)| tabs[..i].contains(t))
+            {
+                continue;
+            }
+            let id = next_free_id(list.splits.iter().map(|s| s.id));
+            list.splits.push(Split {
+                id,
+                sizes: normalize_sizes(&saved.sizes, tabs.len()),
+                tabs,
+                vertical: saved.vertical,
+            });
+        }
+        list.prune_splits();
         let current_id = session
             .tabs
             .len()
@@ -323,6 +390,15 @@ impl TabList {
                     name: g.name.clone(),
                     color: g.color.clone(),
                     collapsed: g.collapsed,
+                })
+                .collect(),
+            splits: self
+                .splits
+                .iter()
+                .map(|s| SavedSplit {
+                    tabs: s.tabs.iter().filter_map(|&id| self.index_of(id)).collect(),
+                    sizes: s.sizes.clone(),
+                    vertical: s.vertical,
                 })
                 .collect(),
             ..Session::default()
@@ -494,6 +570,7 @@ impl TabList {
             });
         }
         self.prune_groups();
+        self.prune_splits();
         self.track_current();
         Some(tab)
     }
@@ -800,6 +877,7 @@ impl TabList {
         self.tabs.clear();
         self.current = 0;
         self.prune_groups();
+        self.prune_splits();
     }
 
     /// Where [`pin`](Self::pin) moves the tab at `index`: the end of the
@@ -1215,6 +1293,184 @@ impl TabList {
             }
         }
         self.prune_groups();
+        true
+    }
+
+    pub fn splits(&self) -> &[Split] {
+        &self.splits
+    }
+
+    /// Changes whenever a split view is added, removed or changed.
+    pub fn splits_revision(&self) -> u64 {
+        self.splits_revision
+    }
+
+    /// The split view showing the tab at `index`, if any.
+    pub fn split_of(&self, index: usize) -> Option<&Split> {
+        let id = self.tabs.get(index)?.id;
+        self.splits.iter().find(|s| s.tabs.contains(&id))
+    }
+
+    /// The split view on screen: the current tab's.
+    pub fn current_split(&self) -> Option<&Split> {
+        self.split_of(self.current()?)
+    }
+
+    /// Drop closed tabs from split views and views left with one tab.
+    fn prune_splits(&mut self) {
+        let before = self.splits.clone();
+        let open: Vec<TabId> = self.tabs.iter().map(|t| t.id).collect();
+        for split in &mut self.splits {
+            let keep: Vec<bool> = split.tabs.iter().map(|id| open.contains(id)).collect();
+            if keep.iter().all(|&k| k) {
+                continue;
+            }
+            let sizes: Vec<f64> = split
+                .sizes
+                .iter()
+                .zip(&keep)
+                .filter(|&(_, &k)| k)
+                .map(|(s, _)| *s)
+                .collect();
+            split.tabs.retain(|id| open.contains(id));
+            split.sizes = normalize_sizes(&sizes, split.tabs.len());
+        }
+        self.splits.retain(|s| s.tabs.len() > 1);
+        if self.splits != before {
+            self.splits_revision += 1;
+        }
+    }
+
+    /// Show the tab at `other` next to the tab at `index`: in `index`'s split
+    /// view right after it, or in a new one of the two. `other` leaves any
+    /// split it was in and joins `index`'s workspace. Panes get equal space.
+    /// Returns the split's id; `None` if either tab is missing, they are the
+    /// same, or the split already has [`SPLIT_MAX_PANES`].
+    pub fn split_tabs(&mut self, index: usize, other: usize) -> Option<SplitId> {
+        let (a, b) = (self.tabs.get(index)?.id, self.tabs.get(other)?.id);
+        if a == b || self.split_of(index).is_some_and(|s| s.tabs.contains(&b)) {
+            return self.split_of(index).map(|s| s.id);
+        }
+        if self
+            .split_of(index)
+            .is_some_and(|s| s.tabs.len() >= SPLIT_MAX_PANES)
+        {
+            return None;
+        }
+        self.unsplit(other);
+        let (workspace, anchor_essential) =
+            (self.tabs[index].workspace, self.tabs[index].essential);
+        let joining = &mut self.tabs[other];
+        if !joining.essential && !anchor_essential && joining.workspace != workspace {
+            joining.workspace = workspace;
+            joining.group = None;
+        }
+        self.normalize_group(other);
+        let id = match self.splits.iter_mut().find(|s| s.tabs.contains(&a)) {
+            Some(split) => {
+                let at = split.tabs.iter().position(|&t| t == a).unwrap_or(0);
+                split.tabs.insert(at + 1, b);
+                split.sizes = normalize_sizes(&[], split.tabs.len());
+                split.id
+            }
+            None => {
+                let id = next_free_id(self.splits.iter().map(|s| s.id));
+                self.splits.push(Split {
+                    id,
+                    tabs: vec![a, b],
+                    sizes: normalize_sizes(&[], 2),
+                    vertical: false,
+                });
+                id
+            }
+        };
+        self.prune_groups();
+        self.splits_revision += 1;
+        Some(id)
+    }
+
+    /// Take the tab at `index` out of its split view; a view left with one
+    /// tab ends. True if it was in one.
+    pub fn unsplit(&mut self, index: usize) -> bool {
+        let Some(id) = self.tabs.get(index).map(|t| t.id) else {
+            return false;
+        };
+        let Some(split) = self.splits.iter_mut().find(|s| s.tabs.contains(&id)) else {
+            return false;
+        };
+        let at = split.tabs.iter().position(|&t| t == id).unwrap_or(0);
+        split.tabs.remove(at);
+        let mut sizes = split.sizes.clone();
+        if at < sizes.len() {
+            sizes.remove(at);
+        }
+        split.sizes = normalize_sizes(&sizes, split.tabs.len());
+        self.splits.retain(|s| s.tabs.len() > 1);
+        self.splits_revision += 1;
+        true
+    }
+
+    /// End split view `id`, keeping its tabs. False if there is none.
+    pub fn end_split(&mut self, id: SplitId) -> bool {
+        let before = self.splits.len();
+        self.splits.retain(|s| s.id != id);
+        if self.splits.len() == before {
+            return false;
+        }
+        self.splits_revision += 1;
+        true
+    }
+
+    /// Set the panes' shares of the space (see [`SPLIT_MIN_SIZE`]). False if
+    /// there is no such split, the count is wrong or nothing changes.
+    pub fn set_split_sizes(&mut self, id: SplitId, sizes: &[f64]) -> bool {
+        let Some(split) = self.splits.iter_mut().find(|s| s.id == id) else {
+            return false;
+        };
+        if sizes.len() != split.tabs.len() {
+            return false;
+        }
+        let sizes = normalize_sizes(sizes, split.tabs.len());
+        if sizes == split.sizes {
+            return false;
+        }
+        split.sizes = sizes;
+        self.splits_revision += 1;
+        true
+    }
+
+    /// Stack the panes top to bottom, or put them side by side. False if
+    /// there is no such split or nothing changes.
+    pub fn set_split_vertical(&mut self, id: SplitId, vertical: bool) -> bool {
+        match self.splits.iter_mut().find(|s| s.id == id) {
+            Some(split) if split.vertical != vertical => {
+                split.vertical = vertical;
+                self.splits_revision += 1;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Swap the pane showing the tab at `index` with its neighbour `step`
+    /// places along (−1 or 1). False at either end.
+    pub fn move_pane(&mut self, index: usize, step: isize) -> bool {
+        let Some(id) = self.tabs.get(index).map(|t| t.id) else {
+            return false;
+        };
+        let Some(split) = self.splits.iter_mut().find(|s| s.tabs.contains(&id)) else {
+            return false;
+        };
+        let at = split.tabs.iter().position(|&t| t == id).unwrap_or(0);
+        let Some(to) = at
+            .checked_add_signed(step)
+            .filter(|&to| to < split.tabs.len())
+        else {
+            return false;
+        };
+        split.tabs.swap(at, to);
+        split.sizes.swap(at, to);
+        self.splits_revision += 1;
         true
     }
 }
@@ -1838,5 +2094,87 @@ mod tests {
         l.close(0);
         assert_eq!(l.search_closed(contains("example")), [0, 1]);
         assert_eq!(l.search_closed(contains("a.ex")), [1]);
+    }
+
+    #[test]
+    fn split_views_hold_two_to_four_tabs() {
+        let mut l = list(&["a", "b", "c", "d", "e", "f"]);
+        let id = l.split_tabs(0, 2).unwrap();
+        assert_eq!(l.split_of(2).unwrap().id, id);
+        assert_eq!(
+            l.current_split().unwrap().tabs,
+            [l.get(0).unwrap().id, l.get(2).unwrap().id]
+        );
+        // A third tab goes right after the one it splits with.
+        l.split_tabs(0, 1);
+        let ids = |l: &TabList| -> Vec<TabId> { l.current_split().unwrap().tabs.clone() };
+        assert_eq!(ids(&l), [0, 1, 2]);
+        assert!((l.current_split().unwrap().sizes[0] - 1.0 / 3.0).abs() < 1e-9);
+        l.split_tabs(2, 3);
+        assert_eq!(l.split_tabs(0, 4), None, "four panes at most");
+        // Splitting with a tab of another split moves it over.
+        l.split_tabs(4, 5);
+        let other = l.split_tabs(4, 3).unwrap();
+        assert_eq!(l.split_of(3).unwrap().id, other);
+        assert_eq!(ids(&l), [0, 1, 2]);
+        assert_eq!(l.split_tabs(0, 0), Some(id));
+    }
+
+    #[test]
+    fn closing_or_unsplitting_ends_a_split_left_with_one_tab() {
+        let mut l = list(&["a", "b", "c"]);
+        l.split_tabs(0, 1);
+        l.split_tabs(0, 2);
+        let rev = l.splits_revision();
+        l.close(1);
+        assert!(l.splits_revision() > rev);
+        assert_eq!(l.split_of(0).unwrap().tabs.len(), 2);
+        assert!(l.unsplit(1));
+        assert!(l.splits().is_empty());
+        assert!(!l.unsplit(0));
+    }
+
+    #[test]
+    fn split_sizes_stay_sane() {
+        let mut l = list(&["a", "b"]);
+        let id = l.split_tabs(0, 1).unwrap();
+        assert!(l.set_split_sizes(id, &[3.0, 1.0]));
+        assert_eq!(l.splits()[0].sizes, [0.75, 0.25]);
+        assert!(!l.set_split_sizes(id, &[3.0, 1.0]));
+        assert!(!l.set_split_sizes(id, &[1.0]));
+        l.set_split_sizes(id, &[1.0, 0.0]);
+        assert_eq!(l.splits()[0].sizes, [0.5, 0.5], "unusable sizes even out");
+        l.set_split_sizes(id, &[0.99, 0.01]);
+        assert!(l.splits()[0].sizes[1] >= SPLIT_MIN_SIZE * 0.9);
+        assert!(l.set_split_vertical(id, true));
+        assert!(l.move_pane(0, 1));
+        assert_eq!(l.splits()[0].tabs, [1, 0]);
+        assert!(!l.move_pane(0, 1));
+        assert!(l.end_split(id));
+        assert!(l.current_split().is_none());
+    }
+
+    #[test]
+    fn splits_survive_a_session_round_trip() {
+        let mut l = list(&["a", "b", "c"]);
+        let id = l.split_tabs(2, 0).unwrap();
+        l.set_split_sizes(id, &[0.6, 0.4]);
+        l.set_split_vertical(id, true);
+        let session = Session::from_json(&l.to_session().to_json()).unwrap();
+        assert_eq!(session.splits[0].tabs, [2, 0]);
+        let back = TabList::from_session(&session);
+        let split = back.split_of(0).unwrap();
+        assert_eq!(
+            split.tabs,
+            [back.get(2).unwrap().id, back.get(0).unwrap().id]
+        );
+        assert!(split.vertical);
+        assert!((split.sizes[0] - 0.6).abs() < 1e-9);
+        // Out of range or repeated tabs are dropped.
+        let mut odd = session.clone();
+        odd.splits[0].tabs = vec![1, 9];
+        assert!(TabList::from_session(&odd).splits().is_empty());
+        odd.splits[0].tabs = vec![1, 1];
+        assert!(TabList::from_session(&odd).splits().is_empty());
     }
 }

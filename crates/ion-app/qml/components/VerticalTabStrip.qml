@@ -24,10 +24,16 @@ Item {
     // a counter bumped whenever it gains or loses a view.
     property var views: null
     property int viewsRevision: 0
+    // Id of the split view on screen, or -1.
+    property int currentSplit: -1
 
     signal activated(int index)
     signal closeRequested(int index)
     signal moveRequested(int from, int to)
+    // A tab dragged off the strip, at `scenePos` in window coordinates;
+    // index -1 when it came back or the drag ended.
+    signal tabDraggedOut(int index, point scenePos)
+    signal tabDroppedOut(int index, point scenePos)
     signal newTabRequested()
     signal searchRequested()
     signal menuRequested(Item anchor)
@@ -193,6 +199,8 @@ Item {
                         onCloseRequested: index => strip.closeRequested(index)
                         onMoveRequested: (from, to) => strip.moveRequested(from, to)
                         onMenuRequested: index => strip.tabMenuRequested(index)
+                        onDraggedOut: (index, pos) => strip.tabDraggedOut(index, pos)
+                        onDroppedOut: (index, pos) => strip.tabDroppedOut(index, pos)
                     }
                 }
             }
@@ -241,6 +249,7 @@ Item {
                     required property bool groupCollapsed
                     required property bool groupFirst
                     required property bool groupLast
+                    required property int split
 
                     readonly property bool grouped: group >= 0
                     readonly property bool folded: grouped && groupCollapsed
@@ -299,12 +308,16 @@ Item {
                         list: slot.ListView.view
                         currentIndex: strip.currentIndex
                         view: strip.viewAt(slot.row)
+                        inSplit: slot.split >= 0
+                        splitShowing: slot.split >= 0 && slot.split === strip.currentSplit
                         showTitle: strip.expanded
                         urlAsTitle: true
                         onActivated: index => strip.activated(index)
                         onCloseRequested: index => strip.closeRequested(index)
                         onMoveRequested: (from, to) => strip.moveRequested(from, to)
                         onMenuRequested: index => strip.tabMenuRequested(index)
+                        onDraggedOut: (index, pos) => strip.tabDraggedOut(index, pos)
+                        onDroppedOut: (index, pos) => strip.tabDroppedOut(index, pos)
                     }
 
                     Rectangle {

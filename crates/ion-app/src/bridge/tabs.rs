@@ -24,6 +24,7 @@ pub mod qobject {
         type QHash_i32_QByteArray = cxx_qt_lib::QHash<cxx_qt_lib::QHashPair_i32_QByteArray>;
         include!("cxx-qt-lib/qlist.h");
         type QList_i32 = cxx_qt_lib::QList<i32>;
+        type QList_f64 = cxx_qt_lib::QList<f64>;
         include!("cxx-qt-lib/qmodelindex.h");
         type QModelIndex = cxx_qt_lib::QModelIndex;
         include!("cxx-qt-lib/qstring.h");
@@ -189,6 +190,48 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "searchTabs"]
         fn search_tabs(self: &Tabs, query: &QString) -> QString;
+
+        /// Split views were added, removed or changed.
+        #[qsignal]
+        #[cxx_name = "splitsChanged"]
+        fn splits_changed(self: Pin<&mut Tabs>);
+
+        /// Show the tab at `other` next to the tab at `index`, in `index`'s
+        /// split view or a new one. Returns the split's id, or -1 when it is
+        /// full.
+        #[qinvokable]
+        #[cxx_name = "splitTabs"]
+        fn split_tabs(self: Pin<&mut Tabs>, index: i32, other: i32) -> i32;
+
+        /// Take the tab at `index` out of its split view.
+        #[qinvokable]
+        fn unsplit(self: Pin<&mut Tabs>, index: i32);
+
+        #[qinvokable]
+        #[cxx_name = "endSplit"]
+        fn end_split(self: Pin<&mut Tabs>, id: i32);
+
+        /// Each pane's share of the space, in pane order.
+        #[qinvokable]
+        #[cxx_name = "setSplitSizes"]
+        fn set_split_sizes(self: Pin<&mut Tabs>, id: i32, sizes: &QList_f64);
+
+        /// Stack the panes top to bottom, or side by side.
+        #[qinvokable]
+        #[cxx_name = "setSplitVertical"]
+        fn set_split_vertical(self: Pin<&mut Tabs>, id: i32, vertical: bool);
+
+        /// Swap the pane of the tab at `index` with its neighbour `step` (−1 or
+        /// 1) places along.
+        #[qinvokable]
+        #[cxx_name = "movePane"]
+        fn move_pane(self: Pin<&mut Tabs>, index: i32, step: i32);
+
+        /// The split view on screen as JSON `{id, tabs, sizes, vertical}`
+        /// (`tabs` are rows, in pane order), or `null`.
+        #[qinvokable]
+        #[cxx_name = "currentSplit"]
+        fn current_split(self: &Tabs) -> QString;
 
         /// Id of the group of the tab at `index`, or -1.
         #[qinvokable]
@@ -445,6 +488,7 @@ const ROLE_GROUP_COLLAPSED: i32 = ROLE_ID + 12;
 const ROLE_GROUP_FIRST: i32 = ROLE_ID + 13;
 const ROLE_GROUP_LAST: i32 = ROLE_ID + 14;
 const ROLE_SECTION_END: i32 = ROLE_ID + 15;
+const ROLE_SPLIT: i32 = ROLE_ID + 16;
 
 /// Roles a move, pin or group change can change for other rows than the
 /// tab's own; see `rows_shifted`.
@@ -469,6 +513,7 @@ pub struct TabsRust {
     restoring: bool,
     workspace: i32,
     groups_revision: u64,
+    splits_revision: u64,
 }
 
 impl Default for TabsRust {
@@ -482,6 +527,7 @@ impl Default for TabsRust {
             restoring: false,
             workspace: 0,
             groups_revision: 0,
+            splits_revision: 0,
         }
     }
 }
@@ -534,6 +580,12 @@ impl qobject::Tabs {
                         .is_none_or(|t| t.group != tab.group);
                 QVariant::from(&edge)
             }
+            ROLE_SPLIT => QVariant::from(
+                &self
+                    .list
+                    .split_of(index.row() as usize)
+                    .map_or(-1, |s| s.id as i32),
+            ),
             ROLE_SECTION_END => {
                 let next = self
                     .list
@@ -565,6 +617,7 @@ impl qobject::Tabs {
         roles.insert(ROLE_GROUP_FIRST, QByteArray::from("groupFirst"));
         roles.insert(ROLE_GROUP_LAST, QByteArray::from("groupLast"));
         roles.insert(ROLE_SECTION_END, QByteArray::from("sectionEnd"));
+        roles.insert(ROLE_SPLIT, QByteArray::from("split"));
         roles
     }
 
@@ -604,6 +657,12 @@ impl qobject::Tabs {
             self.as_mut().rust_mut().groups_revision = revision;
             self.as_mut().rows_shifted(0);
             self.as_mut().groups_changed();
+        }
+        let revision = self.list.splits_revision();
+        if self.splits_revision != revision {
+            self.as_mut().rust_mut().splits_revision = revision;
+            self.as_mut().rows_shifted(0);
+            self.as_mut().splits_changed();
         }
         self.session_changed();
     }
@@ -961,6 +1020,68 @@ impl qobject::Tabs {
                 }),
         );
         QString::from(serde_json::Value::Array(rows).to_string().as_str())
+    }
+
+    fn split_tabs(mut self: Pin<&mut Self>, index: i32, other: i32) -> i32 {
+        let len = self.list.len();
+        let (Some(a), Some(b)) = (to_index(index, len), to_index(other, len)) else {
+            return -1;
+        };
+        let id = self.as_mut().rust_mut().list.split_tabs(a, b);
+        self.as_mut().rows_shifted(0);
+        self.sync();
+        id.map_or(-1, |id| id as i32)
+    }
+
+    fn unsplit(mut self: Pin<&mut Self>, index: i32) {
+        if let Some(i) = to_index(index, self.list.len()) {
+            self.as_mut().rust_mut().list.unsplit(i);
+            self.sync();
+        }
+    }
+
+    fn end_split(mut self: Pin<&mut Self>, id: i32) {
+        if let Ok(id) = u32::try_from(id) {
+            self.as_mut().rust_mut().list.end_split(id);
+            self.sync();
+        }
+    }
+
+    fn set_split_sizes(mut self: Pin<&mut Self>, id: i32, sizes: &QList<f64>) {
+        if let Ok(id) = u32::try_from(id) {
+            let sizes: Vec<f64> = sizes.iter().copied().collect();
+            self.as_mut().rust_mut().list.set_split_sizes(id, &sizes);
+            self.sync();
+        }
+    }
+
+    fn set_split_vertical(mut self: Pin<&mut Self>, id: i32, vertical: bool) {
+        if let Ok(id) = u32::try_from(id) {
+            self.as_mut()
+                .rust_mut()
+                .list
+                .set_split_vertical(id, vertical);
+            self.sync();
+        }
+    }
+
+    fn move_pane(mut self: Pin<&mut Self>, index: i32, step: i32) {
+        if let Some(i) = to_index(index, self.list.len()) {
+            self.as_mut().rust_mut().list.move_pane(i, step as isize);
+            self.sync();
+        }
+    }
+
+    fn current_split(&self) -> QString {
+        let value = self.list.current_split().map_or(serde_json::Value::Null, |s| {
+            serde_json::json!({
+                "id": s.id,
+                "tabs": s.tabs.iter().filter_map(|&id| self.list.index_of(id)).collect::<Vec<_>>(),
+                "sizes": s.sizes,
+                "vertical": s.vertical,
+            })
+        });
+        QString::from(value.to_string().as_str())
     }
 
     fn group_at(&self, index: i32) -> i32 {

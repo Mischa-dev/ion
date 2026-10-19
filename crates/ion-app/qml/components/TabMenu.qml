@@ -19,6 +19,10 @@ IonMenu {
     property var groups: []
     property int group: -1
     property int pin: 0
+    // The split view showing the tab, as `{id, tabs, sizes, vertical}`, or
+    // null; and whether the current tab's split has room for one more.
+    property var split: null
+    property bool splitHasRoom: true
     // Workspaces as `{id, name, color, tabs}`, refreshed when the menu opens.
     property var workspaces: []
     // The tab the menu was opened on, and its web view.
@@ -46,6 +50,9 @@ IonMenu {
         groups = JSON.parse(Tabs.groups(Tabs.workspace))
         group = Tabs.groupAt(tabIndex)
         pin = Tabs.pinnedAt(tabIndex)
+        const current = JSON.parse(Tabs.currentSplit())
+        split = current && current.tabs.includes(tabIndex) ? current : null
+        splitHasRoom = !current || current.tabs.length < 4
         popup()
     }
 
@@ -79,6 +86,44 @@ IonMenu {
         // The current tab is always awake; see general.suspendTabsAfter.
         enabled: !root.isCurrent && !(root.view?.suspended ?? true)
         onTriggered: Tabs.setSuspended(root.index, true)
+    }
+
+    IonMenuSeparator {}
+
+    IonMenuItem {
+        text: qsTr("Open in split view")
+        visible: !root.isCurrent && !root.split && root.splitHasRoom
+        height: visible ? implicitHeight : 0
+        onTriggered: Tabs.splitTabs(Tabs.currentIndex, root.index)
+    }
+    IonMenuItem {
+        text: qsTr("Split with a new tab")
+        visible: root.isCurrent && root.splitHasRoom
+        height: visible ? implicitHeight : 0
+        onTriggered: {
+            const index = Tabs.openTabNextToCurrent("", false)
+            Tabs.splitTabs(root.index, index)
+            Tabs.activate(index)
+            root.browser.focusUrlBar()
+        }
+    }
+    IonMenuItem {
+        text: root.split?.vertical ? qsTr("Panes side by side") : qsTr("Stack panes")
+        visible: root.split !== null
+        height: visible ? implicitHeight : 0
+        onTriggered: Tabs.setSplitVertical(root.split.id, !root.split.vertical)
+    }
+    IonMenuItem {
+        text: qsTr("Remove from split view")
+        visible: root.split !== null
+        height: visible ? implicitHeight : 0
+        onTriggered: Tabs.unsplit(root.index)
+    }
+    IonMenuItem {
+        text: qsTr("End split view")
+        visible: root.split !== null
+        height: visible ? implicitHeight : 0
+        onTriggered: Tabs.endSplit(root.split.id)
     }
 
     IonMenuSeparator {}

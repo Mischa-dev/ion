@@ -16,5 +16,7 @@ pub mod session;
 pub mod tabs;
 
 pub use history::{History, HistoryEntry};
-pub use session::{SavedGroup, SavedTab, SavedWorkspace, Session, SessionStore};
-pub use tabs::{ClosedTab, GroupId, Tab, TabGroup, TabId, TabList, Workspace, WorkspaceId};
+pub use session::{SavedGroup, SavedSplit, SavedTab, SavedWorkspace, Session, SessionStore};
+pub use tabs::{
+    ClosedTab, GroupId, Split, SplitId, Tab, TabGroup, TabId, TabList, Workspace, WorkspaceId,
+};

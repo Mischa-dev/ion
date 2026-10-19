@@ -100,6 +100,12 @@ pub const COMMANDS: &[Command] = &[
         "find switch recently closed",
         &["Ctrl+Shift+A"],
     ),
+    command(
+        "split-view",
+        "Split view",
+        "side by side tile two tabs",
+        &["Ctrl+Alt+S"],
+    ),
     command("next-tab", "Next tab", "switch right", NEXT_TAB),
     command("previous-tab", "Previous tab", "switch left", PREVIOUS_TAB),
     command(

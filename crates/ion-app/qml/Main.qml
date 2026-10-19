@@ -89,6 +89,70 @@ ApplicationWindow {
         rows.forEach(i => Tabs.closeTab(i))
     }
 
+    // The tab used before the current one, or -1.
+    function previousTab() {
+        const previous = JSON.parse(Tabs.searchTabs("")).find(r => r.kind === "tab" && !r.current)
+        return previous ? previous.index : -1
+    }
+
+    // A tab dragged off a strip (`index` -1 once it is back or let go). Pressing
+    // it made it current, so the page goes back to the tab shown before, and
+    // the drop hint says which side the dragged tab would open on.
+    property int draggedOutRow: -1
+    function dragTabOverPage(index, scenePos) {
+        if (index < 0) {
+            panes.showDrop(null)
+            if (draggedOutRow >= 0)
+                Tabs.activate(draggedOutRow)
+            draggedOutRow = -1
+            return
+        }
+        if (draggedOutRow < 0) {
+            draggedOutRow = index
+            const previous = previousTab()
+            if (previous >= 0)
+                Tabs.activate(previous)
+        }
+        panes.showDrop(panes.mapFromItem(null, scenePos))
+    }
+
+    // Let go over the page, the dragged tab opens beside the page shown, on
+    // the side it was dropped.
+    function dropTabOnPage(index, scenePos) {
+        panes.showDrop(panes.mapFromItem(null, scenePos))
+        const side = panes.dropSide
+        panes.showDrop(null)
+        draggedOutRow = -1
+        if (side.length === 0 || index < 0 || index === Tabs.currentIndex) {
+            if (index >= 0)
+                Tabs.activate(index)
+            return
+        }
+        if (Tabs.splitTabs(Tabs.currentIndex, index) >= 0 && side === "left")
+            Tabs.movePane(index, -1)
+        Tabs.activate(index)
+    }
+
+    // Ctrl/Cmd+Alt+S: put the current tab side by side with the tab used
+    // before it (a new tab if there is none), or end its split view.
+    function toggleSplit() {
+        const split = JSON.parse(Tabs.currentSplit())
+        if (split) {
+            Tabs.endSplit(split.id)
+            return
+        }
+        const current = Tabs.currentIndex
+        const previous = previousTab()
+        if (previous >= 0) {
+            Tabs.splitTabs(current, previous)
+        } else {
+            const index = Tabs.openTabNextToCurrent("", false)
+            Tabs.splitTabs(Tabs.currentIndex, index)
+            Tabs.activate(index)
+            window.focusUrlBar()
+        }
+    }
+
     function newTab() {
         window.openTab("")
         window.focusUrlBar()
@@ -312,6 +376,8 @@ ApplicationWindow {
             onActivated: index => Tabs.activate(index)
             onCloseRequested: index => window.closeTab(index)
             onMoveRequested: (from, to) => Tabs.moveTab(from, to)
+            onTabDraggedOut: (index, pos) => window.dragTabOverPage(index, pos)
+            onTabDroppedOut: (index, pos) => window.dropTabOnPage(index, pos)
             onNewTabRequested: window.newTab()
             onSearchRequested: tabSearch.show()
             onMenuRequested: anchor => sessionMenu.open(anchor)
@@ -320,6 +386,7 @@ ApplicationWindow {
             onWorkspaceMenuRequested: anchor => workspaceMenu.open(anchor)
             views: views
             viewsRevision: window.viewsRevision
+            currentSplit: panes.split ? panes.split.id : -1
         }
 
         NavigationBar {
@@ -356,6 +423,8 @@ ApplicationWindow {
             onActivated: index => Tabs.activate(index)
             onCloseRequested: index => window.closeTab(index)
             onMoveRequested: (from, to) => Tabs.moveTab(from, to)
+            onTabDraggedOut: (index, pos) => window.dragTabOverPage(index, pos)
+            onTabDroppedOut: (index, pos) => window.dropTabOnPage(index, pos)
             onNewTabRequested: window.newTab()
             onSearchRequested: tabSearch.show()
             onMenuRequested: anchor => sessionMenu.open(anchor)
@@ -364,12 +433,18 @@ ApplicationWindow {
             onWorkspaceMenuRequested: anchor => workspaceMenu.open(anchor)
             views: views
             viewsRevision: window.viewsRevision
+            currentSplit: panes.split ? panes.split.id : -1
         }
 
-        // One web view per tab, stacked; only the current one is visible.
+        // One web view per tab, stacked; only the current one is visible, or
+        // the panes of its split view.
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
+
+            // Above the views: the current pane's outline, resize handles and
+            // the drop hint for tabs dragged onto the page.
+            SplitPanes { id: panes; anchors.fill: parent; z: 1 }
 
             Repeater {
                 id: views
@@ -386,6 +461,8 @@ ApplicationWindow {
                     required property int index
                     required property bool suspended
                     readonly property bool current: index === Tabs.currentIndex
+                    readonly property bool inSplit: panes.paneOf(index) >= 0
+                    readonly property rect pane: panes.rectFor(index, panes.width, panes.height, panes.sizes)
                     // Background tabs restored from a session load when first shown.
                     property bool deferred: false
 
@@ -395,9 +472,24 @@ ApplicationWindow {
                             url = target
                     }
 
-                    anchors.fill: parent
-                    visible: current
+                    x: pane.x
+                    y: pane.y
+                    width: pane.width
+                    height: pane.height
+                    visible: current || inSplit
                     profile: window.profile
+                    // Clicking into a pane of a split view makes its tab current;
+                    // the click still reaches the page.
+                    MouseArea {
+                        anchors.fill: parent
+                        z: 1
+                        enabled: view.inSplit && !view.current
+                        acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
+                        onPressed: mouse => {
+                            Tabs.activate(view.index)
+                            mouse.accepted = false
+                        }
+                    }
                     // A suspended tab's page is unloaded; it reloads when shown.
                     lifecycleState: suspended ? WebEngineView.LifecycleState.Discarded
                                               : WebEngineView.LifecycleState.Active

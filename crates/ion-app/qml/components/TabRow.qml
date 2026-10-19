@@ -22,6 +22,9 @@ Rectangle {
     property bool showTitle: true
     // Untitled tabs show their address instead of "New Tab" (the sidebar).
     property bool urlAsTitle: false
+    // In a split view, and whether that view is on screen.
+    property bool inSplit: false
+    property bool splitShowing: false
 
     readonly property bool current: row === currentIndex
     readonly property bool hovered: tabMouse.containsMouse || closeButton.hovered || audio.hovered
@@ -30,12 +33,14 @@ Rectangle {
     signal closeRequested(int index)
     signal moveRequested(int from, int to)
     signal menuRequested(int index)
+    signal draggedOut(int index, point scenePos)
+    signal droppedOut(int index, point scenePos)
 
     radius: Theme.radius
     z: tabMouse.dragging ? 1 : 0
     transform: Translate { x: tabMouse.dragX; y: tabMouse.dragY }
     color: tabMouse.dragging ? Theme.surfaceHover
-         : current ? Theme.surface : tabMouse.containsMouse ? Theme.surfaceRaised : "transparent"
+         : current ? Theme.surface : tabMouse.containsMouse || splitShowing ? Theme.surfaceRaised : "transparent"
 
     Behavior on color { ColorAnimation { duration: Theme.animationMs } }
 
@@ -47,6 +52,8 @@ Rectangle {
         onCloseRequested: index => tab.closeRequested(index)
         onMoveRequested: (from, to) => tab.moveRequested(from, to)
         onMenuRequested: index => tab.menuRequested(index)
+        onDraggedOut: (index, pos) => tab.draggedOut(index, pos)
+        onDroppedOut: (index, pos) => tab.droppedOut(index, pos)
     }
 
     RowLayout {
@@ -60,6 +67,15 @@ Rectangle {
             view: tab.view
             savedIcon: tab.icon
             opacity: tab.suspended ? Theme.dimmedOpacity : 1
+        }
+
+        // Split views are marked so it's clear which tabs open together.
+        Text {
+            Layout.alignment: Qt.AlignVCenter
+            visible: tab.inSplit && tab.showTitle
+            text: "◫"
+            color: tab.splitShowing ? Theme.accent : Theme.textMuted
+            font.pixelSize: Theme.fontSize
         }
 
         Text {

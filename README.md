@@ -80,6 +80,7 @@ that site's search: press Tab to switch to it.
 | New / close tab | Ctrl/Cmd+T / Ctrl/Cmd+W |
 | Reopen closed tab | Ctrl/Cmd+Shift+T |
 | Search tabs | Ctrl/Cmd+Shift+A |
+| Split view on / off | Ctrl/Cmd+Alt+S |
 | Focus location bar | Ctrl/Cmd+L, Alt+D, F6 |
 | Next / previous tab | Ctrl+Tab / Ctrl+Shift+Tab |
 | Reload | Ctrl/Cmd+R, F5 |

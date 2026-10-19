@@ -54,7 +54,6 @@ Item {
     // Show where a tab dragged from the strip would land; `point` is in this
     // item's coordinates, or null to hide the hint.
     function showDrop(point) {
-        console.warn("SHOWDROP", point)
         if (!point || point.x < 0 || point.y < 0 || point.x > width || point.y > height)
             dropSide = ""
         else
@@ -142,12 +141,24 @@ Item {
         border.width: Theme.groupLineWidth
         border.color: Theme.accent
 
-        Text {
+        // On a chip, so it reads over any page.
+        Rectangle {
             anchors.centerIn: parent
-            text: qsTr("Open in split view")
-            color: Theme.text
-            font.pixelSize: Theme.fontSize + 2
-            font.bold: true
+            width: hint.implicitWidth + Theme.spacing * 4
+            height: hint.implicitHeight + Theme.spacing * 2
+            radius: height / 2
+            color: Theme.surface
+            border.color: Theme.border
+            border.width: 1
+
+            Text {
+                id: hint
+                anchors.centerIn: parent
+                text: qsTr("Open in split view")
+                color: Theme.text
+                font.pixelSize: Theme.fontSize + 2
+                font.bold: true
+            }
         }
     }
 }

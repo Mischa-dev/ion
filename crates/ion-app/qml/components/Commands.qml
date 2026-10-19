@@ -7,7 +7,7 @@ import Ion
 //
 // `browser` (the main window) provides openTab(url), newTab(), closeTab(i),
 // closeOtherTabs(i), focusUrlBar(), toggleBookmark(), showImport(),
-// showExtensions(), toggleFullScreen(), searchTabs(), askAgent(input), startAgentQuestion(),
+// showExtensions(), toggleFullScreen(), searchTabs(), toggleSplit(), askAgent(input), startAgentQuestion(),
 // toggleAgentSidebar(), showAgentActivity(), profile and currentView.
 Item {
     id: root
@@ -43,6 +43,7 @@ Item {
         case "duplicate-tab": browser.openTab(view ? view.url : ""); break
         case "reopen-tab": Tabs.reopenClosedTab(); break
         case "search-tabs": browser.searchTabs(); break
+        case "split-view": browser.toggleSplit(); break
         case "next-tab": Tabs.cycle(1); break
         case "previous-tab": Tabs.cycle(-1); break
         case "move-tab-left": Tabs.moveTab(Tabs.currentIndex, Tabs.neighbour(Tabs.currentIndex, -1)); break

@@ -51,3 +51,20 @@ used before the current one.
 
 The ⋯ menu's "Recently closed" lists the last ten closed tabs; any of them
 can be reopened, not only the latest (Ctrl/Cmd+Shift+T).
+
+## Split view
+
+Up to four tabs can share the page area, side by side or stacked:
+
+- Drag a tab from either strip onto the page; the half it would take
+  lights up, and letting go opens it there next to the page shown.
+- Ctrl/Cmd+Alt+S splits the current tab with the tab used before it (or a
+  new tab), and ends the split when pressed again.
+- A tab's menu has "Open in split view", "Split with a new tab", "Stack
+  panes", "Remove from split view" and "End split view".
+
+Clicking into a pane makes its tab the current one, outlined in the accent
+color; the toolbar and shortcuts act on it. Drag the bar between panes to
+resize them. Tabs in a split view are marked ◫ in the strips, and choosing
+any of them brings the whole split back. Splits are saved with the session;
+closing a tab takes it out of its split, and a split left with one tab ends.
