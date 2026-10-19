@@ -71,21 +71,13 @@ pub mod qobject {
         #[cxx_name = "wantsSiteSearch"]
         fn wants_site_search(self: &AddressBar, page_url: &QString) -> bool;
 
-        /// Whether the OpenSearch file at `descriptionUrl`, linked from
-        /// `pageUrl`, may be fetched: only from the page's own site.
+        /// Look up, in the background, the search that the OpenSearch
+        /// file at `descriptionUrl` (linked from `pageUrl`) describes, and
+        /// remember it as a bang for that site. Only the page's own site is
+        /// asked, redirects included.
         #[qinvokable]
-        #[cxx_name = "maySiteSearchFrom"]
-        fn may_site_search_from(
-            self: &AddressBar,
-            page_url: &QString,
-            description_url: &QString,
-        ) -> bool;
-
-        /// Remember the search described by OpenSearch `xml`, found on
-        /// `pageUrl`, as a bang for that site. Returns whether it was new.
-        #[qinvokable]
-        #[cxx_name = "addSiteSearch"]
-        fn add_site_search(self: &AddressBar, page_url: &QString, xml: &QString) -> bool;
+        #[cxx_name = "discoverSiteSearch"]
+        fn discover_site_search(self: &AddressBar, page_url: &QString, description_url: &QString);
 
         /// The suggestions in a search engine's `body`, without `query`.
         #[qinvokable]
@@ -195,6 +187,23 @@ fn page_host(page_url: &str) -> Option<String> {
         return None;
     }
     Some(url.host_str()?.trim_start_matches("www.").to_lowercase())
+}
+
+/// Remembers the search described by OpenSearch `xml`, found on `page_url`.
+fn learn_site_search(page_url: &str, xml: &str) {
+    let Some(host) = page_host(page_url) else {
+        return;
+    };
+    let Some(engine) = opensearch::parse(xml, &host) else {
+        return;
+    };
+    with_site_searches(|s| {
+        // Only answers to a look this run asked for: clearing history
+        // forgets the pending ones too.
+        if s.tried.contains(&host) && s.engines.add(engine) {
+            s.changed();
+        }
+    });
 }
 
 /// `History.search()`'s or `History.chosen()`'s JSON as pages.
@@ -314,26 +323,14 @@ impl qobject::AddressBar {
         with_site_searches(|s| !s.engines.knows(&host) && s.tried.insert(host))
     }
 
-    fn may_site_search_from(&self, page_url: &QString, description_url: &QString) -> bool {
-        opensearch::may_fetch(&page_url.to_string(), &description_url.to_string())
-    }
-
-    fn add_site_search(&self, page_url: &QString, xml: &QString) -> bool {
-        let Some(host) = page_host(&page_url.to_string()) else {
-            return false;
-        };
-        let Some(engine) = opensearch::parse(&xml.to_string(), &host) else {
-            return false;
-        };
-        with_site_searches(|s| {
-            // Only answers to a look this run asked for: clearing history
-            // forgets the pending ones too.
-            if !s.tried.contains(&host) || !s.engines.add(engine) {
-                return false;
+    fn discover_site_search(&self, page_url: &QString, description_url: &QString) {
+        let page = page_url.to_string();
+        let description = description_url.to_string();
+        std::thread::spawn(move || {
+            if let Some(xml) = opensearch::fetch(&page, &description) {
+                learn_site_search(&page, &xml);
             }
-            s.changed();
-            true
-        })
+        });
     }
 
     fn parse_suggestions(&self, body: &QString, query: &QString) -> QStringList {

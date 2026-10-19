@@ -7,10 +7,18 @@
 //! Each found engine becomes a bang (`!youtube`, `!docs.rs`) alongside the
 //! built-in ones, never replacing a bang that already exists.
 
+use std::time::Duration;
+
 use serde::{Deserialize, Serialize};
 
 /// Sites remembered at most; the oldest are dropped first.
 pub const MAX_ENGINES: usize = 300;
+
+/// Redirects followed at most while fetching a description.
+const MAX_HOPS: usize = 3;
+
+/// Descriptions are a few KB; anything far bigger isn't one.
+const MAX_DESCRIPTION_BYTES: u64 = 256 * 1024;
 
 /// One site's search.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -110,6 +118,42 @@ pub fn may_fetch(page: &str, description: &str) -> bool {
         return false;
     };
     secure_enough && same_site(&page_host.to_lowercase(), &host.to_lowercase())
+}
+
+/// Fetches the OpenSearch description at `description`, linked from `page`.
+/// Every address on the way, each redirect included, has to pass
+/// [`may_fetch`] before it is requested. Blocks; sends no cookies.
+pub fn fetch(page: &str, description: &str) -> Option<String> {
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_global(Some(Duration::from_secs(10)))
+        .max_redirects(0)
+        .http_status_as_error(false)
+        .user_agent(concat!("Ion/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .into();
+    let mut address = url::Url::parse(description).ok()?;
+    for _ in 0..=MAX_HOPS {
+        if !may_fetch(page, address.as_str()) {
+            return None;
+        }
+        let mut response = agent.get(address.as_str()).call().ok()?;
+        let status = response.status();
+        if status.is_redirection() {
+            let location = response.headers().get("location")?.to_str().ok()?;
+            address = address.join(location).ok()?;
+            continue;
+        }
+        if status != 200 {
+            return None;
+        }
+        return response
+            .body_mut()
+            .with_config()
+            .limit(MAX_DESCRIPTION_BYTES)
+            .read_to_string()
+            .ok();
+    }
+    None
 }
 
 /// Whether two hosts belong to one site: equal, or one a subdomain of the
@@ -338,6 +382,63 @@ mod tests {
         ));
         assert!(!may_fetch("http://10.0.0.1/", "http://10.0.0.2/os.xml"));
         assert!(!may_fetch(page, "file:///etc/passwd"));
+    }
+
+    /// Serves `responses` in order on a local port, one per connection,
+    /// and returns the address and how many requests it got.
+    fn serve(responses: Vec<String>) -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+        use std::io::{Read, Write};
+        use std::sync::atomic::Ordering;
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
+        let hits = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = hits.clone();
+        std::thread::spawn(move || {
+            for response in responses {
+                let Ok((mut stream, _)) = listener.accept() else {
+                    return;
+                };
+                counter.fetch_add(1, Ordering::SeqCst);
+                let mut request = [0; 4096];
+                let _ = stream.read(&mut request);
+                let _ = stream.write_all(response.as_bytes());
+            }
+        });
+        (address, hits)
+    }
+
+    fn reply(status: &str, headers: &str, body: &str) -> String {
+        format!(
+            "HTTP/1.1 {status}\r\n{headers}Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        )
+    }
+
+    #[test]
+    fn fetches_a_description_through_same_site_redirects() {
+        let xml = "<OpenSearchDescription/>";
+        let (base, hits) = serve(vec![
+            reply("302 Found", "Location: /real.xml\r\n", ""),
+            reply("200 OK", "", xml),
+        ]);
+        let page = format!("{base}/");
+        assert_eq!(
+            fetch(&page, &format!("{base}/os.xml")).as_deref(),
+            Some(xml)
+        );
+        assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn never_follows_a_redirect_off_the_site() {
+        let (base, _) = serve(vec![reply(
+            "302 Found",
+            "Location: http://10.0.0.1/admin/reboot\r\n",
+            "",
+        )]);
+        let page = format!("{base}/");
+        // 10.0.0.1 is never contacted: the hop is refused before any request.
+        assert_eq!(fetch(&page, &format!("{base}/os.xml")), None);
     }
 
     #[test]
