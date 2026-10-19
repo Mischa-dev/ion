@@ -17,6 +17,9 @@ pub type GroupId = u32;
 pub type SplitId = u32;
 
 /// Most tabs one split view shows at once.
+/// How many tabs [`TabList::previous_tab`] remembers.
+const RECENT_MAX: usize = 32;
+
 pub const SPLIT_MAX_PANES: usize = 4;
 
 /// Smallest share of the space a pane of a split view can be given.
@@ -174,6 +177,8 @@ pub struct TabList {
     shown_workspace: WorkspaceId,
     /// Each workspace's last current tab, to return to when switching back.
     last_current: Vec<(WorkspaceId, TabId)>,
+    /// Tabs in the order they were last current, most recent first.
+    recent: Vec<TabId>,
     groups: Vec<TabGroup>,
     /// Bumped whenever a group is added, removed or changed.
     groups_revision: u64,
@@ -198,6 +203,7 @@ impl Default for TabList {
             }],
             shown_workspace: 0,
             last_current: Vec::new(),
+            recent: Vec::new(),
             groups: Vec::new(),
             groups_revision: 0,
             splits: Vec::new(),
@@ -835,6 +841,11 @@ impl TabList {
         {
             self.tabs[i].last_active = now;
         }
+        if self.seen_current != Some(current_id) {
+            self.recent.retain(|&id| id != current_id);
+            self.recent.insert(0, current_id);
+            self.recent.truncate(RECENT_MAX);
+        }
         self.seen_current = Some(current_id);
         if !self.tabs[current].essential {
             let workspace = self.tabs[current].workspace;
@@ -859,6 +870,20 @@ impl TabList {
                 std::mem::take(&mut tab.suspended)
             })
             .collect()
+    }
+
+    /// The tab current before the current one, among the tabs of the strip
+    /// on screen; `None` if there is none. Follows
+    /// [`note_current`](Self::note_current).
+    pub fn previous_tab(&self) -> Option<usize> {
+        let current = self.current()?;
+        let workspace = self.current_workspace();
+        self.recent
+            .iter()
+            .filter_map(|&id| self.index_of(id))
+            .find(|&i| {
+                i != current && (self.tabs[i].essential || self.tabs[i].workspace == workspace)
+            })
     }
 
     /// Whether the tab at `index` is on screen: the current tab, or another
@@ -1131,6 +1156,8 @@ impl TabList {
         }
         tab.workspace = id;
         tab.group = None;
+        // A split view shows one workspace's tabs.
+        self.unsplit(index);
         self.raw_move(index, to);
         self.prune_groups();
         self.track_current();
@@ -1725,6 +1752,36 @@ mod tests {
         let restored = TabList::from_session(&l.to_session());
         assert_eq!(restored.current_workspace(), work);
         assert!(restored.get(restored.current().unwrap()).unwrap().essential);
+    }
+
+    #[test]
+    fn previous_tab_is_the_last_one_current_in_this_strip() {
+        let mut l = list(&["a", "b", "c"]);
+        let work = l.add_workspace("Work", "");
+        l.open_in(work, 3, "w", "", false);
+        for i in [0, 1, 2] {
+            l.activate(i);
+            // All in the same second: order still counts.
+            l.note_current(5);
+        }
+        assert_eq!(l.previous_tab(), Some(1));
+        l.activate(0);
+        l.note_current(5);
+        assert_eq!(l.previous_tab(), Some(2));
+        l.activate(3);
+        l.note_current(5);
+        assert_eq!(l.previous_tab(), None);
+    }
+
+    #[test]
+    fn moving_a_pane_to_another_workspace_takes_it_out_of_the_split() {
+        let mut l = list(&["a", "b", "c"]);
+        let work = l.add_workspace("Work", "");
+        l.split_tabs(0, 1).unwrap();
+        l.split_tabs(0, 2).unwrap();
+        let to = l.move_to_workspace(2, work).unwrap();
+        assert!(l.split_of(to).is_none());
+        assert_eq!(l.split_of(0).unwrap().tabs.len(), 2);
     }
 
     #[test]

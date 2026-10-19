@@ -400,6 +400,12 @@ pub mod qobject {
         #[cxx_name = "workspaceTabCount"]
         fn workspace_tab_count(self: &Tabs, id: i32) -> i32;
 
+        /// The tab current before the current one in the strip on screen,
+        /// or -1.
+        #[qinvokable]
+        #[cxx_name = "previousTab"]
+        fn previous_tab(self: &Tabs) -> i32;
+
         #[qinvokable]
         #[cxx_name = "titleAt"]
         fn title_at(self: &Tabs, index: i32) -> QString;
@@ -1387,6 +1393,10 @@ impl qobject::Tabs {
         to_index(index, self.list.len())
             .and_then(|i| self.list.neighbour(i, step as isize))
             .map_or(-1, |i| i as i32)
+    }
+
+    fn previous_tab(&self) -> i32 {
+        self.list.previous_tab().map_or(-1, |i| i as i32)
     }
 
     fn workspace_tab_count(&self, id: i32) -> i32 {
