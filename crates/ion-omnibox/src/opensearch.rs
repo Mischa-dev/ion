@@ -68,16 +68,17 @@ fn registrable_domain(host: &str) -> Option<&str> {
 /// HTTPS, so learning it never sends your words in the clear.
 pub fn parse_for_page(xml: &str, page_url: &str) -> Option<SiteEngine> {
     let page = url::Url::parse(page_url).ok()?;
-    let engine = parse(xml, page.host_str()?)?;
-    if page.scheme() == "https" && !engine.template.starts_with("https:") {
-        return None;
-    }
-    Some(engine)
+    parse_with(xml, page.host_str()?, page.scheme() == "https")
 }
 
 /// The site's search from an OpenSearch description `xml` fetched for a page
 /// on `page_host`. The results page has to be on the same site.
 pub fn parse(xml: &str, page_host: &str) -> Option<SiteEngine> {
+    parse_with(xml, page_host, false)
+}
+
+/// [`parse`], taking only HTTPS results pages when `https_only`.
+fn parse_with(xml: &str, page_host: &str, https_only: bool) -> Option<SiteEngine> {
     let page_host = page_host.trim_start_matches("www.").to_lowercase();
     let name = element_text(xml, "ShortName")
         .map(|name| decode(name.trim()))
@@ -96,9 +97,23 @@ pub fn parse(xml: &str, page_host: &str) -> Option<SiteEngine> {
             return None;
         }
         let template = template.replace("{searchTerms}", "\u{0}");
-        let template = fill_parameters(&template)?.replace('\u{0}', "{}");
+        let number = |name| {
+            attribute(tag, name)
+                .filter(|n: &&str| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+                .unwrap_or("1")
+        };
+        let offsets = Offsets {
+            index: number("indexOffset"),
+            page: number("pageOffset"),
+        };
+        let template = fill_parameters(&template, &offsets)?.replace('\u{0}', "{}");
         let url = url::Url::parse(&template.replace("{}", "q")).ok()?;
-        if !matches!(url.scheme(), "https" | "http") {
+        let allowed: &[&str] = if https_only {
+            &["https"]
+        } else {
+            &["https", "http"]
+        };
+        if !allowed.contains(&url.scheme()) {
             return None;
         }
         let host = url.host_str()?.trim_start_matches("www.").to_lowercase();
@@ -263,21 +278,26 @@ fn same_site(a: &str, b: &str) -> bool {
     a == b || registrable_domain(a).is_some_and(|base| registrable_domain(b) == Some(base))
 }
 
-/// What Ion sends for OpenSearch's standard required parameters.
+/// What Ion sends for OpenSearch's standard required parameters, besides
+/// the first result and page numbers, which come from [`Offsets`].
 const PARAMETER_DEFAULTS: &[(&str, &str)] = &[
     ("inputEncoding", "UTF-8"),
     ("outputEncoding", "UTF-8"),
     ("language", "*"),
-    ("startIndex", "1"),
-    ("startPage", "1"),
     ("count", "20"),
 ];
+
+/// A `<Url>`'s first result and page numbers (`indexOffset`, `pageOffset`).
+struct Offsets<'a> {
+    index: &'a str,
+    page: &'a str,
+}
 
 /// Fills the parameters left in `template` other than the query: query
 /// pairs holding only optional ones (`{startPage?}`) go, standard required
 /// ones get their defaults, and an unknown required one means Ion can't use
 /// the template.
-fn fill_parameters(template: &str) -> Option<String> {
+fn fill_parameters(template: &str, offsets: &Offsets) -> Option<String> {
     let template = match template.split_once('?') {
         Some((base, query)) => {
             let kept: Vec<&str> = query
@@ -300,10 +320,14 @@ fn fill_parameters(template: &str) -> Option<String> {
         let name = &rest[start + 1..end];
         // An optional parameter outside the query is just left empty.
         if !name.ends_with('?') {
-            let value = PARAMETER_DEFAULTS
-                .iter()
-                .find(|(known, _)| *known == name)
-                .map(|(_, value)| *value)?;
+            let value = match name {
+                "startIndex" => offsets.index,
+                "startPage" => offsets.page,
+                _ => PARAMETER_DEFAULTS
+                    .iter()
+                    .find(|(known, _)| *known == name)
+                    .map(|(_, value)| *value)?,
+            };
             filled.push_str(value);
         }
         rest = &rest[end + 1..];
@@ -662,6 +686,25 @@ mod tests {
             template="https://example.com/s?q={searchTerms}&amp;key={custom:apiKey}"/>
             </OpenSearchDescription>"#;
         assert_eq!(parse(unknown, "example.com"), None);
+    }
+
+    #[test]
+    fn a_secure_page_skips_a_plain_http_url_for_a_later_https_one() {
+        let xml = r#"<OpenSearchDescription>
+            <Url type="text/html" template="http://example.com/s?q={searchTerms}"/>
+            <Url type="text/html" template="https://example.com/s?q={searchTerms}"/>
+            </OpenSearchDescription>"#;
+        let engine = parse_for_page(xml, "https://example.com/").unwrap();
+        assert_eq!(engine.template, "https://example.com/s?q={}");
+    }
+
+    #[test]
+    fn first_result_and_page_numbers_follow_the_urls_offsets() {
+        let xml = r#"<OpenSearchDescription><Url type="text/html" indexOffset="0"
+            template="https://example.com/s?q={searchTerms}&amp;start={startIndex}&amp;p={startPage}"/>
+            </OpenSearchDescription>"#;
+        let engine = parse(xml, "example.com").unwrap();
+        assert_eq!(engine.template, "https://example.com/s?q={}&start=0&p=1");
     }
 
     #[test]
