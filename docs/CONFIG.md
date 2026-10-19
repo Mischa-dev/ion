@@ -45,6 +45,7 @@ density = "comfortable"      # "comfortable" | "compact"
 cornerRadius = 8
 tabs = "horizontal"          # "horizontal" | "vertical"
 collapseSidebar = false      # vertical tabs: show only favicons until hovered
+tabPreviews = true           # a card with the page's picture when hovering a tab
 animations = { enable = true, speed = 1.0 }
 
 [theme]

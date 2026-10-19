@@ -1,0 +1,128 @@
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import Ion
+
+// One tab in either strip: icon, title, speaker and close button, with the
+// mouse handling of TabDragArea. The strips lay these out and add group
+// headers around them.
+Rectangle {
+    id: tab
+
+    required property int row
+    required property string title
+    required property string url
+    required property string icon
+    required property bool suspended
+    // The strip's list, for drag reordering, and its current row.
+    required property var list
+    required property int currentIndex
+    property var view: null
+    // Titles are hidden in the collapsed sidebar.
+    property bool showTitle: true
+    // Untitled tabs show their address instead of "New Tab" (the sidebar).
+    property bool urlAsTitle: false
+    // Hover previews open to the right in the sidebar, below in the top strip.
+    property bool previewBeside: false
+    // In a split view, and whether that view is on screen.
+    property bool inSplit: false
+    property bool splitShowing: false
+
+    readonly property bool current: row === currentIndex
+    readonly property bool hovered: tabMouse.containsMouse || closeButton.hovered || audio.hovered
+
+    signal activated(int index)
+    signal closeRequested(int index)
+    signal moveRequested(int from, int to)
+    signal menuRequested(int index)
+    signal draggedOut(int index, point scenePos)
+    signal droppedOut(int index, point scenePos)
+
+    radius: Theme.radius
+    z: tabMouse.dragging ? 1 : 0
+    transform: Translate { x: tabMouse.dragX; y: tabMouse.dragY }
+    color: tabMouse.dragging ? Theme.surfaceHover
+         : current ? Theme.surface : tabMouse.containsMouse || splitShowing ? Theme.surfaceRaised : "transparent"
+
+    Behavior on color { ColorAnimation { duration: Theme.animationMs } }
+
+    TabPreview {
+        view: tab.view
+        title: tab.title
+        url: tab.url
+        suspended: tab.suspended
+        current: tab.current
+        beside: tab.previewBeside
+        wanted: tabMouse.containsMouse && !tabMouse.pressed && !closeButton.hovered && !audio.hovered
+    }
+
+    TabDragArea {
+        id: tabMouse
+        list: tab.list
+        index: tab.row
+        onActivated: index => tab.activated(index)
+        onCloseRequested: index => tab.closeRequested(index)
+        onMoveRequested: (from, to) => tab.moveRequested(from, to)
+        onMenuRequested: index => tab.menuRequested(index)
+        onDraggedOut: (index, pos) => tab.draggedOut(index, pos)
+        onDroppedOut: (index, pos) => tab.droppedOut(index, pos)
+    }
+
+    RowLayout {
+        anchors.fill: parent
+        anchors.leftMargin: Theme.spacing * 2
+        anchors.rightMargin: Theme.spacing
+        spacing: Theme.spacing
+
+        TabIcon {
+            Layout.alignment: Qt.AlignVCenter
+            view: tab.view
+            savedIcon: tab.icon
+            opacity: tab.suspended ? Theme.dimmedOpacity : 1
+
+            AttentionDot {
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: -Theme.spacing / 2
+                visible: tab.view?.needsAttention ?? false
+            }
+        }
+
+        // Split views are marked so it's clear which tabs open together.
+        Text {
+            Layout.alignment: Qt.AlignVCenter
+            visible: tab.inSplit && tab.showTitle
+            text: "◫"
+            color: tab.splitShowing ? Theme.accent : Theme.textMuted
+            font.pixelSize: Theme.fontSize
+        }
+
+        Text {
+            Layout.fillWidth: true
+            visible: tab.showTitle
+            text: tab.title.length > 0 ? tab.title
+                : tab.urlAsTitle && tab.url.length > 0 ? tab.url : qsTr("New Tab")
+            color: tab.current ? Theme.text : Theme.textMuted
+            font.pixelSize: Theme.fontSize
+            elide: Text.ElideRight
+            textFormat: Text.PlainText
+        }
+
+        TabAudioButton {
+            id: audio
+            Layout.alignment: Qt.AlignVCenter
+            view: tab.view
+            visible: audible && tab.showTitle
+        }
+
+        IconButton {
+            id: closeButton
+            Layout.preferredWidth: Theme.tabHeight - Theme.spacing * 2
+            Layout.preferredHeight: Theme.tabHeight - Theme.spacing * 2
+            iconName: "close"
+            tip: qsTr("Close tab")
+            visible: tab.showTitle && (tab.current || tabMouse.containsMouse || hovered)
+            onClicked: tab.closeRequested(tab.row)
+        }
+    }
+}
