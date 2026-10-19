@@ -73,6 +73,7 @@ pub mod qobject {
 }
 
 use cxx_qt_lib::{QList, QString, QStringList, QVariant};
+use ion_bangs::Action;
 use ion_core::engines;
 use ion_core::navigation::Resolved;
 use ion_omnibox::{Page, Sources};
@@ -129,11 +130,14 @@ impl qobject::AddressBar {
             remote: &remote,
             typed: &typed,
         };
-        rows(ion_omnibox::suggest(
-            &current_palette(),
-            &input.to_string(),
-            &sources,
-        ))
+        let mut items = ion_omnibox::suggest(&current_palette(), &input.to_string(), &sources);
+        // Agent quick actions only once agents are turned on.
+        if !ion_config::global().config().ai.enable {
+            items.retain(|item| {
+                !matches!(item.action, Action::Run(id) if ion_bangs::commands::AGENT_COMMANDS.contains(&id))
+            });
+        }
+        rows(items)
     }
 
     fn autocomplete(
