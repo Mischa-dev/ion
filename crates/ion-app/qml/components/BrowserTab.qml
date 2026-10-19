@@ -15,6 +15,8 @@ WebEngineView {
     // Saved passwords on this tab's pages: `passwords.prompt`, `passwords.formOnPage`.
     readonly property alias passwords: formFill
     readonly property alias findBar: findBar
+    // A dialog (alert, sign-in…) is waiting for this tab to be shown.
+    readonly property bool needsAttention: pageDialog.item ? pageDialog.item.waiting : false
     // Ion's own page drawn over this tab, if any (`builtinPage.active`).
     readonly property alias builtinPage: builtinPage
 
@@ -38,7 +40,12 @@ WebEngineView {
     property bool live: false
     // The parts' own `view` properties hide this file's `view` id.
     readonly property WebEngineView browserTab: view
-    onVisibleChanged: if (visible) live = true
+    onVisibleChanged: {
+        if (visible) {
+            live = true
+            snapshotSoon.restart()
+        }
+    }
 
     // A tab with no page yet matches the browser chrome instead of glaring
     // white. Pages get the web's usual white canvas, which many rely on.
@@ -115,6 +122,10 @@ WebEngineView {
     property bool pageSchemeRestored: false
     onLoadingChanged: info => {
         live = true
+        if (info.status === WebEngineView.LoadSucceededStatus)
+            snapshotSoon.restart()
+        else if (info.status === WebEngineView.LoadStartedStatus && !visible)
+            snapshot = ""
         // Ion's own error page covers Chromium's until something replaces it;
         // a load that only starts, or is stopped, leaves Chromium's in place.
         // HTTPS-first: the https page Ion asked for failed; go back to http
@@ -187,6 +198,34 @@ WebEngineView {
     function zoomOut() { setZoom(Zoom.stepOut(zoomFactor)) }
     function resetZoom() { setZoom(1.0) }
 
+    // A small picture of the page for the tab strips' hover previews, taken
+    // while the tab is on screen: after each load and every so often. Kept as
+    // the grab result, which owns the image `snapshot` points to.
+    // None at all while previews are off (ui.tabPreviews).
+    property url snapshot: ""
+    property var snapshotResult: null
+    readonly property bool snapshots: { Config.revision; return Config.value("ui.tabPreviews") !== false }
+    onSnapshotsChanged: if (!snapshots) { snapshot = ""; snapshotResult = null }
+    function takeSnapshot() {
+        if (!snapshots || !visible || width <= 0 || height <= 0 || loadError.visible)
+            return
+        grabToImage(result => {
+            snapshotResult = result
+            snapshot = result.url
+        }, Qt.size(Theme.previewWidth * Screen.devicePixelRatio,
+                   Math.round(Theme.previewWidth * Screen.devicePixelRatio * height / width)))
+    }
+    Timer {
+        id: snapshotSoon
+        interval: Theme.noticeMs / 2
+        onTriggered: view.takeSnapshot()
+    }
+    Timer {
+        interval: Theme.snapshotMs
+        repeat: true
+        running: view.snapshots && view.visible && Qt.application.state === Qt.ApplicationActive
+        onTriggered: view.takeSnapshot()
+    }
     // Saves the visible area (or the whole page) as a PNG in the downloads
     // folder and copies it to the clipboard.
     function takeScreenshot(fullPage) { screenshotTool.item?.capture(fullPage) }
@@ -210,7 +249,7 @@ WebEngineView {
     TabPart { sourceComponent: PermissionPrompt { view: browserTab; tabId: browserTab.tabId } }
     ExternalAppPrompt { id: externalApp; view: view }
     TabPart { sourceComponent: ScreenSharePicker { view: browserTab } }
-    TabPart { sourceComponent: PageDialog { view: browserTab } }
+    TabPart { id: pageDialog; sourceComponent: PageDialog { view: browserTab } }
     WebAuthDialog { view: view }
     TabPart {
         id: screenshotTool

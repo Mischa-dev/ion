@@ -6,6 +6,10 @@ import Ion
 
 // Horizontal tab strip over the `Tabs` model. Reports clicks; Main.qml decides
 // what they do. VerticalTabStrip.qml is the sidebar variant.
+//
+// Essentials come first, then this workspace's pinned tabs as icons, then
+// its other tabs. A tab group shows as a colored chip before its tabs, with
+// a line under them; clicking the chip folds the group to just the chip.
 Rectangle {
     id: strip
 
@@ -17,19 +21,61 @@ Rectangle {
     // a counter bumped whenever it gains or loses a view.
     property var views: null
     property int viewsRevision: 0
+    // Id of the split view on screen, or -1.
+    property int currentSplit: -1
+    // Tab counts by group id, for folded group chips, and the space they and
+    // the pinned tabs take, which the other tabs share what is left of.
+    property var groupTabs: ({})
+    property int fixedWidth: 0
+    property int flexibleTabs: 1
 
     signal activated(int index)
     signal closeRequested(int index)
     signal moveRequested(int from, int to)
+    // A tab dragged off the strip, at `scenePos` in window coordinates;
+    // index -1 when it came back or the drag ended.
+    signal tabDraggedOut(int index, point scenePos)
+    signal tabDroppedOut(int index, point scenePos)
     signal newTabRequested()
+    signal searchRequested()
     signal menuRequested(Item anchor)
     signal tabMenuRequested(int index)
+    signal groupMenuRequested(int group, Item anchor)
     signal workspaceMenuRequested(Item anchor)
 
-    // Position in the list of the tab at `row` of the model, or -1.
-    function shownIndex(row) {
-        return shown.mapFromSource(strip.tabs.index(row, 0)).row
+    function viewAt(row) {
+        strip.viewsRevision
+        return strip.views ? strip.views.itemAt(row) : null
     }
+
+    function refreshGroups() {
+        const counts = {}
+        const groups = JSON.parse(Tabs.groups(strip.workspace))
+        for (const g of groups)
+            counts[g.id] = g.tabs
+        groupTabs = counts
+        const layout = JSON.parse(Tabs.stripLayout(strip.workspace))
+        flexibleTabs = Math.max(1, layout.tabs)
+        fixedWidth = layout.pinned * (Theme.tabHeight + Theme.spacing / 2) + Theme.spacing * 2
+                   + groups.length * Theme.tabMaxWidth / 2
+    }
+    onWorkspaceChanged: refreshGroups()
+    Component.onCompleted: refreshGroups()
+    Connections {
+        target: Tabs
+        function onGroupsChanged() { strip.refreshGroups() }
+        function onSessionChanged() { strip.refreshGroups() }
+    }
+
+    // Position in the list of the tab at `row` of the model, or -1. Not bound
+    // to the ListView's own currentIndex: the view rewrites that itself as
+    // rows come and go, which looped with a binding.
+    readonly property int shownCurrent: {
+        list.count
+        return shown.mapFromSource(strip.tabs.index(strip.currentIndex, 0)).row
+    }
+    // Keep the current tab fully in view when it changes or tabs are added.
+    onShownCurrentChanged: Qt.callLater(() => list.positionViewAtIndex(strip.shownCurrent, ListView.Contain))
 
     implicitHeight: Theme.tabHeight + Theme.spacing
     color: Theme.background
@@ -47,12 +93,41 @@ Rectangle {
             onMenuRequested: anchor => strip.workspaceMenuRequested(anchor)
         }
 
+        // Essentials, shared by every workspace.
+        ListView {
+            id: essentialsList
+            Layout.fillHeight: true
+            Layout.preferredWidth: contentWidth
+            visible: count > 0
+            orientation: ListView.Horizontal
+            spacing: Theme.spacing / 2
+            interactive: false
+            model: SortFilterProxyModel {
+                model: strip.tabs
+                filters: ValueFilter { roleName: "essential"; value: true }
+            }
+            delegate: PinnedTab {
+                width: Theme.tabHeight
+                height: essentialsList.height
+                list: essentialsList
+                currentIndex: strip.currentIndex
+                view: strip.viewAt(row)
+                onActivated: index => strip.activated(index)
+                onCloseRequested: index => strip.closeRequested(index)
+                onMoveRequested: (from, to) => strip.moveRequested(from, to)
+                onMenuRequested: index => strip.tabMenuRequested(index)
+                onDraggedOut: (index, pos) => strip.tabDraggedOut(index, pos)
+                onDroppedOut: (index, pos) => strip.tabDroppedOut(index, pos)
+            }
+        }
+
         ListView {
             id: list
             Layout.fillWidth: true
             Layout.fillHeight: true
             orientation: ListView.Horizontal
-            spacing: Theme.spacing / 2
+            // Gaps are inside the delegates, so folded tabs leave none.
+            spacing: 0
             clip: true
             interactive: contentWidth > width
             // Rows keep their model index in `row`; the list's own indexes
@@ -60,16 +135,12 @@ Rectangle {
             model: SortFilterProxyModel {
                 id: shown
                 model: strip.tabs
-                filters: ValueFilter { roleName: "workspace"; value: strip.workspace }
-            }
-            currentIndex: {
-                list.count
-                return strip.shownIndex(strip.currentIndex)
+                filters: [
+                    ValueFilter { roleName: "workspace"; value: strip.workspace },
+                    ValueFilter { roleName: "essential"; value: false }
+                ]
             }
             highlightFollowsCurrentItem: false
-            // Keep the current tab fully in view when it changes or tabs are added.
-            onCurrentIndexChanged: Qt.callLater(() => list.positionViewAtIndex(list.currentIndex, ListView.Contain))
-            onCountChanged: Qt.callLater(() => list.positionViewAtIndex(list.currentIndex, ListView.Contain))
 
             add: Transition {
                 NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.animationSlowMs; easing.type: Easing.OutCubic }
@@ -78,66 +149,115 @@ Rectangle {
                 NumberAnimation { property: "opacity"; to: 0; duration: Theme.animationMs }
             }
 
-            delegate: Rectangle {
-                id: tab
+            delegate: Item {
+                id: slot
 
                 required property int row
                 required property string title
+                required property string url
                 required property string icon
                 required property bool suspended
-                readonly property bool current: row === strip.currentIndex
-                readonly property var view: {
-                    strip.viewsRevision
-                    return strip.views ? strip.views.itemAt(row) : null
-                }
+                required property bool pinned
+                required property bool sectionEnd
+                required property int group
+                required property string groupName
+                required property string groupColor
+                required property bool groupCollapsed
+                required property bool groupFirst
+                required property bool groupLast
+                required property int split
 
-                width: Math.min(Theme.tabMaxWidth, Math.max(Theme.tabMinWidth, list.width / Math.max(1, list.count) - list.spacing))
+                readonly property bool grouped: group >= 0
+                readonly property bool folded: grouped && groupCollapsed
+                readonly property real gap: Theme.spacing / 2
+                // Pinned tabs end with a wider gap before the other tabs.
+                readonly property real trailing: pinned && sectionEnd ? Theme.spacing * 2 : gap
+                readonly property real tabWidth: pinned ? Theme.tabHeight
+                    : Math.min(Theme.tabMaxWidth, Math.max(Theme.tabMinWidth, (list.width - strip.fixedWidth) / strip.flexibleTabs - gap))
+
+                width: (groupFirst ? chip.implicitWidth + gap : 0) + (folded ? 0 : tabWidth + trailing)
                 height: list.height
-                radius: Theme.radius
-                z: tabMouse.dragging ? 1 : 0
-                color: tabMouse.dragging ? Theme.surfaceHover
-                     : current ? Theme.surface : tabMouse.containsMouse ? Theme.surfaceRaised : "transparent"
+                visible: width > 0
+                z: body.z
 
-                Behavior on color { ColorAnimation { duration: Theme.animationMs } }
-
-                TabDragArea {
-                    id: tabMouse
-                    list: tab.ListView.view
-                    index: tab.row
-                    onActivated: index => strip.activated(index)
-                    onCloseRequested: index => strip.closeRequested(index)
-                    onMoveRequested: (from, to) => strip.moveRequested(from, to)
-                    onMenuRequested: index => strip.tabMenuRequested(index)
+                GroupChip {
+                    id: chip
+                    visible: slot.groupFirst
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    group: slot.group
+                    name: slot.groupName
+                    groupColor: slot.groupColor
+                    collapsed: slot.groupCollapsed
+                    tabs: strip.groupTabs[slot.group] ?? 0
+                    onToggled: Tabs.setGroupCollapsed(slot.group, !slot.groupCollapsed)
+                    onMenuRequested: anchor => strip.groupMenuRequested(slot.group, anchor)
                 }
 
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Theme.spacing * 2
-                    anchors.rightMargin: Theme.spacing
-                    spacing: Theme.spacing
+                Loader {
+                    id: body
+                    x: slot.groupFirst ? chip.implicitWidth + slot.gap : 0
+                    width: slot.tabWidth
+                    height: parent.height
+                    visible: !slot.folded
+                    // Kept loaded while folded: unloading would end a drag passing by.
+                    active: true
+                    z: item?.z ?? 0
+                    sourceComponent: slot.pinned ? pinnedTab : fullTab
+                }
 
-                    TabIcon {
-                        Layout.alignment: Qt.AlignVCenter
-                        view: tab.view
-                        savedIcon: tab.icon
-                        opacity: tab.suspended ? Theme.dimmedOpacity : 1
+                // Ties a group's tabs together, through the gaps between them.
+                Rectangle {
+                    visible: slot.grouped && !slot.folded
+                    x: body.x - (slot.groupFirst ? slot.gap : 0)
+                    width: body.width + (slot.groupFirst ? slot.gap : 0) + (slot.groupLast ? 0 : slot.gap)
+                    anchors.bottom: parent.bottom
+                    height: Theme.groupLineWidth
+                    radius: height / 2
+                    color: slot.groupColor.length > 0 ? slot.groupColor : Theme.accent
+                }
+
+                Component {
+                    id: fullTab
+                    TabRow {
+                        row: slot.row
+                        title: slot.title
+                        url: slot.url
+                        icon: slot.icon
+                        suspended: slot.suspended
+                        // Not `list: list`: inside the tab that names its own property.
+                        list: slot.ListView.view
+                        currentIndex: strip.currentIndex
+                        view: strip.viewAt(slot.row)
+                        inSplit: slot.split >= 0
+                        splitShowing: slot.split >= 0 && slot.split === strip.currentSplit
+                        onActivated: index => strip.activated(index)
+                        onCloseRequested: index => strip.closeRequested(index)
+                        onMoveRequested: (from, to) => strip.moveRequested(from, to)
+                        onMenuRequested: index => strip.tabMenuRequested(index)
+                        onDraggedOut: (index, pos) => strip.tabDraggedOut(index, pos)
+                        onDroppedOut: (index, pos) => strip.tabDroppedOut(index, pos)
                     }
-
-                    Text {
-                        Layout.fillWidth: true
-                        text: tab.title.length > 0 ? tab.title : qsTr("New Tab")
-                        color: tab.current ? Theme.text : Theme.textMuted
-                        font.pixelSize: Theme.fontSize
-                        elide: Text.ElideRight
-                    }
-
-                    IconButton {
-                        Layout.preferredWidth: Theme.tabHeight - Theme.spacing * 2
-                        Layout.preferredHeight: Theme.tabHeight - Theme.spacing * 2
-                        iconName: "close"
-                        tip: qsTr("Close tab")
-                        visible: tab.current || tabMouse.containsMouse || hovered
-                        onClicked: strip.closeRequested(tab.row)
+                }
+                Component {
+                    id: pinnedTab
+                    PinnedTab {
+                        row: slot.row
+                        title: slot.title
+                        url: slot.url
+                        icon: slot.icon
+                        suspended: slot.suspended
+                        essential: false
+                        // Not `list: list`: inside the tab that names its own property.
+                        list: slot.ListView.view
+                        currentIndex: strip.currentIndex
+                        view: strip.viewAt(slot.row)
+                        onActivated: index => strip.activated(index)
+                        onCloseRequested: index => strip.closeRequested(index)
+                        onMoveRequested: (from, to) => strip.moveRequested(from, to)
+                        onMenuRequested: index => strip.tabMenuRequested(index)
+                        onDraggedOut: (index, pos) => strip.tabDraggedOut(index, pos)
+                        onDroppedOut: (index, pos) => strip.tabDroppedOut(index, pos)
                     }
                 }
             }
@@ -148,6 +268,13 @@ Rectangle {
             iconName: "plus"
             tip: qsTr("New tab")
             onClicked: strip.newTabRequested()
+        }
+
+        IconButton {
+            Layout.alignment: Qt.AlignVCenter
+            iconName: "search"
+            tip: qsTr("Search tabs")
+            onClicked: strip.searchRequested()
         }
 
         IconButton {

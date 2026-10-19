@@ -8,8 +8,10 @@ import Ion
 Item {
     id: root
 
-    // Session names, refreshed every time the menu opens.
+    // Session names and recently closed tabs, refreshed every time the menu
+    // opens.
     property var names: []
+    property var closed: []
 
     // Shared by the menus and the dialog (popups don't inherit it from here),
     // so they match the browser chrome.
@@ -27,6 +29,9 @@ Item {
     palette.highlightedText: Theme.onAccent
     palette.placeholderText: Theme.textMuted
 
+    signal searchRequested()
+    signal sleepRequested()
+
     function open(anchor) {
         menu.popup(anchor, 0, anchor.height)
     }
@@ -35,12 +40,41 @@ Item {
         id: menu
         palette: root.palette
 
-        onAboutToShow: root.names = Tabs.sessionNames()
+        onAboutToShow: {
+            root.names = Tabs.sessionNames()
+            root.closed = JSON.parse(Tabs.closedTabs()).slice(0, 10)
+        }
 
         IonMenuItem {
             text: qsTr("Reopen closed tab")
             enabled: Tabs.closedCount > 0
             onTriggered: Tabs.reopenClosedTab()
+        }
+        IonMenu {
+            id: closedMenu
+            palette: root.palette
+            title: qsTr("Recently closed")
+            enabled: root.closed.length > 0
+
+            Instantiator {
+                model: root.closed
+                delegate: IonMenuItem {
+                    required property var modelData
+                    required property int index
+                    text: modelData.title.length > 0 ? modelData.title : modelData.url
+                    onTriggered: Tabs.reopenClosedTabAt(index)
+                }
+                onObjectAdded: (index, object) => closedMenu.insertItem(index, object)
+                onObjectRemoved: (index, object) => closedMenu.removeItem(object)
+            }
+        }
+        IonMenuItem {
+            text: qsTr("Search tabs…")
+            onTriggered: root.searchRequested()
+        }
+        IonMenuItem {
+            text: qsTr("Put background tabs to sleep")
+            onTriggered: root.sleepRequested()
         }
         IonMenuItem {
             text: qsTr("Vertical tabs")

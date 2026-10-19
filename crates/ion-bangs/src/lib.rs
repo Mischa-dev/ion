@@ -14,7 +14,7 @@
 pub mod autofill;
 pub mod bang;
 pub mod commands;
-mod fuzzy;
+pub mod fuzzy;
 pub mod palette;
 pub mod settings;
 

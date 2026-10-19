@@ -23,6 +23,28 @@ pub struct SavedTab {
     /// Id of the workspace the tab belongs to (see [`Session::workspaces`]).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub workspace: u32,
+    /// Pinned to the front of its workspace's strip.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub pinned: bool,
+    /// An Essential: pinned and shown in every workspace.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub essential: bool,
+    /// Id of the tab group it belongs to (see [`Session::groups`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<u32>,
+}
+
+/// A tab group as stored on disk.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SavedGroup {
+    pub id: u32,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    /// A `#rrggbb` color, or empty for the theme's accent.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub color: String,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub collapsed: bool,
 }
 
 /// A workspace as stored on disk.
@@ -39,7 +61,7 @@ pub struct SavedWorkspace {
 }
 
 /// A snapshot of one window's tabs.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Session {
     #[serde(default = "default_version")]
     pub version: u32,
@@ -52,6 +74,29 @@ pub struct Session {
     /// whose tabs all belong to one default workspace.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub workspaces: Vec<SavedWorkspace>,
+    /// Tab groups, named by their tabs' `group`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub groups: Vec<SavedGroup>,
+    /// Tabs shown side by side.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub splits: Vec<SavedSplit>,
+    /// Workspace on screen, when the current tab is an Essential (which shows
+    /// in every workspace) and so does not say which.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<u32>,
+}
+
+/// A split view as stored on disk.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct SavedSplit {
+    /// Positions in [`Session::tabs`], in pane order.
+    pub tabs: Vec<usize>,
+    /// Each pane's share of the space, in the same order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sizes: Vec<f64>,
+    /// Stacked top to bottom rather than side by side.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub vertical: bool,
 }
 
 fn default_version() -> u32 {
@@ -62,6 +107,10 @@ fn is_zero(n: &u32) -> bool {
     *n == 0
 }
 
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
 impl Default for Session {
     fn default() -> Self {
         Self {
@@ -69,6 +118,9 @@ impl Default for Session {
             tabs: Vec::new(),
             current: 0,
             workspaces: Vec::new(),
+            groups: Vec::new(),
+            splits: Vec::new(),
+            workspace: None,
         }
     }
 }
