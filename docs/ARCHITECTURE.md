@@ -22,12 +22,13 @@ nix/
 crates/
   ion-core/               shared core: app constants, URL-bar input resolution
   ion-basics/             downloads, per-site zoom, permission prompts and panel, page dialogs, find,
-                          screenshots, context menu and new-tab tiles
+                          screenshots, context menu, new-tab tiles, security key dialog text
   ion-platform/           Chromium switches, one-instance-per-profile hand-off
   ion-bangs/              !bangs and the command palette's ranking
   ion-session/            tabs and workspaces, saved and named sessions, history
   ion-bookmarks/          bookmarks; importing bookmarks and history from Chrome/Firefox
-  ion-sites/              per-site settings ([sites] in config), user scripts and styles
+  ion-sites/              per-site settings ([sites] in config), user scripts and styles,
+                          user agent and site quirks, links that open other apps
   ion-reader/             reader mode: article extraction and the themed reader page
   ion-safety/             permissions and agent trust: decisions, prompts, activity log
   ion-agent/              Ion Agent's runtime: tasks, browser tools, model access
@@ -41,7 +42,8 @@ crates/
     qml/Theme.qml         design tokens singleton (colors, radius, density, motion)
     qml/components/       UI pieces (TabStrip, NavigationBar, UrlBar, BrowserTab…)
 packaging/                Linux desktop file + AppStream, macOS Info.plist
-docs/                     this file; platform.md for per-OS behaviour and checks
+docs/                     this file; platform.md for per-OS behaviour and checks;
+                          compat.md for how Ion makes real sites work
 ```
 
 ## Adding a feature module

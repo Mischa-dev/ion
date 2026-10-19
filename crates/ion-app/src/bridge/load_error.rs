@@ -29,11 +29,18 @@ pub mod qobject {
             url: &QString,
             message: &QString,
         ) -> QStringList;
+
+        /// `[title, detail]` for a tab whose page process ended with
+        /// `status` (`WebEngineView.RenderProcessTerminationStatus`), or an
+        /// empty list when it ended normally.
+        #[qinvokable]
+        #[cxx_name = "describeCrash"]
+        fn describe_crash(self: &LoadErrors, status: i32, url: &QString) -> QStringList;
     }
 }
 
 use cxx_qt_lib::{QString, QStringList};
-use ion_core::load_error::{self, ErrorDomain};
+use ion_core::load_error::{self, ErrorDomain, Termination};
 
 #[derive(Default)]
 pub struct LoadErrorsRust;
@@ -46,10 +53,21 @@ impl qobject::LoadErrors {
             &url.to_string(),
             &message.to_string(),
         );
-        error
-            .into_iter()
-            .flat_map(|e| [e.title, e.detail])
-            .map(|line| QString::from(line.as_str()))
-            .collect()
+        lines(error)
     }
+
+    fn describe_crash(&self, status: i32, url: &QString) -> QStringList {
+        lines(load_error::crashed(
+            Termination::from_qt(status),
+            &url.to_string(),
+        ))
+    }
+}
+
+fn lines(error: Option<load_error::LoadError>) -> QStringList {
+    error
+        .into_iter()
+        .flat_map(|e| [e.title, e.detail])
+        .map(|line| QString::from(line.as_str()))
+        .collect()
 }

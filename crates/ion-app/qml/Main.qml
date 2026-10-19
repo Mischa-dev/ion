@@ -164,6 +164,8 @@ ApplicationWindow {
             extensionPaths = Extensions.paths()
             extensionPaths.forEach(path => extensionManager.loadExtension(path))
         }
+        // True when the last run crashed; its tabs are kept aside.
+        const crashed = Tabs.beginRun()
         if (Config.value("general.restoreSession")) {
             // Restoring replaces every tab; keep any opened while waiting
             // (Ctrl+T, a URL handed over by a second launch).
@@ -172,6 +174,9 @@ ApplicationWindow {
                 early.push(Tabs.urlAt(i))
             if (Tabs.restoreLastSession())
                 early.forEach((target, i) => openTab(target, i === 0))
+            Tabs.discardCrashedSession()
+        } else if (crashed) {
+            crashRestore.offer()
         }
         // URLs on the command line (`ion %U` from the desktop file) open as new
         // tabs after the restored ones; the first one becomes current.
@@ -266,6 +271,7 @@ ApplicationWindow {
             // saved session.
             if (window.startupFinished)
                 Tabs.saveSession()
+            Tabs.endRun()
             History.save()
             window.clearOnExit(false)
         }
@@ -526,6 +532,7 @@ ApplicationWindow {
     }
 
     AgentsStoppedNotice {}
+    CrashRestoreNotice { id: crashRestore }
     AgentActivity { id: agentActivity }
     AgentTools { views: views }
 }

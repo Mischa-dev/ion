@@ -118,9 +118,12 @@ trust = "ask"                # see docs/SAFETY.md
 [sites."example.com"]        # per-site settings; a host covers its subdomains,
 javascript = true            # "*" covers every site, the most specific wins
                              # (CSS for a site goes in [theme.sites] above)
-# userAgent = "chrome"       # "chrome" (the engine's, minus "QtWebEngine"),
-                             # "firefox", "safari", "default" or a full string;
-                             # values other than "chrome" also blank client hints
+# userAgent = "firefox"      # "default" (Ion's: the engine's minus "QtWebEngine";
+                             # "chrome" is the same), "firefox", "safari",
+                             # "engine" (with "QtWebEngine") or a full string;
+                             # Firefox, Safari and custom strings blank client
+                             # hints. accounts.google.com gets "firefox" built
+                             # in (docs/compat.md); set "default" to undo it
 ```
 
 ## User scripts and styles
