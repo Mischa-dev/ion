@@ -20,13 +20,14 @@ nix/
   icons.nix               renders the app icon (hicolor PNGs, macOS .icns)
   packaging-check.nix     validates desktop file, AppStream data, Ion.app
 crates/
-  ion-core/               shared core: app constants, URL-bar input resolution
+  ion-core/               shared core: app constants, URL-bar input resolution, search engines
   ion-keyring/            named secrets in the OS keyring (docs/PRIVACY.md)
   ion-passwords/          the password manager's logic and page script
   ion-basics/             downloads, per-site zoom, permission prompts and panel, page dialogs, find,
                           screenshots, context menu, new-tab tiles, security key dialog text
   ion-platform/           Chromium switches, one-instance-per-profile hand-off
   ion-bangs/              !bangs and the command palette's ranking
+  ion-omnibox/            address bar dropdown: ranking, inline answers, learned choices
   ion-session/            tabs and workspaces, saved and named sessions, history
   ion-bookmarks/          bookmarks; importing bookmarks and history from Chrome/Firefox
   ion-sites/              per-site settings ([sites] in config), user scripts and styles,
@@ -35,6 +36,7 @@ crates/
   ion-safety/             permissions and agent trust: decisions, prompts, activity log
   ion-agent/              Ion Agent's runtime: tasks, browser tools, model access
   ion-perf/               startup marks, memory pressure, per-process memory
+  ion-panels/             the side panel: web panels and notes (clippings)
   ion-input/              keyboard shortcuts (the keymap and its remaps), touchpad
                           swipe and pinch recognizers
   ion-app/                the binary (`ion`)
@@ -145,6 +147,10 @@ from `config.toml` and offer to go back to it.
   back/forward swipe (`ion_input::swipe`, drawn by `SwipeIndicator.qml`);
   pinching zooms the page (`ion_input::pinch`) and the result is saved per
   site like Ctrl+scroll.
+- The side panel (`SidePanel.qml`, Ctrl+Shift+L) holds notes (`NotesPanel.qml`)
+  and web panels; `Panels` (`bridge/panels.rs`) keeps both through
+  `ion_panels` in `panels.json` and `notes.json` in the data directory. Each
+  web panel's view loads on first show and then stays alive.
   `Palette::suggest` is the URL bar's narrower version (typed entry first,
   then tabs, history and bang completions), and `ion_bangs::autofill` fills
   in addresses inline; both lists draw their rows with

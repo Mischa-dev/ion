@@ -1313,8 +1313,9 @@ dependencies = [
  "ion-core",
  "ion-input",
  "ion-keyring",
+ "ion-omnibox",
+ "ion-panels",
  "ion-passwords",
- "ion-perf",
  "ion-platform",
  "ion-privacy",
  "ion-reader",
@@ -1389,6 +1390,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ion-omnibox"
+version = "0.1.0"
+dependencies = [
+ "ion-bangs",
+ "ion-core",
+ "serde",
+ "serde_json",
+ "url",
+]
+
+[[package]]
+name = "ion-panels"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "url",
+]
+
+[[package]]
 name = "ion-passwords"
 version = "0.1.0"
 dependencies = [
@@ -1400,13 +1421,6 @@ dependencies = [
  "serde",
  "serde_json",
  "url",
-]
-
-[[package]]
-name = "ion-perf"
-version = "0.1.0"
-dependencies = [
- "libc",
 ]
 
 [[package]]
