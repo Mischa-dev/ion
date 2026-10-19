@@ -137,6 +137,16 @@ impl qobject::AddressBar {
                 !matches!(item.action, Action::Run(id) if ion_bangs::commands::AGENT_COMMANDS.contains(&id))
             });
         }
+        // Quick actions show the keys in effect, after `[shortcuts]` remaps,
+        // as the palette does.
+        let keymap = super::keymap::current();
+        for item in &mut items {
+            if let Action::Run(id) = item.action
+                && let Some(binding) = keymap.0.bindings().iter().find(|b| b.id == id)
+            {
+                item.hint = binding.keys.first().cloned().unwrap_or_default();
+            }
+        }
         rows(items)
     }
 

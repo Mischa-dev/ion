@@ -340,6 +340,12 @@ TextField {
     }
     Keys.onEscapePressed: {
         if (suggestions.length > 0) {
+            // Dismissed: a late engine answer mustn't reopen the list.
+            remoteTimer.stop()
+            if (request) {
+                request.abort()
+                request = null
+            }
             suggestions = []
             return
         }
