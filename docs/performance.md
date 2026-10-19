@@ -77,8 +77,9 @@ build only, then `qmlprofiler --output trace.qtd target/release/ion URL`.
 - macOS: the kernel's own level (`kern.memorystatus_vm_pressure_level`).
 
 It rises at once and falls only after two calm readings, so a policy built on
-it doesn't flap. Tab policy (unloading idle tabs, owned by the tabs code)
-reacts to `onMemoryPressureChanged`. `Performance.memoryUsage()` returns the
+it doesn't flap. Nothing acts on it yet: tabs sleep only after
+`general.suspendTabsAfter`. Sleeping idle tabs sooner under pressure, as
+Chrome and Safari do, belongs to the tabs code (`onMemoryPressureChanged`). `Performance.memoryUsage()` returns the
 memory of Ion and every web process as JSON, for a task-manager style view.
 
 ## Results
