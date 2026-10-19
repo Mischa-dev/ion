@@ -345,6 +345,41 @@ impl Safety {
         }
     }
 
+    /// The person asked `agent` about the page `site` in `tab` (from the
+    /// address bar, a selection or a follow-up): asking is consent to read
+    /// that page, as every browser assistant does. Lets the agent read
+    /// `site` in that tab until the tab closes, unless something already
+    /// decides otherwise: agents stopped, the tab taken back, a rule that
+    /// denies, or a page without a host (those always ask). Returns
+    /// whether it allowed anything new.
+    pub fn allow_reading_asked_page(&mut self, agent: &str, tab: u64, site: Origin) -> bool {
+        let request = AgentRequest {
+            agent: agent.to_owned(),
+            action: Action::ReadPage,
+            site: Some(site.clone()),
+            tab: Some(tab),
+        };
+        let decision = self.policy.decide_agent(&request);
+        if decision.verdict != Verdict::Ask || decision.reason == Reason::LocalPage {
+            return false;
+        }
+        let now = self.now();
+        let mut entry = agent_entry(now, Kind::Decision, &request);
+        entry.verdict = Some(Verdict::Allow);
+        entry.reason = Some("the person asked about this page".to_owned());
+        self.log(entry);
+        self.policy.add_user_rule(Rule {
+            who: Who::Agent(agent.to_owned()),
+            what: What::Action(Action::ReadPage),
+            site: SitePattern::Origin(site),
+            effect: Effect::Allow,
+            lifetime: Lifetime::Tab(tab),
+            source: Source::User,
+            created: now,
+        });
+        true
+    }
+
     pub fn tab_closed(&mut self, tab: u64) {
         *self.tab_closures.entry(tab).or_default() += 1;
         self.policy.tab_closed(tab);
@@ -492,6 +527,39 @@ fn agent_entry(time: u64, kind: Kind, request: &AgentRequest) -> Entry {
 mod tests {
     use super::*;
     use crate::audit::test_dir;
+
+    #[test]
+    fn asking_about_a_page_lets_the_agent_read_it_in_that_tab() {
+        let mut safety = Safety::in_memory();
+        let site = Origin::parse("https://lwn.net/Articles/1").unwrap();
+        let read = |tab| AgentRequest {
+            agent: "ion".into(),
+            action: Action::ReadPage,
+            site: Some(site.clone()),
+            tab: Some(tab),
+        };
+        assert_eq!(safety.request_agent(read(1)).verdict(), Verdict::Ask);
+        assert!(safety.allow_reading_asked_page("ion", 1, site.clone()));
+        assert_eq!(safety.request_agent(read(1)).verdict(), Verdict::Allow);
+        // Only that tab, only reading, and only until it closes.
+        assert_eq!(safety.request_agent(read(2)).verdict(), Verdict::Ask);
+        let click = AgentRequest {
+            action: Action::Interact,
+            ..read(1)
+        };
+        assert_eq!(safety.request_agent(click).verdict(), Verdict::Ask);
+        assert!(!safety.allow_reading_asked_page("ion", 1, site.clone()));
+        safety.tab_closed(1);
+        assert_eq!(safety.request_agent(read(1)).verdict(), Verdict::Ask);
+
+        // Taken back, stopped, or a page without a host: nothing changes.
+        safety.take_over(3);
+        assert!(!safety.allow_reading_asked_page("ion", 3, site.clone()));
+        let file = Origin::parse("file:///home/me/notes.html").unwrap();
+        assert!(!safety.allow_reading_asked_page("ion", 4, file));
+        safety.stop_all();
+        assert!(!safety.allow_reading_asked_page("ion", 5, site));
+    }
     use crate::policy::{Reason, TrustLevel};
 
     const NOW: u64 = 1_791_367_200;

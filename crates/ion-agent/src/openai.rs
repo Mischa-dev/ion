@@ -2,16 +2,13 @@
 //! or a local server such as Ollama or llama.cpp.
 
 use std::io::{BufRead, BufReader};
-use std::time::Duration;
 
 use serde_json::{Value, json};
 use url::{Host, Url};
 
+use crate::http::{self, MAX_REPLY_BYTES};
 use crate::model::{Message, Model, Reply, ToolCall};
 use crate::tool::Tool;
-
-/// Answers bigger than this are not a chat reply.
-const MAX_REPLY_BYTES: u64 = 4 * 1024 * 1024;
 
 pub struct OpenAi {
     http: ureq::Agent,
@@ -24,35 +21,21 @@ impl OpenAi {
     /// `base_url` goes up to and including `/v1`. Honours the usual
     /// `HTTPS_PROXY` variables.
     pub fn new(base_url: &str, model: &str, api_key: Option<String>) -> OpenAi {
-        let config = ureq::Agent::config_builder()
-            .timeout_global(Some(Duration::from_secs(120)))
-            // Error bodies say what went wrong; read them instead of
-            // getting a bare status.
-            .http_status_as_error(false)
-            .user_agent(concat!("Ion/", env!("CARGO_PKG_VERSION")))
-            .build();
         OpenAi {
-            http: config.into(),
+            http: http::client(),
             base_url: base_url.trim_end_matches('/').to_owned(),
             model: model.to_owned(),
             api_key: api_key.filter(|k| !k.trim().is_empty()),
         }
     }
-}
 
-impl OpenAi {
     fn post(&self, body: &Value) -> Result<ureq::http::Response<ureq::Body>, String> {
-        let endpoint = endpoint(&self.base_url, self.api_key.is_some())?;
-        let mut request = self
-            .http
-            .post(endpoint)
-            .header("Content-Type", "application/json");
+        let endpoint = endpoint(&self.base_url, self.api_key.is_some(), "chat/completions")?;
+        let mut headers = Vec::new();
         if let Some(key) = &self.api_key {
-            request = request.header("Authorization", format!("Bearer {key}"));
+            headers.push(("Authorization", format!("Bearer {key}")));
         }
-        request
-            .send(body.to_string())
-            .map_err(|e| format!("Couldn't reach the model service: {e}"))
+        http::post_json(&self.http, &endpoint, &headers, body)
     }
 }
 
@@ -60,7 +43,7 @@ impl OpenAi {
 /// the cleartext network. Plain HTTP stays allowed for model servers on the
 /// same machine, and for keyless servers elsewhere (Ollama on another box on
 /// the LAN), where TLS is normally unavailable.
-fn endpoint(base: &str, sends_key: bool) -> Result<String, String> {
+pub(crate) fn endpoint(base: &str, sends_key: bool, path: &str) -> Result<String, String> {
     let mut url = Url::parse(base.trim())
         .map_err(|_| "The model service URL isn't a valid absolute address.".to_owned())?;
     let loopback = match url.host() {
@@ -87,9 +70,8 @@ fn endpoint(base: &str, sends_key: bool) -> Result<String, String> {
                 .to_owned(),
         );
     }
-    let mut path = url.path().trim_end_matches('/').to_owned();
-    path.push_str("/chat/completions");
-    url.set_path(&path);
+    let full = format!("{}/{path}", url.path().trim_end_matches('/'));
+    url.set_path(&full);
     Ok(url.into())
 }
 
@@ -151,6 +133,28 @@ impl Model for OpenAi {
             }
         }
         Ok(stream.finish())
+    }
+
+    fn models(&self) -> Result<Vec<String>, String> {
+        let url = endpoint(&self.base_url, self.api_key.is_some(), "models")?;
+        let mut request = self.http.get(&url);
+        if let Some(key) = &self.api_key {
+            request = request.header("Authorization", format!("Bearer {key}"));
+        }
+        let mut response = request
+            .call()
+            .map_err(|e| format!("Couldn't reach the model service: {e}"))?;
+        let status = response.status().as_u16();
+        let body = response
+            .body_mut()
+            .with_config()
+            .limit(MAX_REPLY_BYTES)
+            .read_to_string()
+            .map_err(|e| format!("The model service's reply was cut off: {e}"))?;
+        if !(200..300).contains(&status) {
+            return Err(describe_error(status, &body));
+        }
+        parse_models(&body)
     }
 
     fn reply(&self, messages: &[Message], tools: &[Tool]) -> Result<Reply, String> {
@@ -248,6 +252,7 @@ impl Stream {
         Reply {
             text: self.text,
             calls,
+            raw: String::new(),
         }
     }
 }
@@ -279,7 +284,7 @@ fn message_json(message: &Message) -> Value {
     match message {
         Message::System(text) => json!({ "role": "system", "content": text }),
         Message::User(text) => json!({ "role": "user", "content": text }),
-        Message::Assistant { text, calls } => {
+        Message::Assistant { text, calls, .. } => {
             let mut m = json!({ "role": "assistant", "content": text });
             if !calls.is_empty() {
                 let calls: Vec<Value> = calls
@@ -333,7 +338,28 @@ pub fn parse_reply(text: &str) -> Result<Reply, String> {
                 .collect()
         })
         .unwrap_or_default();
-    Ok(Reply { text, calls })
+    Ok(Reply {
+        text,
+        calls,
+        raw: String::new(),
+    })
+}
+
+/// The model ids in a `/models` listing (`{"data": [{"id": …}]}`, which
+/// OpenAI, Anthropic, OpenRouter and Ollama all send), sorted.
+pub fn parse_models(body: &str) -> Result<Vec<String>, String> {
+    let value: Value = serde_json::from_str(body)
+        .map_err(|_| "The model service sent something that isn't a list of models.".to_owned())?;
+    let mut ids: Vec<String> = value["data"]
+        .as_array()
+        .ok_or_else(|| "The model service sent something that isn't a list of models.".to_owned())?
+        .iter()
+        .filter_map(|m| m["id"].as_str())
+        .map(str::to_owned)
+        .collect();
+    ids.sort();
+    ids.dedup();
+    Ok(ids)
 }
 
 /// A sentence for a failed request, using the service's own message when it
@@ -363,20 +389,34 @@ mod tests {
     #[test]
     fn model_endpoints_require_secure_transport() {
         assert_eq!(
-            endpoint("https://api.example/v1", true).unwrap(),
+            endpoint("https://api.example/v1", true, "chat/completions").unwrap(),
             "https://api.example/v1/chat/completions"
         );
         assert_eq!(
-            endpoint("http://127.0.0.1:11434/v1/", true).unwrap(),
+            endpoint("http://127.0.0.1:11434/v1/", true, "chat/completions").unwrap(),
             "http://127.0.0.1:11434/v1/chat/completions"
         );
-        assert!(endpoint("http://[::1]:8080/v1", true).is_ok());
-        assert!(endpoint("http://localhost:8080/v1", true).is_ok());
-        assert!(endpoint("http://models.example/v1", true).is_err());
-        assert!(endpoint("http://192.168.1.20:11434/v1", false).is_ok());
-        assert!(endpoint("ftp://models.example/v1", false).is_err());
-        assert!(endpoint("https://user:secret@models.example/v1", true).is_err());
-        assert!(endpoint("https://models.example/v1?token=secret", true).is_err());
+        assert!(endpoint("http://[::1]:8080/v1", true, "chat/completions").is_ok());
+        assert!(endpoint("http://localhost:8080/v1", true, "chat/completions").is_ok());
+        assert!(endpoint("http://models.example/v1", true, "chat/completions").is_err());
+        assert!(endpoint("http://192.168.1.20:11434/v1", false, "chat/completions").is_ok());
+        assert!(endpoint("ftp://models.example/v1", false, "chat/completions").is_err());
+        assert!(
+            endpoint(
+                "https://user:secret@models.example/v1",
+                true,
+                "chat/completions"
+            )
+            .is_err()
+        );
+        assert!(
+            endpoint(
+                "https://models.example/v1?token=secret",
+                true,
+                "chat/completions"
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -448,6 +488,7 @@ mod tests {
                     name: "read_page".into(),
                     arguments: "{}".into(),
                 }],
+                raw: String::new(),
             },
             Message::Tool {
                 call_id: "c1".into(),
@@ -487,6 +528,16 @@ mod tests {
 
         assert!(parse_reply("<html>").is_err());
         assert!(parse_reply(r#"{"choices":[]}"#).is_err());
+    }
+
+    #[test]
+    fn lists_models() {
+        assert_eq!(
+            parse_models(r#"{"object":"list","data":[{"id":"b"},{"id":"a"},{"x":1}]}"#).unwrap(),
+            ["a", "b"]
+        );
+        assert!(parse_models("{}").is_err());
+        assert!(parse_models("<html>").is_err());
     }
 
     #[test]
