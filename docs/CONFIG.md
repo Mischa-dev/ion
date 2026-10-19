@@ -83,8 +83,12 @@ lists = ["easylist", "easyprivacy", "ublock-filters"]
 #   { title = "Mail", url = "https://mail.example/" },
 # ]
 
-[shortcuts]                  # command id = Qt key sequence
+[shortcuts]                  # command = key, [keys] or "" for none; Ctrl is Cmd on
+                             # macOS. Easier: Ctrl+/ opens the shortcut editor,
+                             # which writes here. Command names are the palette's
+                             # commands in camelCase (newTab, reload, findNext…).
 # palette = "Ctrl+K"
+# reload = ["F5", "Ctrl+R"]
 # askAgent = "Ctrl+E"         # the address bar, ready with "@ion " (needs ai.enable)
 # agentSidebar = "Ctrl+Shift+E"  # the agent sidebar (needs ai.enable)
 

@@ -1,0 +1,12 @@
+[package]
+name = "ion-input"
+description = "Keyboard shortcuts and pointer gestures for the Ion browser"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true
