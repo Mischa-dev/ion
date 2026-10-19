@@ -181,10 +181,13 @@ WebEngineView {
     // A small picture of the page for the tab strips' hover previews, taken
     // while the tab is on screen: after each load and every so often. Kept as
     // the grab result, which owns the image `snapshot` points to.
+    // None at all while previews are off (ui.tabPreviews).
     property url snapshot: ""
     property var snapshotResult: null
+    readonly property bool snapshots: { Config.revision; return Config.value("ui.tabPreviews") !== false }
+    onSnapshotsChanged: if (!snapshots) { snapshot = ""; snapshotResult = null }
     function takeSnapshot() {
-        if (!visible || width <= 0 || height <= 0 || loadError.visible)
+        if (!snapshots || !visible || width <= 0 || height <= 0 || loadError.visible)
             return
         grabToImage(result => {
             snapshotResult = result
@@ -200,7 +203,7 @@ WebEngineView {
     Timer {
         interval: Theme.snapshotMs
         repeat: true
-        running: view.visible && Qt.application.state === Qt.ApplicationActive
+        running: view.snapshots && view.visible && Qt.application.state === Qt.ApplicationActive
         onTriggered: view.takeSnapshot()
     }
     onVisibleChanged: if (visible) snapshotSoon.restart()

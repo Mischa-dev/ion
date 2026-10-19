@@ -159,7 +159,8 @@ ApplicationWindow {
         // A full split view (four panes) takes no more; the page stays put.
         if (Tabs.splitTabs(Tabs.currentIndex, index) < 0)
             return
-        if (side === "left")
+        // It joins after the current pane; the first half puts it before.
+        if (side === "left" || side === "top")
             Tabs.movePane(index, -1)
         Tabs.activate(index)
     }

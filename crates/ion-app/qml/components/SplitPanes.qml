@@ -15,7 +15,8 @@ Item {
     property var sizes: []
     readonly property bool active: split !== null
     readonly property real gap: Theme.spacing
-    // A tab being dragged over the page: which half would get it, or "".
+    // A tab being dragged over the page: which half would get it ("left" or
+    // "right", "top" or "bottom" in a stacked split), or "".
     property string dropSide: ""
 
     // The JSON `split` came from, so a refresh that changes nothing keeps
@@ -66,6 +67,8 @@ Item {
     function showDrop(point) {
         if (!point || point.x < 0 || point.y < 0 || point.x > width || point.y > height)
             dropSide = ""
+        else if (split?.vertical)
+            dropSide = point.y < height / 2 ? "top" : "bottom"
         else
             dropSide = point.x < width / 2 ? "left" : "right"
     }
@@ -143,9 +146,11 @@ Item {
     Rectangle {
         visible: root.dropSide.length > 0
         z: 4
-        x: root.dropSide === "left" ? 0 : root.width / 2
-        width: root.width / 2
-        height: root.height
+        readonly property bool stacked: root.dropSide === "top" || root.dropSide === "bottom"
+        x: root.dropSide === "right" ? root.width / 2 : 0
+        y: root.dropSide === "bottom" ? root.height / 2 : 0
+        width: stacked ? root.width : root.width / 2
+        height: stacked ? root.height / 2 : root.height
         radius: Theme.radius
         color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, Theme.tintOpacity)
         border.width: Theme.groupLineWidth
