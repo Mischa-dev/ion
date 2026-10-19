@@ -23,11 +23,11 @@ Rectangle {
     signal activated(int index)
     signal closeRequested(int index)
     signal moveRequested(int from, int to)
-    signal dropped(int index)
     signal menuRequested(int index)
 
     radius: Theme.radius
     z: tabMouse.dragging ? 1 : 0
+    transform: Translate { x: tabMouse.dragX; y: tabMouse.dragY }
     color: tabMouse.dragging ? Theme.surfaceHover
          : current ? Theme.surface : tabMouse.containsMouse ? Theme.surfaceRaised : Theme.background
     border.width: essential ? Theme.hairline : 0
@@ -42,7 +42,6 @@ Rectangle {
         onActivated: index => tab.activated(index)
         onCloseRequested: index => tab.closeRequested(index)
         onMoveRequested: (from, to) => tab.moveRequested(from, to)
-        onDropped: index => tab.dropped(index)
         onMenuRequested: index => tab.menuRequested(index)
     }
 

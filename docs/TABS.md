@@ -29,7 +29,8 @@ header (a chip in the strip, a row in the sidebar) folds and unfolds it;
 right-click it to rename, recolor, add a tab, ungroup or close the group.
 
 - Links opened from a grouped tab join its group.
-- Dragging a tab and letting go inside a group adds it; letting go outside
+- Dragging a tab shows where it will land; letting go inside a group adds it,
+  letting go outside
   takes it out. Dragging past a group does not.
 - Activating a tab in a folded group unfolds it. Folding the current tab's
   group moves to the nearest tab outside it.

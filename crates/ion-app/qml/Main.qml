@@ -302,8 +302,7 @@ ApplicationWindow {
             workspace: Tabs.workspace
             onActivated: index => Tabs.activate(index)
             onCloseRequested: index => window.closeTab(index)
-            onMoveRequested: (from, to) => Tabs.dragTab(from, to)
-            onDropRequested: index => Tabs.dropTab(index)
+            onMoveRequested: (from, to) => Tabs.moveTab(from, to)
             onNewTabRequested: window.newTab()
             onMenuRequested: anchor => sessionMenu.open(anchor)
             onTabMenuRequested: index => tabMenu.openFor(index)
@@ -346,8 +345,7 @@ ApplicationWindow {
             workspace: Tabs.workspace
             onActivated: index => Tabs.activate(index)
             onCloseRequested: index => window.closeTab(index)
-            onMoveRequested: (from, to) => Tabs.dragTab(from, to)
-            onDropRequested: index => Tabs.dropTab(index)
+            onMoveRequested: (from, to) => Tabs.moveTab(from, to)
             onNewTabRequested: window.newTab()
             onMenuRequested: anchor => sessionMenu.open(anchor)
             onTabMenuRequested: index => tabMenu.openFor(index)

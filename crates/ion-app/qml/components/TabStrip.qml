@@ -30,7 +30,6 @@ Rectangle {
     signal activated(int index)
     signal closeRequested(int index)
     signal moveRequested(int from, int to)
-    signal dropRequested(int index)
     signal newTabRequested()
     signal menuRequested(Item anchor)
     signal tabMenuRequested(int index)
@@ -109,7 +108,6 @@ Rectangle {
                 onActivated: index => strip.activated(index)
                 onCloseRequested: index => strip.closeRequested(index)
                 onMoveRequested: (from, to) => strip.moveRequested(from, to)
-                onDropped: index => strip.dropRequested(index)
                 onMenuRequested: index => strip.tabMenuRequested(index)
             }
         }
@@ -192,7 +190,8 @@ Rectangle {
                     width: slot.tabWidth
                     height: parent.height
                     visible: !slot.folded
-                    active: !slot.folded
+                    // Kept loaded while folded: unloading would end a drag passing by.
+                    active: true
                     z: item?.z ?? 0
                     sourceComponent: slot.pinned ? pinnedTab : fullTab
                 }
@@ -216,13 +215,13 @@ Rectangle {
                         url: slot.url
                         icon: slot.icon
                         suspended: slot.suspended
-                        list: list
+                        // Not `list: list`: inside the tab that names its own property.
+                        list: slot.ListView.view
                         currentIndex: strip.currentIndex
                         view: strip.viewAt(slot.row)
                         onActivated: index => strip.activated(index)
                         onCloseRequested: index => strip.closeRequested(index)
                         onMoveRequested: (from, to) => strip.moveRequested(from, to)
-                        onDropped: index => strip.dropRequested(index)
                         onMenuRequested: index => strip.tabMenuRequested(index)
                     }
                 }
@@ -235,13 +234,13 @@ Rectangle {
                         icon: slot.icon
                         suspended: slot.suspended
                         essential: false
-                        list: list
+                        // Not `list: list`: inside the tab that names its own property.
+                        list: slot.ListView.view
                         currentIndex: strip.currentIndex
                         view: strip.viewAt(slot.row)
                         onActivated: index => strip.activated(index)
                         onCloseRequested: index => strip.closeRequested(index)
                         onMoveRequested: (from, to) => strip.moveRequested(from, to)
-                        onDropped: index => strip.dropRequested(index)
                         onMenuRequested: index => strip.tabMenuRequested(index)
                     }
                 }
