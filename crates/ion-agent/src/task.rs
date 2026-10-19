@@ -289,6 +289,7 @@ impl Task {
             messages.push(Message::Assistant {
                 text,
                 calls: Vec::new(),
+                raw: String::new(),
             });
         }
         let restore = |e: &SavedExchange| Exchange {
@@ -433,6 +434,7 @@ impl Task {
         self.messages.push(Message::Assistant {
             text: reply.text.clone(),
             calls: reply.calls.clone(),
+            raw: reply.raw.clone(),
         });
         if reply.calls.is_empty() {
             self.answer = reply.text.trim().to_owned();
@@ -611,6 +613,7 @@ mod tests {
         task.model_replied(Reply {
             text: String::new(),
             calls: vec![call("c1", "read_page")],
+            raw: String::new(),
         });
         let Next::Tool(c, tool) = task.advance() else {
             panic!("expected a tool call");
@@ -640,6 +643,7 @@ mod tests {
         task.model_replied(Reply {
             text: " It's an example. ".into(),
             calls: vec![],
+            raw: String::new(),
         });
         assert_eq!(task.status(), Status::Done);
         assert_eq!(task.answer(), "It's an example.");
@@ -653,6 +657,7 @@ mod tests {
         task.model_replied(Reply {
             text: String::new(),
             calls: vec![call("x", "format_disk"), call("c2", "list_tabs")],
+            raw: String::new(),
         });
         let Next::Tool(c, Tool::ListTabs) = task.advance() else {
             panic!("expected list_tabs");
@@ -680,6 +685,7 @@ mod tests {
         task.model_replied(Reply {
             text: String::new(),
             calls: vec![call("c1", "read_page")],
+            raw: String::new(),
         });
         task.advance();
         task.step_started("Reading example.com".into());
@@ -702,6 +708,7 @@ mod tests {
             task.model_replied(Reply {
                 text: String::new(),
                 calls: vec![call(&format!("c{i}"), "list_tabs")],
+                raw: String::new(),
             });
             if task.status() == Status::Failed {
                 break;
@@ -726,6 +733,7 @@ mod tests {
         task.model_replied(Reply {
             text: String::new(),
             calls: vec![call("c1", "read_page")],
+            raw: String::new(),
         });
         task.advance();
         task.step_started("Reading example.com".into());
@@ -769,6 +777,7 @@ mod tests {
         task.model_replied(Reply {
             text: "It's an example.".into(),
             calls: vec![],
+            raw: String::new(),
         });
         assert_eq!(task.to_json()["draft"], "");
         assert_eq!(task.answer(), "It's an example.");
@@ -807,6 +816,7 @@ mod tests {
         task.model_replied(Reply {
             text: "An example.".into(),
             calls: vec![],
+            raw: String::new(),
         });
         assert!(task.follow_up("who made it?", &Context::default()));
         assert_eq!(task.status(), Status::Thinking);
@@ -830,6 +840,7 @@ mod tests {
         task.model_replied(Reply {
             text: String::new(),
             calls: vec![call("c1", "read_page"), call("c2", "list_tabs")],
+            raw: String::new(),
         });
         task.advance();
         task.stop();
@@ -867,6 +878,7 @@ mod tests {
         task.model_replied(Reply {
             text: String::new(),
             calls: vec![call("c1", "read_page")],
+            raw: String::new(),
         });
         task.advance();
         task.step_started("Reading example.com".into());
@@ -881,6 +893,7 @@ mod tests {
         task.model_replied(Reply {
             text: "An example page.".into(),
             calls: vec![],
+            raw: String::new(),
         });
         let saved = task.saved_exchanges();
         assert_eq!(saved.len(), 1);
@@ -899,7 +912,7 @@ mod tests {
         assert_eq!(messages.len(), 4);
         assert_eq!(messages[1], Message::User("what is this?".into()));
         assert!(
-            matches!(&messages[2], Message::Assistant { text, calls } if text == "An example page." && calls.is_empty())
+            matches!(&messages[2], Message::Assistant { text, calls, .. } if text == "An example page." && calls.is_empty())
         );
         assert!(matches!(&messages[3], Message::User(q) if q.starts_with("and who made it?")));
         assert!(!format!("{messages:?}").contains("secret page text"));

@@ -117,6 +117,12 @@ From the spec, made exact:
 | `full` | allowed everywhere | allowed | allowed | allowed |
 | `custom` | rules only; anything no rule covers asks | | | |
 
+Asking an agent about the page you are on is consent to read it: asking
+from a tab (the address bar, a selection, Explain) lets that agent read that
+page's origin in that tab until the tab closes, logged as "the person asked
+about this page". It never covers acting, other tabs, pages without a host,
+or a site a rule denies, and stop and take-over still win.
+
 "Approving a site" for an agent is a rule `agent, tier:act, site -> allow`,
 which covers read and act but not commit and above. `full` still obeys the
 hard limits, stop and take-over, and asks for pages without a host.
