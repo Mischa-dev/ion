@@ -13,6 +13,8 @@ WebEngineView {
     // Reader mode for this tab: `reader.toggle()`, `reader.active`.
     readonly property alias reader: readerMode
     readonly property alias findBar: findBar
+    // A dialog (alert, sign-in…) is waiting for this tab to be shown.
+    readonly property bool needsAttention: pageDialog.waiting
 
     // Emitted when the page asks for a new tab or window (target=_blank, window.open).
     signal newTabRequested(var request)
@@ -156,7 +158,7 @@ WebEngineView {
     PermissionPrompt { view: view; tabId: view.tabId }
     ExternalAppPrompt { id: externalApp; view: view }
     ScreenSharePicker { view: view }
-    PageDialog { view: view }
+    PageDialog { id: pageDialog; view: view }
     WebAuthDialog { view: view }
     ScreenshotTool {
         id: screenshotTool

@@ -81,6 +81,13 @@ Rectangle {
         visible: (tab.view?.recentlyAudible ?? false) || (tab.view?.audioMuted ?? false)
     }
 
+    AttentionDot {
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.margins: Theme.spacing / 2
+        visible: tab.view?.needsAttention ?? false
+    }
+
     ToolTip.visible: tabMouse.containsMouse && !tabMouse.dragging
     ToolTip.text: tab.title.length > 0 ? tab.title : tab.url
     ToolTip.delay: Theme.hoverDelayMs * 2

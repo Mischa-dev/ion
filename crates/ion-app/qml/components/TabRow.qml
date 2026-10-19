@@ -67,6 +67,13 @@ Rectangle {
             view: tab.view
             savedIcon: tab.icon
             opacity: tab.suspended ? Theme.dimmedOpacity : 1
+
+            AttentionDot {
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: -Theme.spacing / 2
+                visible: tab.view?.needsAttention ?? false
+            }
         }
 
         // Split views are marked so it's clear which tabs open together.

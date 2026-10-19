@@ -22,6 +22,10 @@ Popup {
     // Dialogs since the page last loaded, and whether the person blocked more.
     property int pageDialogCount: 0
     property bool pageBlocked: false
+    // A dialog from a tab in the background waits until the tab is shown,
+    // so it never covers the page the person is looking at; the tab strip
+    // marks the tab meanwhile.
+    property bool waiting: false
 
     readonly property int dialogType: !isAuth && request ? request.type : 0
     readonly property bool isPrompt: dialogType === JavaScriptDialogRequest.DialogTypePrompt
@@ -55,6 +59,11 @@ Popup {
 
     function present() {
         answered = false
+        if (!view.visible) {
+            waiting = true
+            return
+        }
+        waiting = false
         open()
         if (isAuth)
             userField.forceActiveFocus()
@@ -98,6 +107,15 @@ Popup {
         function onAuthenticationDialogRequested(request) {
             dialog.showAuth(request)
         }
+        function onVisibleChanged() {
+            if (dialog.view.visible && dialog.waiting && dialog.request) {
+                dialog.present()
+            } else if (!dialog.view.visible && dialog.opened) {
+                // Switching tabs puts an open dialog away unanswered.
+                dialog.waiting = true
+                dialog.close()
+            }
+        }
         function onLoadingChanged(info) {
             if (info.status === WebEngineView.LoadStartedStatus) {
                 dialog.pageDialogCount = 0
@@ -106,8 +124,10 @@ Popup {
         }
     }
 
-    // Esc, or the tab going away, counts as Cancel.
+    // Esc, or the tab closing, counts as Cancel.
     onClosed: {
+        if (waiting)
+            return
         if (request && !answered)
             request.dialogReject()
         request = null
