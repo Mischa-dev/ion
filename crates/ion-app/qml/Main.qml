@@ -616,7 +616,7 @@ ApplicationWindow {
     // toolbar (vertical tabs only) over the page.
     GridLayout {
         anchors.fill: parent
-        columns: 3
+        columns: 4
         rowSpacing: 0
         columnSpacing: 0
 
@@ -803,17 +803,24 @@ ApplicationWindow {
         // Notes and web panels (Ctrl+Shift+L).
         SidePanel {
             id: sidePanel
+            // Beside the toolbar too only when the toolbar row is in use
+            // (vertical tabs); spanning an empty row would open it up.
+            Layout.row: window.verticalTabs ? 0 : 1
+            Layout.column: 2
+            Layout.rowSpan: window.verticalTabs ? 2 : 1
             Layout.fillHeight: true
+            Layout.preferredHeight: 0
             Layout.preferredWidth: implicitWidth
             browser: window
         }
 
         AgentSidebar {
             id: agentSidebar
-            Layout.row: 0
-            Layout.column: 2
-            Layout.rowSpan: 2
+            Layout.row: window.verticalTabs ? 0 : 1
+            Layout.column: 3
+            Layout.rowSpan: window.verticalTabs ? 2 : 1
             Layout.fillHeight: true
+            Layout.preferredHeight: 0
             Layout.preferredWidth: implicitWidth
             view: window.currentView
             onAsk: input => navBar.askAgent(input)
