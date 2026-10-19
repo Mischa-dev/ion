@@ -83,8 +83,12 @@ lists = ["easylist", "easyprivacy", "ublock-filters"]
 #   { title = "Mail", url = "https://mail.example/" },
 # ]
 
-[shortcuts]                  # command id = Qt key sequence
+[shortcuts]                  # command = key, [keys] or "" for none; Ctrl is Cmd on
+                             # macOS. Easier: Ctrl+/ opens the shortcut editor,
+                             # which writes here. Command names are the palette's
+                             # commands in camelCase (newTab, reload, findNext…).
 # palette = "Ctrl+K"
+# reload = ["F5", "Ctrl+R"]
 # askAgent = "Ctrl+E"         # the address bar, ready with "@ion " (needs ai.enable)
 # agentSidebar = "Ctrl+Shift+E"  # the agent sidebar (needs ai.enable)
 
@@ -120,9 +124,12 @@ trust = "ask"                # see docs/SAFETY.md
 [sites."example.com"]        # per-site settings; a host covers its subdomains,
 javascript = true            # "*" covers every site, the most specific wins
                              # (CSS for a site goes in [theme.sites] above)
-# userAgent = "chrome"       # "chrome" (the engine's, minus "QtWebEngine"),
-                             # "firefox", "safari", "default" or a full string;
-                             # values other than "chrome" also blank client hints
+# userAgent = "firefox"      # "default" (Ion's: the engine's minus "QtWebEngine";
+                             # "chrome" is the same), "firefox", "safari",
+                             # "engine" (with "QtWebEngine") or a full string;
+                             # Firefox, Safari and custom strings blank client
+                             # hints. accounts.google.com gets "firefox" built
+                             # in (docs/compat.md); set "default" to undo it
 ```
 
 ## User scripts and styles
