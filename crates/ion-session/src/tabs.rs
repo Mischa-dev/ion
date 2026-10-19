@@ -331,6 +331,12 @@ impl TabList {
         list.split_stray_group_members();
         list.prune_groups();
         list.current = current_id.and_then(|id| list.index_of(id)).unwrap_or(0);
+        if let Some(shown) = session
+            .workspace
+            .filter(|&id| list.workspaces.iter().any(|w| w.id == id))
+        {
+            list.shown_workspace = shown;
+        }
         list.track_current();
         list
     }
@@ -401,6 +407,11 @@ impl TabList {
                     vertical: s.vertical,
                 })
                 .collect(),
+            workspace: self
+                .tabs
+                .get(self.current)
+                .filter(|t| t.essential)
+                .map(|_| self.shown_workspace),
             ..Session::default()
         }
     }
@@ -1701,6 +1712,19 @@ mod tests {
         assert_eq!(urls(&restored), ["a", "b", "c"]);
         assert_eq!(restored.get(1).unwrap().title, "Bee");
         assert_eq!(restored.current(), Some(1));
+    }
+
+    #[test]
+    fn essential_current_keeps_its_workspace_across_restarts() {
+        let mut l = list(&["a", "b"]);
+        let work = l.add_workspace("Work", "");
+        l.open_in(work, 2, "w", "", true);
+        let e = l.pin(0, Pin::Everywhere).unwrap();
+        l.activate(e);
+        assert_eq!(l.current_workspace(), work);
+        let restored = TabList::from_session(&l.to_session());
+        assert_eq!(restored.current_workspace(), work);
+        assert!(restored.get(restored.current().unwrap()).unwrap().essential);
     }
 
     #[test]

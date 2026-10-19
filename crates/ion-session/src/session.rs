@@ -80,6 +80,10 @@ pub struct Session {
     /// Tabs shown side by side.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub splits: Vec<SavedSplit>,
+    /// Workspace on screen, when the current tab is an Essential (which shows
+    /// in every workspace) and so does not say which.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<u32>,
 }
 
 /// A split view as stored on disk.
@@ -116,6 +120,7 @@ impl Default for Session {
             workspaces: Vec::new(),
             groups: Vec::new(),
             splits: Vec::new(),
+            workspace: None,
         }
     }
 }
