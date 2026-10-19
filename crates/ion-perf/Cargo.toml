@@ -1,0 +1,15 @@
+[package]
+name = "ion-perf"
+description = "Qt-free performance plumbing for the Ion browser: startup marks, memory pressure and per-process memory"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[lints]
+workspace = true

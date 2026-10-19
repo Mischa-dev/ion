@@ -108,6 +108,13 @@ vim = false                  # j/k scroll, gg/G, d/u, H/L back/forward,
 swipe = true                 # two fingers sideways on a touchpad: back/forward
 pinch = "zoom"               # "zoom" (page zoom, kept per site), "magnify"
                              # (Chromium's magnifier, layout unchanged) or "off"
+mouse = false                # hold the right button and draw: L back, R forward,
+                             # D new tab, DR close tab, DL reopen closed tab,
+                             # UD reload, U reset zoom, RL duplicate tab
+[gestures.mouseStrokes]      # change or add strokes: moves to a command id
+                             # (up to 4 of L R U D, no letter twice in a row)
+# U = "new-tab"
+# D = ""                     # "" turns a stroke off
 
 [privacy]
 globalPrivacyControl = true  # Sec-GPC header and navigator.globalPrivacyControl
@@ -122,6 +129,11 @@ fingerprinting = true        # noise on canvas/WebGL/audio readouts, common
 [passwords]                  # saved in the system keyring's protection (docs/PRIVACY.md)
 enable = true                # offer to save passwords typed into sites
 autofill = true              # fill a site's only saved login when its page loads
+
+[media]
+autoplay = "muted"           # what pages may play before you click or type:
+                             # "allow", "muted" (silent video only; sound waits
+                             # for you) or "block" (nothing)
 
 [ai]                         # Ion Agent: @ion or !ai in the address bar
 enable = false               # off until you turn it on
@@ -151,6 +163,7 @@ javascript = true            # "*" covers every site, the most specific wins
                              # Firefox, Safari and custom strings blank client
                              # hints. accounts.google.com gets "firefox" built
                              # in (docs/compat.md); set "default" to undo it
+# autoplay = "allow"         # overrides media.autoplay for this site
 ```
 
 ## User scripts and styles
