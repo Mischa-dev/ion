@@ -107,25 +107,25 @@ Rectangle {
 
         IconButton {
             visible: row.running
-            glyph: row.download.isPaused ? "▶" : "⏸"
+            iconName: row.download.isPaused ? "play" : "pause"
             tip: row.download.isPaused ? qsTr("Resume") : qsTr("Pause")
             onClicked: row.download.isPaused ? row.download.resume() : row.download.pause()
         }
         IconButton {
             // Finished interrupted downloads cannot be resumed.
             visible: row.interrupted && !row.download.isFinished
-            glyph: "↻"
+            iconName: "reload"
             tip: qsTr("Retry")
             onClicked: row.download.resume()
         }
         IconButton {
             visible: row.completed
-            glyph: "📁"
+            iconName: "folder"
             tip: qsTr("Show in folder")
             onClicked: row.showInFolder()
         }
         IconButton {
-            glyph: "×"
+            iconName: "close"
             tip: row.running ? qsTr("Cancel") : qsTr("Remove from list")
             onClicked: row.running ? row.download.cancel() : row.removeRequested()
         }

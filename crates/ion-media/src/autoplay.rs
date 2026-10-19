@@ -11,13 +11,25 @@ use std::collections::BTreeMap;
 use ion_config::{Autoplay, Site};
 
 /// The autoplay policy for pages at `url`: the most specific `[sites]` entry
-/// that sets `autoplay`, else `default` (`media.autoplay`).
+/// that sets `autoplay`, else `default` (`media.autoplay`). A `blob:` or
+/// `filesystem:` URL counts as the site that made it.
 pub fn autoplay_for(default: Autoplay, sites: &BTreeMap<String, Site>, url: &str) -> Autoplay {
-    ion_sites::matching(sites, url)
+    ion_sites::matching(sites, creator(url))
         .iter()
         .rev()
         .find_map(|(_, site)| site.autoplay)
         .unwrap_or(default)
+}
+
+/// The URL a `blob:` or `filesystem:` URL wraps; other URLs as they are.
+fn creator(url: &str) -> &str {
+    let url = url.trim();
+    for scheme in ["blob:", "filesystem:"] {
+        if url.len() > scheme.len() && url[..scheme.len()].eq_ignore_ascii_case(scheme) {
+            return &url[scheme.len()..];
+        }
+    }
+    url
 }
 
 /// Whether the engine's `playbackRequiresUserGesture` should be on.
@@ -83,6 +95,16 @@ mod tests {
             autoplay_for(Autoplay::Muted, &BTreeMap::new(), "https://news.example/"),
             Autoplay::Muted
         );
+    }
+
+    #[test]
+    fn blob_urls_count_as_their_site() {
+        let s = sites(&[("music.example", Some(Autoplay::Block))]);
+        assert_eq!(
+            autoplay_for(Autoplay::Allow, &s, "blob:https://music.example/1234"),
+            Autoplay::Block
+        );
+        assert_eq!(creator("https://a.example/"), "https://a.example/");
     }
 
     #[test]

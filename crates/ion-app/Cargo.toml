@@ -25,6 +25,7 @@ ion-reader.workspace = true
 ion-safety.workspace = true
 ion-agent.workspace = true
 ion-media.workspace = true
+ion-settings.workspace = true
 ion-input.workspace = true
 cxx.workspace = true
 cxx-qt.workspace = true

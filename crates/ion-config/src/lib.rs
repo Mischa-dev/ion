@@ -36,7 +36,7 @@ pub use schema::{
     Density, General, Keyboard, Mcp, Media, PROVIDERS, PageTheming, Privacy, RuleEffect, Safety,
     Search, Site, SiteTheme, TabLayout, Theme, ThemeSource, Ui,
 };
-pub use store::{Paths, State, Store, Subscription, Watcher};
+pub use store::{Origin, Paths, State, Store, Subscription, Watcher};
 pub use toml::Value;
 
 /// The process-wide store, loaded from [`Paths::from_env`] and watched for
