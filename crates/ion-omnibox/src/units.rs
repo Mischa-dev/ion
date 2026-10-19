@@ -244,6 +244,10 @@ fn quantity(text: &str) -> Option<(f64, &'static Unit)> {
 }
 
 fn find(name: &str) -> Option<&'static Unit> {
+    // "°" on its own is the angle, not the start of "°C".
+    if name.trim() == "°" {
+        return UNITS.iter().find(|unit| unit.symbol == "°");
+    }
     let name = name
         .trim()
         .trim_start_matches("degrees ")
@@ -317,6 +321,11 @@ mod tests {
         assert_eq!(
             text("180 deg to rad").as_deref(),
             Some("180° = 3.14159 rad")
+        );
+        assert_eq!(text("180° to rad").as_deref(), Some("180° = 3.14159 rad"));
+        assert_eq!(
+            text("3.14159 rad to °").as_deref(),
+            Some("3.14159 rad = 180°")
         );
     }
 

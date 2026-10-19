@@ -246,7 +246,18 @@ impl Pool {
 /// Open tabs, bookmarks and history pages matching `query`, best first.
 fn pages(query: &str, sources: &Sources) -> Vec<Item> {
     let mut pool = Pool {
-        terms: query.split_whitespace().map(str::to_lowercase).collect(),
+        // A typed or pasted address matches pages as they're compared:
+        // without its scheme, `www.` or trailing slash.
+        terms: query
+            .split_whitespace()
+            .map(|term| {
+                if term.contains("://") || term.starts_with("www.") {
+                    normalize(term)
+                } else {
+                    term.to_lowercase()
+                }
+            })
+            .collect(),
         current: current_url(sources),
         candidates: Vec::new(),
     };
@@ -608,12 +619,15 @@ mod tests {
                 .count(),
             1
         );
-        // Typing an open tab's address still offers to switch to it.
-        assert!(
-            run(&w, "rust-lang.org")
-                .iter()
-                .any(|i| i.action == Action::SwitchTab(1))
-        );
+        // Typing or pasting an open tab's address still offers to switch to it.
+        for address in ["rust-lang.org", "https://www.rust-lang.org/"] {
+            assert!(
+                run(&w, address)
+                    .iter()
+                    .any(|i| i.action == Action::SwitchTab(1)),
+                "{address}"
+            );
+        }
         // The current tab isn't suggested.
         assert!(
             run(&w, "ion")
