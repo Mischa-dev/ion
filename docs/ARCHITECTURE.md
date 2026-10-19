@@ -68,6 +68,33 @@ work rarely touches the same file:
 Shared files with small, append-only edits: root `Cargo.toml`,
 `crates/ion-app/Cargo.toml`, `bridge/mod.rs`, and the hookup in `Main.qml`.
 
+## Ion's own pages and Settings
+
+`ion://settings`, `ion://history` and the other pages in `ion_core::pages`
+are QML pages (`qml/pages/*Page.qml`) that `BuiltinPage.qml` draws over the
+tab. The `ion:` scheme (`bridge/pages.rs`) serves the tab an empty, titled
+document, so Back, Reload, tab titles and session restore work as for any
+page. `window.openPage("settings", "privacy")` shows one, reusing a tab that
+already has it.
+
+The Settings page is drawn from data in `crates/ion-settings`, so a feature
+adds its settings without touching the page:
+
+1. `crates/ion-settings/src/sections/<name>.rs` with
+   `pub fn section(ctx: &Context) -> Section`, and one line in
+   `sections/mod.rs` (the sidebar's order). Each `Setting` names a config key
+   and a `Control` (`Toggle`, `Choice`, `Preset`, `Text`, `Number`, `List`,
+   `Flags`, `Folder`, `Action`). The crate's tests check every key exists in
+   the config schema and every choice is a value it accepts.
+2. A row that needs its own UI uses `Control::Custom { component }`, drawn by
+   `qml/settings/<component>.qml`, which gets the row's `setting` (with
+   `value`, `default`, `origin`) and may emit `action(string)`. A button uses
+   `Control::Action`; add its case to `run()` in `SettingsPage.qml`.
+
+Every change goes through `Config.set`, which writes `overrides.toml`; Nix's
+`config.toml` is never written (docs/CONFIG.md). Rows say when a value comes
+from `config.toml` and offer to go back to it.
+
 ## Where things stand
 
 - Tabs live in the Rust `Tabs` singleton (`bridge/tabs.rs`, a list model over
