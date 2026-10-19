@@ -40,7 +40,9 @@ TextField {
         if (!match)
             return null
         const rest = match[3] === "/" ? "" : match[3]
-        const host = match[2].replace(/^www\./, "")
+        // Credentials before an `@` are never shown: `https://bank.example@evil.test`
+        // would otherwise read as bank.example.
+        const host = match[2].slice(match[2].lastIndexOf("@") + 1).replace(/^www\./, "")
         // Plain http to this machine never leaves it: no warning.
         const local = /^(localhost|127\.[\d.]+|\[::1\])(:\d+)?$/.test(host)
         return { secure: match[1] === "https", local: local, host: host, rest: rest }
@@ -103,8 +105,11 @@ TextField {
 
         Text {
             id: hostText
+            // A host too long to fit keeps its end, the part that names the site.
+            width: Math.min(implicitWidth, parent.width)
             text: field.parts?.host ?? ""
             textFormat: Text.PlainText
+            elide: Text.ElideLeft
             color: Theme.text
             font.pixelSize: Theme.fontSize
             font.weight: Theme.weightMedium
