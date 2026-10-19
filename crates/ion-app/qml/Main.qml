@@ -536,6 +536,17 @@ ApplicationWindow {
                 view.zoomFactor = factor
         }
         onCommand: id => window.runCommand(id)
+        // In a split view the stroke acts on the pane it starts in.
+        onStrokeStarted: (x, y) => {
+            for (let i = 0; i < views.count; i++) {
+                const pane = views.itemAt(i)
+                if (pane && pane.inSplit && !pane.current
+                        && pane.contains(pane.mapFromItem(null, x, y))) {
+                    Tabs.activate(pane.index)
+                    return
+                }
+            }
+        }
         onStrokeMoved: (x, y) => strokeTrail.add(x, y)
         Component.onCompleted: attach(window)
     }

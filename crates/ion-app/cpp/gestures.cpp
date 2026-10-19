@@ -130,9 +130,11 @@ private:
             return take;
         }
         case QEvent::MouseMove:
-            if (m_stroking)
-                QMetaObject::invokeMethod(m_target, "strokeTo", Qt::DirectConnection, x, y);
-            return false;
+            // The page never saw the press, so it doesn't see the drag either.
+            if (!m_stroking)
+                return false;
+            QMetaObject::invokeMethod(m_target, "strokeTo", Qt::DirectConnection, x, y);
+            return true;
         case QEvent::MouseButtonRelease: {
             if (!m_stroking || event->button() != Qt::RightButton)
                 return false;

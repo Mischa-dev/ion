@@ -86,6 +86,12 @@ pub mod qobject {
         #[cxx_name = "strokeMoved"]
         fn stroke_moved(self: Pin<&mut Gestures>, x: f64, y: f64);
 
+        /// A mouse stroke began at (`x`, `y`) in window coordinates, so the
+        /// split view pane there can become current before it runs.
+        #[qsignal]
+        #[cxx_name = "strokeStarted"]
+        fn stroke_started(self: Pin<&mut Gestures>, x: f64, y: f64);
+
         /// A mouse stroke asks for this command.
         #[qsignal]
         fn command(self: Pin<&mut Gestures>, id: QString);
@@ -309,6 +315,7 @@ impl qobject::Gestures {
         }
         self.as_mut().rust_mut().stroke = Some(Stroke::begin(x, y));
         self.as_mut().set_stroke_label();
+        self.stroke_started(x, y);
         true
     }
 
