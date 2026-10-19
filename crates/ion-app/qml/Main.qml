@@ -536,8 +536,9 @@ ApplicationWindow {
                         // its site's autoplay policy now; a blank one is the
                         // opener's.
                         const target = request.requestedUrl.toString()
-                        tab.applyAutoplay(target.length > 0 && !target.startsWith("about:")
-                                          ? target : view.url.toString())
+                        const blank = target.length === 0 || target.startsWith("about:")
+                        tab.autoplayInherited = blank ? view.autoplayUrl() : ""
+                        tab.applyAutoplay(blank ? tab.autoplayInherited : target)
                         request.openIn(tab)
                     }
                     // A page a script opened may close itself (window.close()),

@@ -279,6 +279,8 @@ WebEngineView {
         }
         view.navigationEnd = target
         view.settings.javascriptEnabled = Sites.javascriptEnabled(target)
+        if (!target.startsWith("about:"))
+            view.autoplayInherited = ""
         view.applyAutoplay(target)
         autoplayCheck.restart()
     }
@@ -290,15 +292,25 @@ WebEngineView {
     Timer {
         id: autoplayCheck
         interval: 1500
-        onTriggered: view.applyAutoplay(view.url.toString())
+        onTriggered: view.applyAutoplay(view.autoplayUrl())
     }
     function autoplayLoading(info) {
         if (info.status === WebEngineView.LoadStartedStatus) {
             autoplayCheck.stop()
             applyAutoplay(info.url.toString())
         } else {
-            applyAutoplay(url.toString())
+            applyAutoplay(autoplayUrl())
         }
+    }
+
+    // A blank popup's opener, whose site's policy the popup keeps while it
+    // stays blank (set by Main.qml when it adopts the popup).
+    property string autoplayInherited: ""
+    // The URL whose policy the open page follows.
+    function autoplayUrl() {
+        const current = url.toString()
+        return autoplayInherited.length > 0 && (current.length === 0 || current.startsWith("about:"))
+            ? autoplayInherited : current
     }
 
     // The policy last applied, to spot a settings change that affects the
@@ -314,7 +326,7 @@ WebEngineView {
             if (view.loading)
                 return
             const before = view.autoplayPolicy
-            view.applyAutoplay(view.url.toString())
+            view.applyAutoplay(view.autoplayUrl())
             if (view.autoplayPolicy === before)
                 return
             if (view.autoplayPolicy === "block")
