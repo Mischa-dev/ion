@@ -18,8 +18,6 @@ Rectangle {
     // pointer don't steal the keyboard selection.
     signal pointerMoved(point position)
 
-    readonly property bool mac: Qt.platform.os === "osx" || Qt.platform.os === "macos"
-
     function iconFor(kind) {
         switch (kind) {
         case "tab": return "tabs"
@@ -34,12 +32,10 @@ Rectangle {
         }
     }
 
-    // Shortcut hints are written as "Ctrl+…"; show them the macOS way there.
+    // Command hints are portable key text ("Ctrl+…"); show them the
+    // platform's way (⌘ on macOS).
     function hintText(hint) {
-        if (!mac)
-            return hint
-        return hint.replace("Alt+Left", "Ctrl+[").replace("Alt+Right", "Ctrl+]")
-            .replace("Ctrl+", "⌘").replace("Shift+", "⇧")
+        return row.item.kind === "command" && hint.length > 0 ? Keymap.display(hint) : hint
     }
 
     implicitHeight: Theme.tabHeight + Theme.spacing * 2

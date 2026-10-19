@@ -163,6 +163,15 @@ impl qobject::PaletteSearch {
             &ion_config::global().config(),
             ion_theme::builtin::names(),
         );
+        // Hints show the keys in effect, after `[shortcuts]` remaps.
+        let keymap = super::keymap::current();
+        let hints: Vec<(&'static str, String)> = keymap
+            .0
+            .bindings()
+            .iter()
+            .map(|b| (b.id, b.keys.first().cloned().unwrap_or_default()))
+            .collect();
+        let recent = super::keymap::recent();
         let sources = Sources {
             tabs: &tabs,
             current_tab: usize::try_from(current).ok(),
@@ -170,6 +179,8 @@ impl qobject::PaletteSearch {
             bookmarks: &bookmarks,
             sessions: &sessions,
             settings: &settings,
+            hints: &hints,
+            recent: &recent,
         };
 
         rows(self.palette().query(&input.to_string(), &sources))

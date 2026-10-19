@@ -75,10 +75,6 @@ Popup {
         }
     }
 
-    Shortcut {
-        sequences: ["Ctrl+J"]
-        onActivated: panel.toggle()
-    }
     // The page keeps keyboard focus while the panel is open, so Esc is a
     // shortcut rather than the popup's own close policy.
     Shortcut {

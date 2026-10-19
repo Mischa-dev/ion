@@ -1,6 +1,6 @@
 #include "fonts.h"
 
-#include <QtCore/QDir>
+#include <QtCore/QDirIterator>
 #include <QtCore/QStringList>
 #include <QtGui/QFont>
 #include <QtGui/QFontDatabase>
@@ -12,11 +12,12 @@ void installUiFont()
 {
     const QString dir = qEnvironmentVariable("ION_FONT_DIR");
     if (!dir.isEmpty()) {
-        QDir fonts(dir);
-        const QStringList files = fonts.entryList({ QStringLiteral("*.ttf"), QStringLiteral("*.otf") },
-                                                  QDir::Files);
-        for (const QString &file : files)
-            QFontDatabase::addApplicationFont(fonts.filePath(file));
+        // Packages may keep fonts in subfolders (share/fonts/truetype/…).
+        QDirIterator fonts(dir,
+                           { QStringLiteral("*.ttf"), QStringLiteral("*.otf"), QStringLiteral("*.ttc") },
+                           QDir::Files, QDirIterator::Subdirectories);
+        while (fonts.hasNext())
+            QFontDatabase::addApplicationFont(fonts.next());
     }
 #ifndef Q_OS_MACOS
     // The first of these that is installed; otherwise the platform default.
