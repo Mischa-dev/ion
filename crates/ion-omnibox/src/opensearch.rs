@@ -85,6 +85,14 @@ fn parse_with(xml: &str, page_host: &str, https_only: bool) -> Option<SiteEngine
         .filter(|name| !name.is_empty())
         .unwrap_or_else(|| page_host.clone());
 
+    let language = element_text(xml, "Language")
+        .map(str::trim)
+        .filter(|l| {
+            !l.is_empty()
+                && l.bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'*')
+        })
+        .unwrap_or("*");
     // The first results page that works; a broken or off-site one doesn't
     // stop a later one from being used.
     let template = tags(xml, "Url").find_map(|tag| {
@@ -105,6 +113,7 @@ fn parse_with(xml: &str, page_host: &str, https_only: bool) -> Option<SiteEngine
         let offsets = Offsets {
             index: number("indexOffset"),
             page: number("pageOffset"),
+            language,
         };
         let template = fill_parameters(&template, &offsets)?.replace('\u{0}', "{}");
         let url = url::Url::parse(&template.replace("{}", "q")).ok()?;
@@ -279,18 +288,20 @@ fn same_site(a: &str, b: &str) -> bool {
 }
 
 /// What Ion sends for OpenSearch's standard required parameters, besides
-/// the first result and page numbers, which come from [`Offsets`].
+/// the language and first result and page numbers, which come from
+/// [`Offsets`].
 const PARAMETER_DEFAULTS: &[(&str, &str)] = &[
     ("inputEncoding", "UTF-8"),
     ("outputEncoding", "UTF-8"),
-    ("language", "*"),
     ("count", "20"),
 ];
 
-/// A `<Url>`'s first result and page numbers (`indexOffset`, `pageOffset`).
+/// A `<Url>`'s first result and page numbers (`indexOffset`, `pageOffset`),
+/// and the description's first `<Language>` (`*`, any, when it names none).
 struct Offsets<'a> {
     index: &'a str,
     page: &'a str,
+    language: &'a str,
 }
 
 /// Fills the parameters left in `template` other than the query: query
@@ -323,6 +334,7 @@ fn fill_parameters(template: &str, offsets: &Offsets) -> Option<String> {
             let value = match name {
                 "startIndex" => offsets.index,
                 "startPage" => offsets.page,
+                "language" => offsets.language,
                 _ => PARAMETER_DEFAULTS
                     .iter()
                     .find(|(known, _)| *known == name)
@@ -705,6 +717,15 @@ mod tests {
             </OpenSearchDescription>"#;
         let engine = parse(xml, "example.com").unwrap();
         assert_eq!(engine.template, "https://example.com/s?q={}&start=0&p=1");
+    }
+
+    #[test]
+    fn the_language_is_one_the_description_names() {
+        let xml = r#"<OpenSearchDescription><Language>de</Language><Url type="text/html"
+            template="https://example.com/s?q={searchTerms}&amp;hl={language}"/>
+            </OpenSearchDescription>"#;
+        let engine = parse(xml, "example.com").unwrap();
+        assert_eq!(engine.template, "https://example.com/s?q={}&hl=de");
     }
 
     #[test]
