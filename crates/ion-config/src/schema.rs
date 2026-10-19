@@ -43,6 +43,7 @@ pub struct Config {
     pub agents: Agents,
     pub safety: Safety,
     pub ai: Ai,
+    pub performance: Performance,
     pub media: Media,
     pub reader: Reader,
 }
@@ -162,6 +163,26 @@ impl Default for Passwords {
         Self {
             enable: true,
             autofill: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Performance {
+    /// Look up the addresses of a page's links before they are clicked, as
+    /// Chrome and Safari do; saves a network round trip per new site.
+    pub dns_prefetch: bool,
+    /// Decode video on the GPU (VA-API on Linux; macOS always does). Read
+    /// at startup.
+    pub hardware_video: bool,
+}
+
+impl Default for Performance {
+    fn default() -> Self {
+        Self {
+            dns_prefetch: true,
+            hardware_video: true,
         }
     }
 }

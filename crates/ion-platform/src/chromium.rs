@@ -23,6 +23,10 @@ pub const WIDEVINE_VAR: &str = "ION_WIDEVINE_PATH";
 /// listing it keeps it on whatever QtWebEngine ships.
 const LINUX_FEATURES: &[&str] = &["WebRTCPipeWireCapturer"];
 
+/// libva's driver choice. `nvidia` means nvidia-vaapi-driver is installed and
+/// chosen on purpose, which Chromium otherwise refuses to use.
+pub const LIBVA_DRIVER_VAR: &str = "LIBVA_DRIVER_NAME";
+
 /// VA-API video decoding (and encoding, for WebRTC) on Linux. Chromium renamed
 /// the decode feature over time; listing every name is harmless because unknown
 /// features are ignored, and keeps this working across QtWebEngine updates.
@@ -63,6 +67,8 @@ pub struct Options {
     pub hardware_video: bool,
     /// Where the Widevine CDM is, if Ion knows.
     pub widevine: Option<String>,
+    /// VA-API through nvidia-vaapi-driver ([`LIBVA_DRIVER_VAR`] is `nvidia`).
+    pub nvidia_vaapi: bool,
 }
 
 impl Options {
@@ -74,10 +80,12 @@ impl Options {
             .ok()
             .map(|path| path.trim().to_owned())
             .filter(|path| !path.is_empty() && std::path::Path::new(path).is_file());
+        let nvidia_vaapi = std::env::var(LIBVA_DRIVER_VAR).is_ok_and(|v| v.trim() == "nvidia");
         Self {
             os: Os::current(),
             hardware_video,
             widevine,
+            nvidia_vaapi,
         }
     }
 
@@ -89,6 +97,11 @@ impl Options {
             features.extend_from_slice(LINUX_FEATURES);
             if self.hardware_video {
                 features.extend_from_slice(LINUX_VIDEO_FEATURES);
+                // Chromium blocks VA-API on NVIDIA GPUs (crbug.com/1492880)
+                // unless asked; choosing the nvidia driver is that ask.
+                if self.nvidia_vaapi {
+                    features.push("VaapiOnNvidiaGPUs");
+                }
             }
         }
         features
@@ -159,6 +172,7 @@ mod tests {
         os: Os::Linux,
         hardware_video: true,
         widevine: None,
+        nvidia_vaapi: false,
     };
 
     #[test]
@@ -207,6 +221,24 @@ mod tests {
             merged_flags(&linux, None)
                 .unwrap()
                 .starts_with("--widevine-path=/nix/store/x/libwidevinecdm.so --enable-features=")
+        );
+    }
+
+    #[test]
+    fn nvidia_driver_opts_into_vaapi_on_nvidia() {
+        assert!(
+            !merged_flags(&LINUX, None)
+                .unwrap()
+                .contains("VaapiOnNvidiaGPUs")
+        );
+        let nvidia = Options {
+            nvidia_vaapi: true,
+            ..LINUX
+        };
+        assert!(
+            merged_flags(&nvidia, None)
+                .unwrap()
+                .contains("VaapiOnNvidiaGPUs")
         );
     }
 

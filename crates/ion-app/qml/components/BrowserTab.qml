@@ -278,6 +278,12 @@ WebEngineView {
     // Both are off by default; Ion asks before a page uses them.
     settings.fullScreenSupportEnabled: true
     settings.screenCaptureEnabled: true
+    // Look up the addresses of a page's links before they are clicked, as
+    // Chrome and Safari do (`[performance] dnsPrefetch`); off in QtWebEngine.
+    settings.dnsPrefetchEnabled: {
+        Config.revision
+        return Config.value("performance.dnsPrefetch") !== false
+    }
     // Copy buttons and editors (Google Docs, Notion, GitHub) use the async
     // clipboard. Writing needs nothing more; reading asks first (Safety's
     // clipboard permission).

@@ -130,6 +130,11 @@ fingerprinting = true        # noise on canvas/WebGL/audio readouts, common
 enable = true                # offer to save passwords typed into sites
 autofill = true              # fill a site's only saved login when its page loads
 
+[performance]
+dnsPrefetch = true           # look up links' addresses before they are clicked
+hardwareVideo = true         # VA-API video decoding on Linux (read at startup;
+                             # ION_HARDWARE_VIDEO=0 also turns it off)
+
 [media]
 autoplay = "muted"           # what pages may play before you click or type:
                              # "allow", "muted" (silent video only; sound waits

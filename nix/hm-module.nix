@@ -290,6 +290,11 @@ in
           auditRetentionDays = setting types.ints.positive "Days of agent activity log kept.";
         };
 
+        performance = {
+          dnsPrefetch = setting types.bool "Look up the addresses of a page's links before they are clicked.";
+          hardwareVideo = setting types.bool "Decode video on the GPU (VA-API on Linux). Read at startup.";
+        };
+
         media = {
           autoplay = setting autoplayType "What pages may play before you interact: `allow`, `muted` (silent only) or `block`.";
           autoPictureInPicture = setting types.bool "Pop a playing video into picture-in-picture when you switch tabs.";

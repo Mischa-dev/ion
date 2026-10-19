@@ -216,7 +216,7 @@ ApplicationWindow {
     }
 
     function showExtensions() {
-        extensionsDialog.show()
+        extensionsDialog.get().show()
     }
 
     // Window fullscreen, the same as F11: hides the toolbars too.
@@ -246,17 +246,17 @@ ApplicationWindow {
     }
 
     function showProfiles() {
-        profilesDialog.show()
+        profilesDialog.get().show()
     }
 
     function showImport() {
-        importDialog.show()
+        importDialog.get().show()
     }
 
     // The password manager, its search set to `query` ("" for everything).
     // `section` is "passwords" (the default) or "addresses".
     function showPasswords(query, section) {
-        passwordManager.show(query || "", section || "passwords")
+        passwordManager.get().show(query || "", section || "passwords")
     }
 
     function showPalette() {
@@ -342,6 +342,8 @@ ApplicationWindow {
     property bool startupFinished: false
     // True while the views of a restored session are created; see finishStartup.
     property bool restoringViews: false
+    // Restored tabs on screen wait too: a startup tab is about to replace them.
+    property bool restoreDisplaced: false
     // This launch has marked itself running (Tabs.beginRun).
     property bool runStarted: false
     property bool startupRunning: false
@@ -374,17 +376,30 @@ ApplicationWindow {
         } else if (crashed) {
             crashRestore.offer()
         }
-        // The tab views are created now. Restored background tabs wait until
-        // they are first shown, so a big session costs little at startup;
-        // tabs opened below load right away.
-        restoringViews = restored
-        startupFinished = true
-        restoringViews = false
-        early.forEach((target, i) => openTab(target, i === 0))
         // URLs on the command line (`ion %U` from the desktop file) open as new
         // tabs after the restored ones; the first one becomes current.
         const urls = Qt.application.arguments.slice(1).filter(arg => !arg.startsWith("-"))
+        // The tab views are created now. Restored background tabs wait until
+        // they are first shown, so a big session costs little at startup;
+        // tabs opened below load right away. When one of those takes over the
+        // screen, the restored tabs it replaces wait too.
+        restoringViews = restored
+        restoreDisplaced = restored && (early.length > 0 || urls.length > 0)
+        startupFinished = true
+        restoringViews = false
+        early.forEach((target, i) => openTab(target, i === 0))
         urls.forEach((arg, i) => openTab(urlBarResolver.resolve(arg), i === 0))
+        if (restoreDisplaced) {
+            restoreDisplaced = false
+            // Whatever is still on screen loads now.
+            for (let i = 0; i < views.count; i++) {
+                const view = views.itemAt(i)
+                if (view && view.onScreen && view.deferred) {
+                    view.deferred = false
+                    view.loadSavedUrl()
+                }
+            }
+        }
         if (Tabs.count === 0)
             openTab(Pages.isFirstRun() ? Pages.url("welcome", "") : homeUrl)
         sessionSaveTimer.restart()
@@ -686,11 +701,15 @@ ApplicationWindow {
         printPreview.open(window.currentView, saveAsPdf === true)
     }
 
-    ImportDialog { id: importDialog }
-    PasswordManager { id: passwordManager }
-    ProfilesDialog { id: profilesDialog }
+    // Dialogs are built the first time they open (Lazy.get()).
+    Lazy { id: importDialog; sourceComponent: ImportDialog {} }
+    Lazy { id: passwordManager; sourceComponent: PasswordManager {} }
+    Lazy { id: profilesDialog; sourceComponent: ProfilesDialog {} }
     ClearDataDialog { id: clearDataDialog; profile: window.profile }
-    ExtensionsDialog { id: extensionsDialog; browser: window }
+    Lazy {
+        id: extensionsDialog
+        sourceComponent: ExtensionsDialog { browser: window }
+    }
 
     // Per-site CSS and userscripts, installed on the profile.
     SiteScripts { profile: window.profile }
@@ -859,7 +878,8 @@ ApplicationWindow {
                     readonly property bool onScreen: current || inSplit
 
                     Component.onCompleted: {
-                        deferred = (Tabs.restoring || window.restoringViews) && !onScreen
+                        deferred = (Tabs.restoring || window.restoringViews)
+                                && (!onScreen || window.restoreDisplaced)
                         if (!deferred)
                             loadSavedUrl()
                     }
@@ -953,7 +973,7 @@ ApplicationWindow {
             Layout.preferredWidth: implicitWidth
             view: window.currentView
             onAsk: input => navBar.askAgent(input)
-            onActivityRequested: agentActivity.show()
+            onActivityRequested: agentActivity.get().show()
             onFinished: window.currentView?.forceActiveFocus()
         }
     }
@@ -1010,10 +1030,10 @@ ApplicationWindow {
         navBar.urlBar.cursorPosition = navBar.urlBar.text.length
     }
     function showAgentActivity() {
-        agentActivity.show()
+        agentActivity.get().show()
     }
     function showAgentSetup() {
-        agentSetup.show("")
+        agentSetup.get().show("")
     }
     function toggleAgentSidebar() {
         agentSidebar.toggle(window.currentView ? Agent.latestTask(window.currentView.tabId) : -1)
@@ -1021,10 +1041,15 @@ ApplicationWindow {
 
     AgentsStoppedNotice {}
     CrashRestoreNotice { id: crashRestore }
-    AgentActivity { id: agentActivity }
-    AgentSetup {
+    Lazy { id: agentActivity; sourceComponent: AgentActivity {} }
+    Lazy {
         id: agentSetup
-        onAsk: input => window.askAgent(input)
+        sourceComponent: AgentSetup { onAsk: input => window.askAgent(input) }
+    }
+    // Here, not in AgentSetup: the dialog doesn't exist until it first opens.
+    Connections {
+        target: Agent
+        function onSetupRequested(input) { agentSetup.get().show(input) }
     }
     AgentTools { views: views }
 }

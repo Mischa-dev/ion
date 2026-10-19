@@ -79,7 +79,6 @@ Popup {
 
     Connections {
         target: Agent
-        function onSetupRequested(input) { root.show(input) }
         function onSetupTested(ok, message, models) {
             if (root.busy !== "testing")
                 return
