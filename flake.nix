@@ -18,10 +18,28 @@
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
     in
     {
-      packages = forAllSystems (pkgs: rec {
-        ion = pkgs.callPackage ./nix/package.nix { src = self; };
-        default = ion;
-      });
+      packages = forAllSystems (
+        pkgs:
+        rec {
+          ion = pkgs.callPackage ./nix/package.nix { src = self; };
+          default = ion;
+        }
+        # Ion with Google's Widevine DRM module, for Netflix, Spotify and other
+        # streaming sites. Widevine is unfree; only this package allows it.
+        // nixpkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+          ion-widevine =
+            let
+              unfree = import nixpkgs {
+                inherit (pkgs.stdenv.hostPlatform) system;
+                config.allowUnfreePredicate = pkg: nixpkgs.lib.getName pkg == "widevine-cdm";
+              };
+            in
+            pkgs.callPackage ./nix/package.nix {
+              src = self;
+              widevine = unfree.widevine-cdm;
+            };
+        }
+      );
 
       homeManagerModules = rec {
         ion = import ./nix/hm-module.nix { inherit self; };

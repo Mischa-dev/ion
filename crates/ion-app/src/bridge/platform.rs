@@ -1,7 +1,8 @@
 //! `Platform` QML singleton: desktop integration.
 //!
 //! [`startup`] runs first thing in `main`: it sets QtWebEngine's Chromium
-//! switches and, if Ion is already running, hands this launch's URLs to it.
+//! switches and Qt's platform theme (portal file pickers) and, if Ion is
+//! already running, hands this launch's URLs to it.
 //! The singleton then delivers URLs from later launches and from macOS
 //! open-URL events to QML through `openRequested`.
 
@@ -61,8 +62,8 @@ use std::sync::Mutex;
 
 use cxx_qt::{CxxQtThread, Threading};
 use cxx_qt_lib::{QString, QStringList};
-use ion_platform::chromium;
 use ion_platform::instance::{self, Claim, Listener, Request};
+use ion_platform::{chromium, desktop};
 
 #[derive(Default)]
 pub struct PlatformRust;
@@ -85,6 +86,11 @@ pub fn startup() -> bool {
     {
         // SAFETY: called at the top of `main`, before any other thread exists.
         unsafe { std::env::set_var(chromium::FLAGS_VAR, flags) };
+    }
+    let theme = std::env::var(desktop::PLATFORM_THEME_VAR).ok();
+    if let Some(theme) = desktop::platform_theme(chromium::Os::current(), theme.as_deref()) {
+        // SAFETY: as above.
+        unsafe { std::env::set_var(desktop::PLATFORM_THEME_VAR, theme) };
     }
 
     // Private windows and profiles (`--private`, `--profile=NAME`) each run

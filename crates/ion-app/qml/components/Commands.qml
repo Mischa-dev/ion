@@ -94,6 +94,7 @@ Item {
         case "resume-agents": Safety.resumeAgents(); break
         case "ask-agent": browser.startAgentQuestion(); break
         case "summarize-page": browser.askAgent("@ion Summarize this page."); break
+        case "set-up-agent": browser.showAgentSetup(); break
         case "agent-sidebar": browser.toggleAgentSidebar(); break
         case "agent-activity": browser.showAgentActivity(); break
         case "screenshot": view?.takeScreenshot(false); break
