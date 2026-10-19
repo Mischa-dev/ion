@@ -12,7 +12,8 @@ fn main() {
         return;
     }
 
-    // QtWebEngine has to be initialized before the application object.
+    // `ion://` pages, and QtWebEngine, are set up before the application object.
+    bridge::pages::register_scheme();
     bridge::webengine::initialize_web_engine();
 
     let mut app = QGuiApplication::new();
