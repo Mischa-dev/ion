@@ -109,17 +109,19 @@ autoplay = "muted"           # what pages may play before you click or type:
 
 [ai]                         # Ion Agent: @ion or !ai in the address bar
 enable = false               # off until you turn it on
-provider = "openai"          # any OpenAI-compatible chat completions API
+provider = "openai"          # "openai" (any OpenAI-compatible API) or "anthropic"
 model = "gpt-5-mini"
 baseUrl = "https://api.openai.com/v1"   # e.g. http://127.0.0.1:11434/v1 for Ollama
-apiKeyEnv = "OPENAI_API_KEY" # the key is read from this variable, never from config
+apiKeyEnv = "OPENAI_API_KEY" # used when no key is saved in the system keyring
+                             # (Set up Ion Agent saves it there); never in config
 keepConversationsDays = 30   # reopen finished conversations from the agent
                              # sidebar; 0 keeps none, pages are never kept
 
 [agents.claude]              # your own agent, asked with @claude (needs ai.enable)
 name = "Claude"
 model = "claude-sonnet-5-5"  # a model makes an agent askable; without one,
-baseUrl = "https://api.anthropic.com/v1/"  # [agents.<id>] only sets its trust
+provider = "anthropic"       # [agents.<id>] only sets its trust; unset uses ai.provider
+baseUrl = "https://api.anthropic.com/v1"
 apiKeyEnv = "ANTHROPIC_API_KEY"  # unset uses ai.apiKeyEnv; baseUrl "" uses ai.baseUrl
 instructions = "Be brief. Cite the page."  # added to its system prompt
 trust = "ask"                # see docs/SAFETY.md

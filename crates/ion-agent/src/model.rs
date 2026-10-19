@@ -21,6 +21,10 @@ pub enum Message {
     Assistant {
         text: String,
         calls: Vec<ToolCall>,
+        /// The service's own record of the turn (JSON), for services that
+        /// need it sent back unchanged (Anthropic's thinking blocks). Empty
+        /// for others.
+        raw: String,
     },
     /// A tool's result, answering the call with `call_id`.
     Tool {
@@ -37,6 +41,8 @@ pub struct Reply {
     pub text: String,
     /// Browser operations the model wants the runtime to consider next.
     pub calls: Vec<ToolCall>,
+    /// See [`Message::Assistant`]'s `raw`.
+    pub raw: String,
 }
 
 /// A model service. Calls block; the app runs them off the UI thread.
@@ -59,6 +65,12 @@ pub trait Model: Send + Sync {
         }
         Ok(reply)
     }
+
+    /// The models the service offers, to check the key and address work
+    /// and to choose from. Services that can't list say so.
+    fn models(&self) -> Result<Vec<String>, String> {
+        Err("This service can't list its models.".to_owned())
+    }
 }
 
 #[cfg(test)]
@@ -78,6 +90,7 @@ mod tests {
         let model = Stub(Ok(Reply {
             text: "complete answer".into(),
             calls: Vec::new(),
+            raw: String::new(),
         }));
         let mut pieces = Vec::new();
 
@@ -99,6 +112,7 @@ mod tests {
         let model = Stub(Ok(Reply {
             text: String::new(),
             calls: vec![call.clone()],
+            raw: String::new(),
         }));
         let mut pieces = Vec::new();
 

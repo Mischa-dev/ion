@@ -1,7 +1,8 @@
 //! `Protocols` QML singleton: links that open other apps (`mailto:`,
-//! `zoommtg:`…), from `ion_sites::protocols`. `ExternalAppPrompt.qml` asks
-//! before handing one to the desktop; "always allow" answers are kept in
-//! `<data dir>/protocols.json`.
+//! `zoommtg:`…), from `ion_sites::protocols`, and the question when a site
+//! wants files on this computer (`ion_sites::file_access`).
+//! `ExternalAppPrompt.qml` asks before handing a link to the desktop;
+//! "always allow" answers are kept in `<data dir>/protocols.json`.
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -48,6 +49,18 @@ pub mod qobject {
         /// Let pages at `origin` open links like `url` without asking.
         #[qinvokable]
         fn allow(self: &Protocols, origin: &QString, url: &QString);
+
+        /// The question for a page at `origin` wanting the file or folder at
+        /// `path` (`directory`), to read or also change (`write`).
+        #[qinvokable]
+        #[cxx_name = "fileAccessPrompt"]
+        fn file_access_prompt(
+            self: &Protocols,
+            origin: &QString,
+            path: &QString,
+            directory: bool,
+            write: bool,
+        ) -> QString;
 
         /// Forget which apps pages at `origin` may open, and the links it handles.
         #[qinvokable]
@@ -106,6 +119,24 @@ impl qobject::Protocols {
 
     fn handler_prompt(&self, origin: &QString, scheme: &QString) -> QString {
         QString::from(protocols::handler_prompt(&origin.to_string(), &scheme.to_string()).as_str())
+    }
+
+    fn file_access_prompt(
+        &self,
+        origin: &QString,
+        path: &QString,
+        directory: bool,
+        write: bool,
+    ) -> QString {
+        QString::from(
+            ion_sites::file_access::prompt(
+                &origin.to_string(),
+                &path.to_string(),
+                directory,
+                write,
+            )
+            .as_str(),
+        )
     }
 
     fn allows(&self, origin: &QString, url: &QString) -> bool {

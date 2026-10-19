@@ -443,7 +443,25 @@ ApplicationWindow {
                         const background = request.destination === WebEngineNewWindowRequest.InNewBackgroundTab
                         const tab = window.openPageTab(!background)
                         tab.showNewTabPage = false
+                        tab.openerTabId = view.tabId
+                        // An adopted page never navigates here, so it takes
+                        // its site's autoplay policy now; a blank one is the
+                        // opener's.
+                        const target = request.requestedUrl.toString()
+                        tab.applyAutoplay(target.length > 0 && !target.startsWith("about:")
+                                          ? target : view.url.toString())
                         request.openIn(tab)
+                    }
+                    // A page a script opened may close itself (window.close()),
+                    // like a "Sign in with Google" or PayPal popup once it's
+                    // done; the tab goes and its opener comes back.
+                    property int openerTabId: -1
+                    onWindowCloseRequested: {
+                        const opener = Tabs.indexOfTab(openerTabId)
+                        const wasCurrent = current
+                        window.closeTab(index)
+                        if (wasCurrent && opener >= 0)
+                            Tabs.activate(Tabs.indexOfTab(openerTabId))
                     }
                     onOpenInNewTab: target => window.openTab(target, false)
                     onAskAgent: input => window.askAgent(input)
@@ -502,6 +520,9 @@ ApplicationWindow {
     function showAgentActivity() {
         agentActivity.show()
     }
+    function showAgentSetup() {
+        agentSetup.show("")
+    }
     function toggleAgentSidebar() {
         agentSidebar.toggle(window.currentView ? Agent.latestTask(window.currentView.tabId) : -1)
     }
@@ -509,5 +530,9 @@ ApplicationWindow {
     AgentsStoppedNotice {}
     CrashRestoreNotice { id: crashRestore }
     AgentActivity { id: agentActivity }
+    AgentSetup {
+        id: agentSetup
+        onAsk: input => window.askAgent(input)
+    }
     AgentTools { views: views }
 }

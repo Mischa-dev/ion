@@ -270,6 +270,12 @@ pub const COMMANDS: &[Command] = &[
         &[],
     ),
     command(
+        "set-up-agent",
+        "Set up Ion Agent",
+        "ai assistant model api key claude openai ollama provider",
+        &[],
+    ),
+    command(
         "agent-activity",
         "Agent activity",
         "ai log history permissions safety allowed take back",
