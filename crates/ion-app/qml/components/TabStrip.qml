@@ -131,6 +131,11 @@ Rectangle {
                         elide: Text.ElideRight
                     }
 
+                    TabAudioButton {
+                        Layout.alignment: Qt.AlignVCenter
+                        view: tab.view
+                    }
+
                     IconButton {
                         Layout.preferredWidth: Theme.tabHeight - Theme.spacing * 2
                         Layout.preferredHeight: Theme.tabHeight - Theme.spacing * 2

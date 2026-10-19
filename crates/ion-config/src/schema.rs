@@ -40,6 +40,7 @@ pub struct Config {
     pub agents: Agents,
     pub safety: Safety,
     pub ai: Ai,
+    pub media: Media,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -106,6 +107,10 @@ pub struct Site {
     /// `"default"` (the engine's own) or a full user-agent string.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_agent: Option<String>,
+    /// Which media the site may start playing by itself; unset uses
+    /// `media.autoplay`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub autoplay: Option<Autoplay>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -410,6 +415,28 @@ impl Default for Safety {
     }
 }
 
+/// `[media]`: sound, video and what pages may play on their own.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Media {
+    /// Which media pages may start playing before you interact with them.
+    pub autoplay: Autoplay,
+}
+
+/// What a page may play before you click or type on it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Autoplay {
+    /// Anything, sound included.
+    Allow,
+    /// Only silent media (muted previews and animations); sound waits for
+    /// you. What Firefox and Safari do.
+    #[default]
+    Muted,
+    /// Nothing, not even silent video.
+    Block,
+}
+
 /// `[ai]`: Ion Agent and the model it runs on. Off by default while agents
 /// are new: with `enable = false` there is no agent UI and nothing starts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -506,6 +533,7 @@ as_str!(AgentTrust { Ask => "ask", TrustedSites => "trustedSites", Full => "full
 as_str!(RuleEffect { Allow => "allow", Ask => "ask", Deny => "deny" });
 as_str!(ThemeSource { Builtin => "builtin", Dms => "dms", System => "system", Manual => "manual" });
 as_str!(PageTheming { Match => "match", System => "system", Darken => "darken" });
+as_str!(Autoplay { Allow => "allow", Muted => "muted", Block => "block" });
 
 impl Config {
     /// Problems serde cannot express, as human-readable messages. The config
@@ -684,6 +712,29 @@ mod tests {
                 Some(pages.as_str())
             );
         }
+        for autoplay in [Autoplay::Allow, Autoplay::Muted, Autoplay::Block] {
+            assert_eq!(
+                toml::Value::try_from(autoplay).unwrap().as_str(),
+                Some(autoplay.as_str())
+            );
+        }
+    }
+
+    #[test]
+    fn autoplay_is_silent_only_unless_a_site_says_otherwise() {
+        let config: Config = toml::from_str(
+            r#"
+            [media]
+            autoplay = "block"
+
+            [sites."youtube.com"]
+            autoplay = "allow"
+            "#,
+        )
+        .unwrap();
+        assert_eq!(Config::default().media.autoplay, Autoplay::Muted);
+        assert_eq!(config.media.autoplay, Autoplay::Block);
+        assert_eq!(config.sites["youtube.com"].autoplay, Some(Autoplay::Allow));
     }
 
     #[test]

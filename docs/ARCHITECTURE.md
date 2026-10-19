@@ -29,6 +29,7 @@ crates/
   ion-bookmarks/          bookmarks; importing bookmarks and history from Chrome/Firefox
   ion-sites/              per-site settings ([sites] in config), user scripts and styles
   ion-reader/             reader mode: article extraction and the themed reader page
+  ion-media/              autoplay policy, picture-in-picture and system media controls
   ion-safety/             permissions and agent trust: decisions, prompts, activity log
   ion-agent/              Ion Agent's runtime: tasks, browser tools, model access
   ion-app/                the binary (`ion`)

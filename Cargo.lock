@@ -783,6 +783,7 @@ dependencies = [
  "ion-bookmarks",
  "ion-config",
  "ion-core",
+ "ion-media",
  "ion-platform",
  "ion-reader",
  "ion-safety",
@@ -837,6 +838,14 @@ name = "ion-core"
 version = "0.1.0"
 dependencies = [
  "url",
+]
+
+[[package]]
+name = "ion-media"
+version = "0.1.0"
+dependencies = [
+ "ion-config",
+ "ion-sites",
 ]
 
 [[package]]

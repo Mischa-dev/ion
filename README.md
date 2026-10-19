@@ -125,6 +125,7 @@ for adding a feature.
 | `crates/ion-sites` | Per-site rules, user agents, scripts, and styles |
 | `crates/ion-theme` | Palettes, theme sources, page theming, and file watching |
 | `crates/ion-reader` | Safe article extraction and reader-page rendering |
+| `crates/ion-media` | Autoplay policy, picture-in-picture, and system media controls |
 | `crates/ion-safety` | Site permissions, agent policy, prompts, and audit trail |
 | `crates/ion-agent` | Model-independent agent task state machine and browser tools |
 | `crates/ion-platform` | Chromium flags, extensions, and single-instance handoff |

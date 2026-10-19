@@ -139,6 +139,8 @@ Popup {
         case "clear-cache": browser.profile.clearHttpCache(); break
         case "clear-history": History.clear(); History.save(); break
         case "reader-mode": view?.reader.toggle(); break
+        case "mute-tab": browser.toggleMute(); break
+        case "mute-other-tabs": browser.muteOtherTabs(); break
         case "extensions": browser.showExtensions(); break
         case "open-extensions-folder":
             if (Extensions.ensureFolder())

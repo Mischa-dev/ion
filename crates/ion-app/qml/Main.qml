@@ -108,6 +108,22 @@ ApplicationWindow {
         fullScreen.toggleWindow()
     }
 
+    // Mute or unmute the current tab (Ctrl+Shift+M, the tab's speaker).
+    function toggleMute() {
+        const view = window.currentView
+        if (view)
+            view.audioMuted = !view.audioMuted
+    }
+
+    // Silence every tab but the current one, wherever they are.
+    function muteOtherTabs() {
+        for (let i = 0; i < views.count; i++) {
+            const view = views.itemAt(i)
+            if (view && i !== Tabs.currentIndex)
+                view.audioMuted = true
+        }
+    }
+
     function showImport() {
         importDialog.show()
     }
@@ -481,6 +497,7 @@ ApplicationWindow {
     Shortcut { sequences: ["Ctrl+0"]; onActivated: window.currentView?.resetZoom() }
     Shortcut { sequence: "Ctrl+D"; onActivated: window.toggleBookmark() }
     Shortcut { sequence: "Ctrl+Alt+R"; onActivated: window.currentView?.reader.toggle() }
+    Shortcut { sequence: "Ctrl+Shift+M"; onActivated: window.toggleMute() }
     Shortcut { sequence: "Ctrl+Shift+S"; onActivated: window.currentView?.takeScreenshot(false) }
     Shortcut { sequence: "Ctrl+Alt+Shift+S"; onActivated: window.currentView?.takeScreenshot(true) }
     Shortcut {

@@ -217,6 +217,27 @@ WebEngineView {
         }
         view.navigationEnd = target
         view.settings.javascriptEnabled = Sites.javascriptEnabled(target)
+        view.applyAutoplay(target)
+    }
+
+    // `[media] autoplay` for the page about to load. The engine's gesture
+    // rule lets silent media play and holds sound back; "block" adds a page
+    // script that holds silent media back too.
+    function applyAutoplay(target) {
+        const policy = Media.autoplay(target)
+        settings.playbackRequiresUserGesture = policy !== "allow"
+        const installed = userScripts.find("ion-autoplay-block")
+        if (policy === "block" && installed.length === 0) {
+            const script = WebEngine.script()
+            script.name = "ion-autoplay-block"
+            script.sourceCode = Media.blockAutoplayScript
+            script.injectionPoint = WebEngineScript.DocumentCreation
+            script.worldId = WebEngineScript.MainWorld
+            script.runsOnSubFrames = true
+            userScripts.insert(script)
+        } else if (policy !== "block" && installed.length > 0) {
+            userScripts.remove(installed[0])
+        }
     }
 
     Connections {

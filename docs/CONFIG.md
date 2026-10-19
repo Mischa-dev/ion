@@ -98,6 +98,11 @@ blockThirdPartyCookies = true
 clearOnExit = []             # any of "cookies", "cache", "history" (the cache
                              # is cleared as Ion next starts)
 
+[media]
+autoplay = "muted"           # what pages may play before you click or type:
+                             # "allow", "muted" (silent video only; sound waits
+                             # for you) or "block" (nothing)
+
 [ai]                         # Ion Agent: @ion or !ai in the address bar
 enable = false               # off until you turn it on
 provider = "openai"          # any OpenAI-compatible chat completions API
@@ -121,6 +126,7 @@ javascript = true            # "*" covers every site, the most specific wins
 # userAgent = "chrome"       # "chrome" (the engine's, minus "QtWebEngine"),
                              # "firefox", "safari", "default" or a full string;
                              # values other than "chrome" also blank client hints
+# autoplay = "allow"         # overrides media.autoplay for this site
 ```
 
 ## User scripts and styles

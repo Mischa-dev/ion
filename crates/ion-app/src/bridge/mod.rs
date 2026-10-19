@@ -12,6 +12,7 @@ pub mod downloads;
 pub mod extensions;
 pub mod history;
 pub mod load_error;
+pub mod media;
 pub mod omnibox;
 pub mod palette;
 pub mod platform;
