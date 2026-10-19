@@ -89,7 +89,7 @@ pub mod qobject {
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 use cxx_qt_lib::{QList, QString, QStringList, QVariant};
 use ion_bangs::Action;
@@ -119,6 +119,11 @@ struct SiteSearches {
 static SITE_SEARCHES: Mutex<Option<SiteSearches>> = Mutex::new(None);
 /// Bumped whenever a site search is added, so bang tables get rebuilt.
 static SITE_SEARCHES_REVISION: AtomicU64 = AtomicU64::new(0);
+
+/// Site-search lookups running at once, and the most allowed: past that a
+/// page's search is skipped this run, so a site can't pile up threads.
+static DISCOVERIES: AtomicUsize = AtomicUsize::new(0);
+const MAX_DISCOVERIES: usize = 4;
 
 fn with_site_searches<T>(f: impl FnOnce(&mut SiteSearches) -> T) -> T {
     let mut guard = SITE_SEARCHES.lock().unwrap_or_else(|e| e.into_inner());
@@ -324,10 +329,15 @@ impl qobject::AddressBar {
     fn discover_site_search(&self, page_url: &QString, description_url: &QString) {
         let page = page_url.to_string();
         let description = description_url.to_string();
+        if DISCOVERIES.fetch_add(1, Ordering::SeqCst) >= MAX_DISCOVERIES {
+            DISCOVERIES.fetch_sub(1, Ordering::SeqCst);
+            return;
+        }
         std::thread::spawn(move || {
             if let Some(xml) = opensearch::fetch(&page, &description) {
                 learn_site_search(&page, &xml);
             }
+            DISCOVERIES.fetch_sub(1, Ordering::SeqCst);
         });
     }
 
