@@ -265,14 +265,14 @@ Rectangle {
 
         IconButton {
             Layout.alignment: Qt.AlignVCenter
-            glyph: "+"
+            iconName: "plus"
             tip: qsTr("New tab")
             onClicked: strip.newTabRequested()
         }
 
         IconButton {
             Layout.alignment: Qt.AlignVCenter
-            glyph: "⌕"
+            iconName: "search"
             tip: qsTr("Search tabs")
             onClicked: strip.searchRequested()
         }
@@ -280,7 +280,7 @@ Rectangle {
         IconButton {
             id: menuButton
             Layout.alignment: Qt.AlignVCenter
-            glyph: "⋯"
+            iconName: "more"
             tip: qsTr("Tabs and sessions")
             onClicked: strip.menuRequested(menuButton)
         }

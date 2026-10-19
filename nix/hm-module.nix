@@ -69,6 +69,10 @@ let
         }
       )) "Rules for this agent, most specific wins.";
       model = setting types.str "Model this agent runs on, so it can be asked with `@<id>`; empty for a trust profile only.";
+      provider = setting (types.enum [
+        "openai"
+        "anthropic"
+      ]) "Model service kind; unset uses `ai.provider`.";
       baseUrl = setting types.str "Model service base URL; empty uses `ai.baseUrl`.";
       apiKeyEnv = setting types.str "Environment variable holding its API key; unset uses `ai.apiKeyEnv`.";
       instructions = setting types.str "Extra instructions added to the agent's system prompt.";
@@ -79,6 +83,7 @@ let
     removeAttrs cfg [
       "enable"
       "package"
+      "widevine"
     ]
   );
 in
@@ -91,10 +96,23 @@ in
       options = {
         enable = lib.mkEnableOption "the Ion browser";
 
+        widevine = mkOption {
+          type = types.bool;
+          default = false;
+          description = ''
+            Install Ion with Google's Widevine DRM module (unfree), which
+            Netflix, Spotify and other streaming sites need. Linux only.
+          '';
+        };
+
         package = mkOption {
           type = types.nullOr types.package;
-          default = self.packages.${pkgs.stdenv.hostPlatform.system}.default or null;
-          defaultText = lib.literalExpression "ion.packages.\${pkgs.stdenv.hostPlatform.system}.default";
+          default =
+            let
+              packages = self.packages.${pkgs.stdenv.hostPlatform.system} or { };
+            in
+            if cfg.widevine then packages.ion-widevine or null else packages.default or null;
+          defaultText = lib.literalExpression "ion.packages.\${pkgs.stdenv.hostPlatform.system}.default (ion-widevine with `widevine = true`)";
           description = "The Ion package to install, or null to only write the config.";
         };
 
@@ -233,10 +251,11 @@ in
           enable = setting types.bool "Turn on Ion Agent (`@ion` and `!ai` in the address bar). Off by default.";
           provider = setting (types.enum [
             "openai"
-          ]) "Model service kind; `openai` is any OpenAI-compatible API.";
+            "anthropic"
+          ]) "Model service kind; `openai` is any OpenAI-compatible API, `anthropic` is Claude.";
           model = setting types.str "Model id sent to the service.";
           baseUrl = setting types.str "The service's base URL, up to and including `/v1`.";
-          apiKeyEnv = setting types.str "Environment variable holding the API key; empty sends none.";
+          apiKeyEnv = setting types.str "Environment variable holding the API key when none is saved in the keyring; empty sends none.";
           keepConversationsDays = setting types.ints.unsigned "Days finished agent conversations are kept to reopen; 0 keeps none.";
         };
 

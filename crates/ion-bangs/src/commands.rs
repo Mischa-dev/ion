@@ -276,6 +276,12 @@ pub const COMMANDS: &[Command] = &[
         &[],
     ),
     command(
+        "set-up-agent",
+        "Set up Ion Agent",
+        "ai assistant model api key claude openai ollama provider",
+        &[],
+    ),
+    command(
         "agent-activity",
         "Agent activity",
         "ai log history permissions safety allowed take back",
@@ -305,6 +311,18 @@ pub const COMMANDS: &[Command] = &[
         "Keyboard shortcuts",
         "keys keybindings hotkeys remap customize edit",
         &["Ctrl+/"],
+    ),
+    command(
+        "settings",
+        "Settings",
+        "preferences options config configure",
+        &["Ctrl+,"],
+    ),
+    command(
+        "clear-browsing-data",
+        "Clear browsing data…",
+        "privacy delete history cookies cache forget",
+        &[],
     ),
     command("quit", "Quit Ion", "exit close window", &["Ctrl+Q"]),
     shortcut("palette", "Command palette", &["Ctrl+K"]),

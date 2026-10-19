@@ -112,14 +112,14 @@ Rectangle {
             id: audio
             Layout.alignment: Qt.AlignVCenter
             view: tab.view
-            visible: active && tab.showTitle
+            visible: audible && tab.showTitle
         }
 
         IconButton {
             id: closeButton
             Layout.preferredWidth: Theme.tabHeight - Theme.spacing * 2
             Layout.preferredHeight: Theme.tabHeight - Theme.spacing * 2
-            glyph: "×"
+            iconName: "close"
             tip: qsTr("Close tab")
             visible: tab.showTitle && (tab.current || tabMouse.containsMouse || hovered)
             onClicked: tab.closeRequested(tab.row)

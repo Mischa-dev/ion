@@ -259,7 +259,7 @@ Popup {
                             Layout.preferredWidth: Theme.tabHeight - Theme.spacing * 2
                             Layout.preferredHeight: Theme.tabHeight - Theme.spacing * 2
                             visible: !row.closed && (row.selected || hovered)
-                            glyph: "×"
+                            iconName: "close"
                             tip: qsTr("Close tab")
                             onClicked: root.closeRow(row.modelData)
                         }

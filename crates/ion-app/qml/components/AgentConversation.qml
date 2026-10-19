@@ -184,7 +184,7 @@ FocusScope {
                 visible: conversation.renewable && !conversation.working
                 implicitWidth: Theme.urlBarHeight - Theme.spacing
                 implicitHeight: implicitWidth
-                glyph: "+"
+                iconName: "plus"
                 tip: qsTr("New conversation")
                 onClicked: conversation.newRequested()
             }
@@ -193,14 +193,14 @@ FocusScope {
                 visible: conversation.movable
                 implicitWidth: Theme.urlBarHeight - Theme.spacing
                 implicitHeight: implicitWidth
-                glyph: "◨"
+                iconName: "sidebar-right"
                 tip: qsTr("Move to the side")
                 onClicked: conversation.moveRequested()
             }
             IconButton {
                 implicitWidth: Theme.urlBarHeight - Theme.spacing
                 implicitHeight: implicitWidth
-                glyph: "✕"
+                iconName: "close"
                 tip: qsTr("Close")
                 onClicked: conversation.closeRequested()
             }
@@ -454,6 +454,15 @@ FocusScope {
                     selectionColor: Theme.accent
                     selectedTextColor: Theme.onAccent
                     font.pixelSize: Theme.fontSize + 1
+                }
+
+                // Not set up yet: the way there, right where it failed.
+                DialogButton {
+                    visible: conversation.task !== null && conversation.task.needsSetup === true
+                    text: qsTr("Set up Ion Agent")
+                    primary: true
+                    // The question goes again once it is set up.
+                    onClicked: Agent.setupRequested(conversation.task.agent === "ion" ? "@ion " + conversation.task.question : "")
                 }
 
                 Text {

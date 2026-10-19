@@ -12,7 +12,8 @@ fn main() {
         return;
     }
 
-    // QtWebEngine has to be initialized before the application object.
+    // `ion://` pages, and QtWebEngine, are set up before the application object.
+    bridge::pages::register_scheme();
     bridge::webengine::initialize_web_engine();
 
     let mut app = QGuiApplication::new();
@@ -25,6 +26,7 @@ fn main() {
             .set_organization_name(&QString::from(ion_core::APP_NAME));
     }
     QGuiApplication::set_desktop_file_name(&QString::from(ion_core::APP_ID));
+    bridge::fonts::install_ui_font();
 
     // Before the browser profile opens its files.
     bridge::privacy::clear_profile_files();

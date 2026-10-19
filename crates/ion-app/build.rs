@@ -45,7 +45,15 @@ fn main() {
         .filter(|f| !f.ends_with("/mod.rs"))
         .collect();
 
-    CxxQtBuilder::new_qml_module(
+    // Headers of C++ QObjects (they say Q_OBJECT) need moc.
+    let moc_headers: Vec<String> = collect("cpp", "h")
+        .into_iter()
+        .filter(|h| std::fs::read_to_string(h).is_ok_and(|src| src.contains("Q_OBJECT")))
+        .collect();
+    // D-Bus (desktop notifications) only exists on Linux.
+    let linux = std::env::var("CARGO_CFG_TARGET_OS").is_ok_and(|os| os == "linux");
+
+    let mut builder = CxxQtBuilder::new_qml_module(
         QmlModule::new("Ion").qml_files(collect("qml", "qml").into_iter().map(qml_file)),
     )
     .qt_module("Gui")
@@ -56,7 +64,11 @@ fn main() {
     .qt_module("WebEngineQuick")
     .files(bridges)
     .cpp_files(collect("cpp", "cpp"))
+    .cpp_files(moc_headers)
     // Window icon, at qrc:/qt/qml/Ion/icons/dev.ion.Ion.svg.
-    .qrc_resources(["icons/dev.ion.Ion.svg"])
-    .build();
+    .qrc_resources(["icons/dev.ion.Ion.svg"]);
+    if linux {
+        builder = builder.qt_module("DBus");
+    }
+    builder.build();
 }

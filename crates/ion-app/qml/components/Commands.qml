@@ -7,8 +7,10 @@ import Ion
 //
 // `browser` (the main window) provides openTab(url), newTab(), closeTab(i),
 // closeOtherTabs(i), focusUrlBar(), toggleBookmark(), showImport(),
-// showExtensions(), toggleFullScreen(), searchTabs(), toggleSplit(), sleepIdleTabs(seconds), askAgent(input), startAgentQuestion(),
-// toggleAgentSidebar(), showAgentActivity(), profile and currentView.
+// showExtensions(), toggleFullScreen(), searchTabs(), toggleSplit(),
+// sleepIdleTabs(seconds), askAgent(input), startAgentQuestion(),
+// toggleAgentSidebar(), showAgentActivity(), openPage(id, path),
+// showClearData(), profile and currentView.
 Item {
     id: root
 
@@ -57,7 +59,12 @@ Item {
         case "reload": view?.reload(); break
         case "hard-reload": view?.reloadAndBypassCache(); break
         case "stop": view?.stop(); break
-        case "find": view?.findBar.open(); break
+        case "find":
+            if (view?.builtinPage.active)
+                view.builtinPage.focusSearch()
+            else
+                view?.findBar.open()
+            break
         case "find-next": view?.findBar.step(1); break
         case "find-previous": view?.findBar.step(-1); break
         case "zoom-in": view?.zoomIn(); break
@@ -92,6 +99,7 @@ Item {
         case "resume-agents": Safety.resumeAgents(); break
         case "ask-agent": browser.startAgentQuestion(); break
         case "summarize-page": browser.askAgent("@ion Summarize this page."); break
+        case "set-up-agent": browser.showAgentSetup(); break
         case "agent-sidebar": browser.toggleAgentSidebar(); break
         case "agent-activity": browser.showAgentActivity(); break
         case "screenshot": view?.takeScreenshot(false); break
@@ -108,6 +116,8 @@ Item {
         case "tab-7": Tabs.activateNth(6); break
         case "tab-8": Tabs.activateNth(7); break
         case "last-tab": Tabs.activateNth(-1); break
+        case "settings": browser.openPage("settings"); break
+        case "clear-browsing-data": browser.showClearData(); break
         case "quit": Qt.quit(); break
         default: console.warn("Commands: unknown command", id)
         }

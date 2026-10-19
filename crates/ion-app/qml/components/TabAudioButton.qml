@@ -9,19 +9,15 @@ IconButton {
     property var view   // BrowserTab, may be null
 
     readonly property bool muted: view?.audioMuted ?? false
-    readonly property bool active: muted || (view?.recentlyAudible ?? false)
+    // Playing sound, or muted: the button is shown.
+    readonly property bool audible: muted || (view?.recentlyAudible ?? false)
 
-    visible: active
-    glyph: muted ? "🔇" : "🔊"
+    visible: audible
+    iconName: muted ? "mute" : "volume"
+    iconSize: Theme.iconSize - 2
+    iconColor: Theme.textMuted
     tip: muted ? qsTr("Unmute tab") : qsTr("Mute tab")
     implicitWidth: Theme.tabHeight - Theme.spacing * 2
     implicitHeight: Theme.tabHeight - Theme.spacing * 2
-    contentItem: Text {
-        text: control.glyph
-        color: Theme.textMuted
-        font.pixelSize: Theme.fontSize - 1
-        horizontalAlignment: Text.AlignHCenter
-        verticalAlignment: Text.AlignVCenter
-    }
     onClicked: if (view) view.audioMuted = !view.audioMuted
 }

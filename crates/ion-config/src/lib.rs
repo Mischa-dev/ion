@@ -32,11 +32,11 @@ mod store;
 use std::sync::OnceLock;
 
 pub use schema::{
-    Adblock, Agent, AgentRule, AgentTrust, Agents, Animations, BrowsingData, Config, Density,
-    General, Keyboard, Mcp, PageTheming, Privacy, RuleEffect, Safety, Search, Site, SiteTheme,
-    TabLayout, Theme, ThemeSource, Ui,
+    Adblock, Agent, AgentRule, AgentTrust, Agents, Ai, Animations, BrowsingData, Config, Density,
+    General, Keyboard, Mcp, PROVIDERS, PageTheming, Privacy, RuleEffect, Safety, Search, Site,
+    SiteTheme, TabLayout, Theme, ThemeSource, Ui,
 };
-pub use store::{Paths, State, Store, Subscription, Watcher};
+pub use store::{Origin, Paths, State, Store, Subscription, Watcher};
 pub use toml::Value;
 
 /// The process-wide store, loaded from [`Paths::from_env`] and watched for

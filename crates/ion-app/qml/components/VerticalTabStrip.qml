@@ -149,14 +149,14 @@ Item {
 
                 IconButton {
                     Layout.fillWidth: true
-                    glyph: "+"
+                    iconName: "plus"
                     tip: qsTr("New tab")
                     onClicked: strip.newTabRequested()
                 }
 
                 IconButton {
                     visible: strip.expanded
-                    glyph: "⌕"
+                    iconName: "search"
                     tip: qsTr("Search tabs")
                     onClicked: strip.searchRequested()
                 }
@@ -164,14 +164,14 @@ Item {
                 IconButton {
                     id: menuButton
                     visible: strip.expanded
-                    glyph: "⋯"
+                    iconName: "more"
                     tip: qsTr("Tabs and sessions")
                     onClicked: strip.menuRequested(menuButton)
                 }
 
                 IconButton {
                     visible: strip.expanded
-                    glyph: strip.collapsed ? "»" : "«"
+                    iconName: strip.collapsed ? "chevrons-right" : "chevrons-left"
                     tip: strip.collapsed ? qsTr("Keep sidebar open") : qsTr("Collapse sidebar")
                     onClicked: Config.set("ui.collapseSidebar", !strip.collapsed)
                 }

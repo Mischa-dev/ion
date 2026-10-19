@@ -41,6 +41,22 @@ QtObject {
     readonly property color danger: engine.danger
     readonly property color warning: engine.warning
     readonly property color success: engine.success
+    // Derived colors. Translucent tints of the palette, so they sit well on
+    // any surface: hover and pressed washes, the accent's soft fill, the
+    // keyboard focus ring and drop shadows.
+    function alpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a) }
+    readonly property color hoverOverlay: alpha(text, dark ? 0.07 : 0.06)
+    readonly property color pressOverlay: alpha(text, dark ? 0.12 : 0.1)
+    readonly property color accentSoft: alpha(accent, dark ? 0.2 : 0.14)
+    readonly property color focusRing: alpha(accent, 0.6)
+    readonly property color shadow: Qt.rgba(0, 0, 0, dark ? 0.5 : 0.16)
+    // A light top-down sheen on accent-filled buttons.
+    readonly property color sheen: Qt.rgba(1, 1, 1, 0.1)
+    readonly property color sheenHover: Qt.rgba(1, 1, 1, 0.16)
+    readonly property color sheenEnd: Qt.rgba(1, 1, 1, 0)
+    // Quieter than textMuted: hints, shortcuts, placeholder detail.
+    readonly property color textSubtle: alpha(textMuted, 0.75)
+
     // What a web page without its own background is drawn on. Not themed:
     // pages assume the web's default white.
     readonly property color pageCanvas: "white"
@@ -48,6 +64,10 @@ QtObject {
     // Shape and density, from the [ui] config section (docs/CONFIG.md).
     readonly property bool compact: Config.density === "compact"
     readonly property int radius: Math.max(0, Config.cornerRadius)
+    // Small controls inside a rounded surface (menu rows, chips), and large
+    // surfaces (popups, dialogs, the page card). All follow `ui.cornerRadius`.
+    readonly property int radiusSmall: Math.round(radius * 0.75)
+    readonly property int radiusLarge: Math.round(radius * 1.5)
     readonly property int spacing: compact ? 4 : 6
     readonly property int tabHeight: compact ? 28 : 32
     readonly property int tabMinWidth: compact ? 64 : 80
@@ -56,10 +76,21 @@ QtObject {
     readonly property int sidebarCollapsedWidth: iconSize + spacing * 6
     readonly property int urlBarHeight: compact ? 28 : 32
     readonly property int iconSize: 16
+    // Line weight of Ion's icons (Icon.qml), in a 24-unit grid.
+    readonly property real iconStroke: 2
     readonly property int hairline: 1
 
-    // Typography
+    // Typography. The typeface is the application font (Inter on Linux, the
+    // system font on macOS; cpp/fonts.cpp), so only sizes and weights live here.
     readonly property int fontSize: 13
+    // Captions, shortcuts, badges.
+    readonly property int fontSizeSmall: 11
+    // Section headings in popups and dialog titles.
+    readonly property int fontSizeLarge: 15
+    // The new-tab clock and other big display text.
+    readonly property int displayFontSize: 64
+    readonly property int weightMedium: Font.Medium
+    readonly property int weightBold: Font.DemiBold
     // Headings on Ion's own pages, such as the error page.
     readonly property int titleFontSize: 22
     // Widest a column of running text gets on Ion's own pages.
@@ -74,6 +105,18 @@ QtObject {
         ? 1 / Config.animationSpeed : 0
     readonly property int animationMs: Math.round(120 * motionScale)
     readonly property int animationSlowMs: Math.round(220 * motionScale)
+    // Quick feedback such as a button press.
+    readonly property int animationFastMs: Math.round(80 * motionScale)
+    // Easing for things arriving (popups opening, items appearing) and for
+    // things moving between two places.
+    readonly property int easeOut: Easing.OutCubic
+    readonly property int easeInOut: Easing.InOutCubic
+    // How far a popup grows into place as it opens.
+    readonly property real popupStartScale: 0.96
+
+    // Elevation: how far a popup's soft shadow reaches (IonShadow.qml).
+    readonly property int shadowRadius: 18
+    readonly property int shadowOffset: 6
     // Loading spinners keep turning with animations off: they report status.
     readonly property int spinnerMs: 800
     // How long a transient notice stays on screen.
