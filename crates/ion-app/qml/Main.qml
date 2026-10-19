@@ -427,7 +427,19 @@ ApplicationWindow {
                         const background = request.destination === WebEngineNewWindowRequest.InNewBackgroundTab
                         const tab = window.openPageTab(!background)
                         tab.showNewTabPage = false
+                        tab.openerTabId = view.tabId
                         request.openIn(tab)
+                    }
+                    // A page a script opened may close itself (window.close()),
+                    // like a "Sign in with Google" or PayPal popup once it's
+                    // done; the tab goes and its opener comes back.
+                    property int openerTabId: -1
+                    onWindowCloseRequested: {
+                        const opener = Tabs.indexOfTab(openerTabId)
+                        const wasCurrent = current
+                        window.closeTab(index)
+                        if (wasCurrent && opener >= 0)
+                            Tabs.activate(Tabs.indexOfTab(openerTabId))
                     }
                     onOpenInNewTab: target => window.openTab(target, false)
                     onAskAgent: input => window.askAgent(input)

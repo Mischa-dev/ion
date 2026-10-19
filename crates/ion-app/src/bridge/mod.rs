@@ -13,6 +13,7 @@ pub mod extensions;
 pub mod history;
 pub mod keymap;
 pub mod load_error;
+pub mod notifications;
 pub mod omnibox;
 pub mod palette;
 pub mod platform;
