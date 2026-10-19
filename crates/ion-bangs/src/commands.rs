@@ -204,6 +204,12 @@ pub const COMMANDS: &[Command] = &[
         "Ctrl+,",
     ),
     command(
+        "welcome",
+        "Set up Ion (welcome page)",
+        "onboarding first run tour import theme",
+        "",
+    ),
+    command(
         "clear-browsing-data",
         "Clear browsing data…",
         "privacy delete history cookies cache forget",

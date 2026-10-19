@@ -27,6 +27,12 @@ pub mod qobject {
         #[qinvokable]
         fn page(self: &Preferences, query: &QString, themes: &QStringList) -> QString;
 
+        /// A built-in theme's background, surface, accent and text colors,
+        /// for previews; empty for "auto" and themes from files.
+        #[qinvokable]
+        #[cxx_name = "themeSwatches"]
+        fn theme_swatches(self: &Preferences, id: &QString) -> QStringList;
+
         /// Remove every change made in Settings. Returns an error or "".
         #[qinvokable]
         #[cxx_name = "resetAll"]
@@ -46,6 +52,17 @@ impl qobject::Preferences {
         };
         let json = ion_settings::page_json(&ctx, &query.to_string(), ion_config::global());
         QString::from(json.as_str())
+    }
+
+    fn theme_swatches(&self, id: &QString) -> QStringList {
+        ion_theme::builtin::get(&id.to_string())
+            .map(|p| {
+                [p.background, p.surface, p.accent, p.text]
+                    .iter()
+                    .map(|c| QString::from(c.to_string().as_str()))
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     fn reset_all(&self) -> QString {

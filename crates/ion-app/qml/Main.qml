@@ -219,7 +219,7 @@ ApplicationWindow {
         const urls = Qt.application.arguments.slice(1).filter(arg => !arg.startsWith("-"))
         urls.forEach((arg, i) => openTab(urlBarResolver.resolve(arg), i === 0))
         if (Tabs.count === 0)
-            openTab(homeUrl)
+            openTab(Pages.isFirstRun() ? Pages.url("welcome", "") : homeUrl)
         startupFinished = true
         sessionSaveTimer.restart()
     }

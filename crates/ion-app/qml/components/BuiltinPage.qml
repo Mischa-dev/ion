@@ -15,7 +15,8 @@ Loader {
         settings: "SettingsPage",
         history: "HistoryPage",
         downloads: "DownloadsPage",
-        bookmarks: "BookmarksPage"
+        bookmarks: "BookmarksPage",
+        welcome: "WelcomePage"
     })
 
     anchors.fill: parent
