@@ -1,0 +1,14 @@
+[package]
+name = "ion-media"
+description = "Media for the Ion browser: autoplay policy, picture-in-picture and system media controls"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ion-config.workspace = true
+ion-sites.workspace = true
+
+[lints]
+workspace = true

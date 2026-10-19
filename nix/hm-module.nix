@@ -33,6 +33,13 @@ let
       lib.mapAttrs (_: v: if builtins.isAttrs v && !lib.isDerivation v then clean v else v) attrs
     );
 
+  # What pages may play before you interact with them.
+  autoplayType = types.enum [
+    "allow"
+    "muted"
+    "block"
+  ];
+
   # One agent's trust settings (`agents.<id>`); see docs/SAFETY.md.
   agentType = types.submodule {
     options = {
@@ -214,6 +221,16 @@ in
                 "off"
               ])
               "What a touchpad pinch does: page zoom remembered per site (default), Chromium's magnifier, or nothing.";
+          mouse = setting types.bool "Hold the right mouse button and draw a stroke to run a command (default false).";
+          mouseStrokes = mkOption {
+            type = types.attrsOf types.str;
+            default = { };
+            example = {
+              U = "new-tab";
+              D = "";
+            };
+            description = "Mouse strokes (moves L, R, U, D, e.g. \"DR\") to command ids, on top of the built-in ones; \"\" turns one off.";
+          };
         };
 
         privacy = {
@@ -245,6 +262,7 @@ in
               options = {
                 javascript = setting types.bool "Run JavaScript on the site.";
                 userAgent = setting types.str "User agent: `chrome`, `firefox`, `safari`, `default` or a full string.";
+                autoplay = setting autoplayType "What the site may play on its own; unset uses `media.autoplay`.";
               };
             }
           );
@@ -270,6 +288,10 @@ in
 
         safety = {
           auditRetentionDays = setting types.ints.positive "Days of agent activity log kept.";
+        };
+
+        media = {
+          autoplay = setting autoplayType "What pages may play before you interact: `allow`, `muted` (silent only) or `block`.";
         };
 
         ai = {
