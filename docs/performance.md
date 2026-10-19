@@ -84,9 +84,13 @@ build only, then `qmlprofiler --output trace.qtd target/release/ion URL`.
 - macOS: the kernel's own level (`kern.memorystatus_vm_pressure_level`).
 
 It rises at once and falls only after two calm readings, so a policy built on
-it doesn't flap. Nothing acts on it yet: tabs sleep only after
-`general.suspendTabsAfter`. Sleeping idle tabs sooner under pressure, as
-Chrome and Safari do, belongs to the tabs code (`onMemoryPressureChanged`). `Performance.memoryUsage()` returns the
+it doesn't flap. Background tabs normally sleep after
+`general.suspendTabsAfter` minutes. Under moderate pressure they sleep after
+five idle minutes (or the setting, if shorter), and under critical pressure at
+once (`sleepForPressure()` in `Main.qml`). Setting it to 0 keeps every tab
+awake regardless. Tabs on
+screen, playing sound, in picture-in-picture or holding a dialog stay awake.
+`Performance.memoryUsage()` returns the
 memory of Ion and every web process as JSON, for a task-manager style view.
 
 ## Results
