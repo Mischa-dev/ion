@@ -165,6 +165,8 @@ Popup {
         case "agent-activity": browser.showAgentActivity(); break
         case "screenshot": view?.takeScreenshot(false); break
         case "screenshot-page": view?.takeScreenshot(true); break
+        case "settings": browser.openPage("settings"); break
+        case "clear-browsing-data": browser.showClearData(); break
         case "quit": Qt.quit(); break
         default: console.warn("CommandPalette: unknown command", id)
         }

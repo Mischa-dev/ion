@@ -27,6 +27,7 @@ WebEngineView {
     // A tab with no page yet matches the browser chrome instead of glaring
     // white. Pages get the web's usual white canvas, which many rely on.
     backgroundColor: url.toString().length === 0 || url.toString() === "about:blank"
+            || Pages.pageOf(url).length > 0
         ? Theme.background : Theme.pageCanvas
 
     // Pages follow Ion's theme (theme.pages, [theme.sites]). QtWebEngine reads
@@ -138,6 +139,7 @@ WebEngineView {
     function takeScreenshot(fullPage) { screenshotTool.capture(fullPage) }
 
     NewTabPage { view: view }
+    BuiltinPage { view: view }
     AdblockCosmetics { view: view }
     FindBar { view: view }
     PermissionPrompt { view: view; tabId: view.tabId }

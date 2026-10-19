@@ -190,6 +190,18 @@ pub const COMMANDS: &[Command] = &[
         "capture image copy entire long scrolling",
         "Ctrl+Alt+Shift+S",
     ),
+    command(
+        "settings",
+        "Settings",
+        "preferences options config configure",
+        "Ctrl+,",
+    ),
+    command(
+        "clear-browsing-data",
+        "Clear browsing data…",
+        "privacy delete history cookies cache forget",
+        "",
+    ),
     command("quit", "Quit Ion", "exit close window", "Ctrl+Q"),
 ];
 

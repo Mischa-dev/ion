@@ -58,6 +58,31 @@ pub struct State {
     /// Why the files on disk could not be used. While set, `config` is the
     /// last config that loaded (or the defaults at startup).
     pub error: Option<String>,
+    /// The base file's table as last loaded, for [`Store::origin`].
+    pub base: Arc<Table>,
+    /// The overrides file's table as last loaded.
+    pub overrides: Arc<Table>,
+}
+
+/// Which layer a key's effective value comes from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Origin {
+    /// Neither file sets it.
+    Default,
+    /// `config.toml` (home-manager, or by hand) sets it.
+    Base,
+    /// The settings UI's `overrides.toml` sets it, and wins.
+    Override,
+}
+
+impl Origin {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::Base => "base",
+            Self::Override => "override",
+        }
+    }
 }
 
 type Callback = Box<dyn Fn(&Arc<State>) + Send + Sync>;
@@ -126,6 +151,24 @@ impl Store {
         layer::lookup(&table, key).cloned()
     }
 
+    /// Where the effective value of `key` comes from. A key under a table
+    /// that a layer sets whole (`bangs`) counts as set by that layer.
+    pub fn origin(&self, key: &str) -> Origin {
+        let state = self.state();
+        if set_in(&state.overrides, key) {
+            Origin::Override
+        } else if set_in(&state.base, key) {
+            Origin::Base
+        } else {
+            Origin::Default
+        }
+    }
+
+    /// The value `config.toml` gives `key`, if it sets it.
+    pub fn base_value(&self, key: &str) -> Option<Value> {
+        layer::lookup(&self.state().base, key).cloned()
+    }
+
     /// Re-read both files and notify subscribers if anything changed.
     pub fn reload(&self) -> Arc<State> {
         let _io = self.inner.io.lock().unwrap_or_else(|e| e.into_inner());
@@ -136,15 +179,16 @@ impl Store {
         let previous = self.state();
         let next = match self.paths().map(load) {
             None => State::default(),
-            Some(Ok(Loaded { config, warnings })) => State {
+            Some(Ok((Loaded { config, warnings }, base, overrides))) => State {
                 config: Arc::new(config),
                 warnings,
                 error: None,
+                base: Arc::new(base),
+                overrides: Arc::new(overrides),
             },
             Some(Err(error)) => State {
-                config: previous.config.clone(),
-                warnings: previous.warnings.clone(),
                 error: Some(error),
+                ..(*previous).clone()
             },
         };
         if *previous == next {
@@ -198,6 +242,14 @@ impl Store {
         let parts = layer::key_path(key)?;
         self.edit(|doc| {
             remove(doc.as_table_mut(), &parts);
+            Ok(())
+        })
+    }
+
+    /// Empty the overrides file, so only the base file and defaults apply.
+    pub fn reset_all(&self) -> Result<(), String> {
+        self.edit(|doc| {
+            *doc = DocumentMut::new();
             Ok(())
         })
     }
@@ -324,10 +376,29 @@ pub struct Watcher {
     _watcher: notify::RecommendedWatcher,
 }
 
-fn load(paths: &Paths) -> Result<Loaded, String> {
-    let mut table = layer::read_table(&paths.base)?;
-    layer::merge(&mut table, layer::read_table(&paths.overrides)?);
-    layer::to_config(table)
+/// The merged config, and the two tables it was merged from.
+fn load(paths: &Paths) -> Result<(Loaded, Table, Table), String> {
+    let base = layer::read_table(&paths.base)?;
+    let overrides = layer::read_table(&paths.overrides)?;
+    let mut table = base.clone();
+    layer::merge(&mut table, overrides.clone());
+    Ok((layer::to_config(table)?, base, overrides))
+}
+
+/// Whether `table` sets `key`, or a value above it that isn't a table.
+fn set_in(table: &Table, key: &str) -> bool {
+    let Ok(parts) = layer::key_path(key) else {
+        return false;
+    };
+    let mut current = table;
+    for part in parts {
+        match current.get(part) {
+            None => return false,
+            Some(Value::Table(child)) => current = child,
+            Some(_) => return true,
+        }
+    }
+    true
 }
 
 fn write_atomically(path: &Path, text: &str) -> std::io::Result<()> {
@@ -557,6 +628,29 @@ mod tests {
             store.overrides_as_nix().unwrap(),
             "programs.ion = {\n  ui.cornerRadius = 12;\n};\n"
         );
+    }
+
+    #[test]
+    fn origin_names_the_layer_that_sets_a_key() {
+        let (_dir, store) = store_with("[ui]\ndensity = \"compact\"\n[bangs]\ngh = \"x{}\"\n");
+        assert_eq!(store.origin("ui.density"), Origin::Base);
+        assert_eq!(store.origin("ui.cornerRadius"), Origin::Default);
+        assert_eq!(store.origin("bangs.gh"), Origin::Base);
+        assert_eq!(store.origin("bangs"), Origin::Base);
+        store
+            .set("ui.density", Value::String("comfortable".into()))
+            .unwrap();
+        assert_eq!(store.origin("ui.density"), Origin::Override);
+        assert_eq!(
+            store.base_value("ui.density"),
+            Some(Value::String("compact".into()))
+        );
+        store.reset("ui.density").unwrap();
+        assert_eq!(store.origin("ui.density"), Origin::Base);
+        store.set("ui.cornerRadius", Value::Integer(3)).unwrap();
+        store.reset_all().unwrap();
+        assert_eq!(store.origin("ui.cornerRadius"), Origin::Default);
+        assert_eq!(store.config().ui.density, Density::Compact);
     }
 
     #[test]

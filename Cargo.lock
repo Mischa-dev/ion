@@ -787,6 +787,7 @@ dependencies = [
  "ion-reader",
  "ion-safety",
  "ion-session",
+ "ion-settings",
  "ion-sites",
  "ion-theme",
  "serde_json",
@@ -872,6 +873,16 @@ dependencies = [
  "serde",
  "serde_json",
  "unicode-segmentation",
+]
+
+[[package]]
+name = "ion-settings"
+version = "0.1.0"
+dependencies = [
+ "ion-config",
+ "serde",
+ "serde_json",
+ "toml",
 ]
 
 [[package]]

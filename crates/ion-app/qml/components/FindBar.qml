@@ -129,10 +129,11 @@ Rectangle {
         }
     }
 
-    // Only the visible tab's bar takes the shortcuts.
+    // Only the visible tab's bar takes the shortcuts. Ion's own pages
+    // (BuiltinPage.qml) use Find for their search field instead.
     Shortcut {
         sequences: [StandardKey.Find]
-        enabled: bar.view.visible
+        enabled: bar.view.visible && Pages.pageOf(bar.view.url).length === 0
         onActivated: bar.open()
     }
     Shortcut {
