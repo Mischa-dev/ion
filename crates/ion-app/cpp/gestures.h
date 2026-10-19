@@ -1,4 +1,5 @@
-// Touchpad gestures for the `Gestures` bridge: an event filter on the window.
+// Touchpad and mouse gestures for the `Gestures` bridge: an event filter on
+// the window.
 #pragma once
 
 #include <QtCore/QObject>
@@ -12,6 +13,15 @@ namespace ion {
 //   void pause()        no phased scroll events for a moment
 //   bool pinch(int stage, double delta, double x, double y)
 //                       stage 0 begins, 1 moves, 2 ends
+//
+// and right-button mouse strokes:
+//
+//   bool strokeBegin(double x, double y)   true takes the press
+//   void strokeTo(double x, double y)
+//   bool strokeEnd(double x, double y)     false replays the click
+//
+// A right click that strokeEnd doesn't take is replayed to the window, so
+// the page's menu opens as usual.
 //
 // `phase` is Qt::ScrollPhase; positions are in window coordinates. An
 // invokable that returns true swallows the event. The filter is owned by

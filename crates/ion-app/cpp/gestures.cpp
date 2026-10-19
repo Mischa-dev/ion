@@ -1,8 +1,11 @@
 #include "ion-app/cpp/gestures.h"
 
+#include <QtCore/QCoreApplication>
 #include <QtCore/QPointer>
 #include <QtCore/QTimer>
+#include <QtGui/QMouseEvent>
 #include <QtGui/QNativeGestureEvent>
+#include <QtGui/QPointingDevice>
 #include <QtGui/QWheelEvent>
 #include <QtQuick/QQuickItem>
 #include <QtQuick/QQuickWindow>
@@ -41,6 +44,10 @@ protected:
             return wheel(static_cast<QWheelEvent *>(event));
         case QEvent::NativeGesture:
             return gesture(static_cast<QNativeGestureEvent *>(event));
+        case QEvent::MouseButtonPress:
+        case QEvent::MouseMove:
+        case QEvent::MouseButtonRelease:
+            return mouse(watched, static_cast<QMouseEvent *>(event));
         default:
             return QObject::eventFilter(watched, event);
         }
@@ -99,6 +106,70 @@ private:
         return swallow;
     }
 
+    bool mouse(QObject *window, QMouseEvent *event)
+    {
+        if (m_replaying)
+            return false;
+        const QPointF position = event->position();
+        const double x = position.x(), y = position.y();
+        switch (event->type()) {
+        case QEvent::MouseButtonPress: {
+            if (event->button() != Qt::RightButton || event->buttons() != Qt::RightButton
+                || overPopup(position))
+                return false;
+            bool take = false;
+            QMetaObject::invokeMethod(m_target, "strokeBegin", Qt::DirectConnection,
+                                      qReturnArg(take), x, y);
+            m_stroking = take;
+            if (take) {
+                m_pressPosition = position;
+                m_pressGlobal = event->globalPosition();
+                m_pressModifiers = event->modifiers();
+                m_pressDevice = event->pointingDevice();
+            }
+            return take;
+        }
+        case QEvent::MouseMove:
+            // The page never saw the press, so it doesn't see the drag either.
+            if (!m_stroking)
+                return false;
+            QMetaObject::invokeMethod(m_target, "strokeTo", Qt::DirectConnection, x, y);
+            return true;
+        case QEvent::MouseButtonRelease: {
+            if (!m_stroking || event->button() != Qt::RightButton)
+                return false;
+            m_stroking = false;
+            bool done = false;
+            QMetaObject::invokeMethod(m_target, "strokeEnd", Qt::DirectConnection,
+                                      qReturnArg(done), x, y);
+            if (!done)
+                replayClick(window);
+            return true;
+        }
+        default:
+            return false;
+        }
+    }
+
+    // A right click that wasn't a stroke: hand the page its press and release.
+    void replayClick(QObject *window)
+    {
+        m_replaying = true;
+        QMouseEvent press(QEvent::MouseButtonPress, m_pressPosition, m_pressPosition, m_pressGlobal,
+                          Qt::RightButton, Qt::RightButton, m_pressModifiers, device());
+        QCoreApplication::sendEvent(window, &press);
+        QMouseEvent release(QEvent::MouseButtonRelease, m_pressPosition, m_pressPosition,
+                            m_pressGlobal, Qt::RightButton, Qt::NoButton, m_pressModifiers,
+                            device());
+        QCoreApplication::sendEvent(window, &release);
+        m_replaying = false;
+    }
+
+    const QPointingDevice *device() const
+    {
+        return m_pressDevice ? m_pressDevice : QPointingDevice::primaryPointingDevice();
+    }
+
     // Whether a popup in the window's overlay covers `position`.
     bool overPopup(const QPointF &position) const
     {
@@ -118,6 +189,12 @@ private:
     QPointer<QObject> m_target;
     QTimer m_pause;
     bool m_overPopup = false;
+    bool m_stroking = false;
+    bool m_replaying = false;
+    QPointF m_pressPosition;
+    QPointF m_pressGlobal;
+    Qt::KeyboardModifiers m_pressModifiers;
+    const QPointingDevice *m_pressDevice = nullptr;
 };
 
 } // namespace

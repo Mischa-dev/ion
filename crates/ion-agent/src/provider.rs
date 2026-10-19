@@ -142,12 +142,18 @@ pub fn preset(id: &str) -> Option<&'static Preset> {
 }
 
 /// The preset that `kind` at `base_url` looks like, for showing the
-/// current setup; "custom" when none does.
+/// current setup: Claude for any Anthropic address (a gateway in front of
+/// it), else "custom" when none matches.
 pub fn preset_for(kind: Kind, base_url: &str) -> &'static Preset {
     let base = base_url.trim().trim_end_matches('/');
     PRESETS
         .iter()
         .find(|p| p.id != "custom" && p.kind == kind && p.base_url == base)
+        .or_else(|| {
+            PRESETS
+                .iter()
+                .find(|p| p.kind == kind && kind == Kind::Anthropic)
+        })
         .unwrap_or(&PRESETS[PRESETS.len() - 1])
 }
 
@@ -195,6 +201,11 @@ mod tests {
         assert_eq!(
             preset_for(Kind::OpenAi, "https://llm.corp.example/v1").id,
             "custom"
+        );
+        // Anthropic behind a gateway is still Claude.
+        assert_eq!(
+            preset_for(Kind::Anthropic, "https://llm.corp.example/anthropic/v1").id,
+            "anthropic"
         );
         // The same address spoken to the other way isn't that preset.
         assert_eq!(

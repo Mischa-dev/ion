@@ -300,6 +300,18 @@ pub const COMMANDS: &[Command] = &[
         &["Ctrl+Alt+R"],
     ),
     command(
+        "mute-tab",
+        "Mute or unmute tab",
+        "sound audio silence quiet volume speaker",
+        &["Ctrl+Shift+M"],
+    ),
+    command(
+        "mute-other-tabs",
+        "Mute other tabs",
+        "sound audio silence quiet volume speaker",
+        &[],
+    ),
+    command(
         "reload-userscripts",
         "Reload user scripts and styles",
         "userscript css greasemonkey refresh",
@@ -328,6 +340,12 @@ pub const COMMANDS: &[Command] = &[
         "summarize-page",
         "Summarize page with Ion Agent",
         "ai assistant tldr summary explain",
+        &[],
+    ),
+    command(
+        "compare-tabs",
+        "Compare open tabs with Ion Agent",
+        "ai assistant tabs difference versus summary",
         &[],
     ),
     command(

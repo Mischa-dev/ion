@@ -212,6 +212,22 @@ ApplicationWindow {
         fullScreen.toggleWindow()
     }
 
+    // Mute or unmute the current tab (Ctrl+Shift+M, the tab's speaker).
+    function toggleMute() {
+        const view = window.currentView
+        if (view)
+            view.audioMuted = !view.audioMuted
+    }
+
+    // Silence every tab but the current one, wherever they are.
+    function muteOtherTabs() {
+        for (let i = 0; i < views.count; i++) {
+            const view = views.itemAt(i)
+            if (view && i !== Tabs.currentIndex)
+                view.audioMuted = true
+        }
+    }
+
     // A private window (a process of its own), with `target` in it if given.
     function openPrivateWindow(target) {
         Privacy.openPrivateWindow(target ? [target.toString()] : [])
@@ -499,7 +515,8 @@ ApplicationWindow {
 
     PlatformIntegration { window: window }
 
-    // Two-finger swipes go back and forward; pinching zooms the page.
+    // Two-finger swipes go back and forward; pinching zooms the page; with
+    // `gestures.mouse`, right-button strokes run commands.
     Gestures {
         id: gestures
         area: {
@@ -588,6 +605,19 @@ ApplicationWindow {
             else
                 view.zoomFactor = factor
         }
+        onCommand: id => window.runCommand(id)
+        // In a split view the stroke acts on the pane it starts in.
+        onStrokeStarted: (x, y) => {
+            for (let i = 0; i < views.count; i++) {
+                const pane = views.itemAt(i)
+                if (pane && pane.inSplit && !pane.current
+                        && pane.contains(pane.mapFromItem(null, x, y))) {
+                    Tabs.activate(pane.index)
+                    return
+                }
+            }
+        }
+        onStrokeMoved: (x, y) => strokeTrail.add(x, y)
         Component.onCompleted: attach(window)
     }
 
@@ -788,6 +818,13 @@ ApplicationWindow {
                         const tab = window.openPageTab(!background)
                         tab.showNewTabPage = false
                         tab.openerTabId = view.tabId
+                        // An adopted page never navigates here, so it takes
+                        // its site's autoplay policy now; a blank one is the
+                        // opener's.
+                        const target = request.requestedUrl.toString()
+                        const blank = target.length === 0 || target.startsWith("about:")
+                        tab.autoplayInherited = blank ? view.autoplayUrl() : ""
+                        tab.applyAutoplay(blank ? tab.autoplayInherited : target)
                         request.openIn(tab)
                     }
                     // A page a script opened may close itself (window.close()),
@@ -827,6 +864,12 @@ ApplicationWindow {
         }
     }
 
+    StrokeTrail {
+        id: strokeTrail
+        parent: pageArea
+        active: gestures.stroking
+        label: gestures.strokeLabel
+    }
     SwipeIndicator {
         parent: pageArea
         direction: gestures.swipeDirection

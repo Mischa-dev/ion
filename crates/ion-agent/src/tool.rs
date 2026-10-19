@@ -5,7 +5,7 @@
 //! never move the person's cursor, focus or scroll position, so the person
 //! can keep using the page while the agent works (docs: agent-feel design).
 
-use ion_safety::{Action, AgentRequest, Origin};
+use ion_safety::{Action, AgentRequest, Choice, Origin, Prompt};
 use serde_json::{Value, json};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -15,6 +15,8 @@ pub enum Tool {
     ReadPage,
     /// Titles and addresses of the open tabs.
     ListTabs,
+    /// The readable text of several of the person's tabs at once, read-only.
+    ReadTabs,
     /// Click a numbered element.
     Click,
     /// Set the value of a numbered field.
@@ -26,9 +28,10 @@ pub enum Tool {
 }
 
 impl Tool {
-    pub const ALL: [Tool; 6] = [
+    pub const ALL: [Tool; 7] = [
         Tool::ReadPage,
         Tool::ListTabs,
+        Tool::ReadTabs,
         Tool::Click,
         Tool::Fill,
         Tool::GoTo,
@@ -40,6 +43,7 @@ impl Tool {
         match self {
             Tool::ReadPage => "read_page",
             Tool::ListTabs => "list_tabs",
+            Tool::ReadTabs => "read_tabs",
             Tool::Click => "click",
             Tool::Fill => "fill",
             Tool::GoTo => "go_to",
@@ -58,7 +62,15 @@ impl Tool {
                  text and a numbered list of the links, buttons and fields on it. Use it before \
                  answering anything about the page, and again after acting to see what changed."
             }
-            Tool::ListTabs => "List the person's open tabs: title and address of each.",
+            Tool::ListTabs => {
+                "List the person's open tabs: the number, title and address of each, and which \
+                 one they are looking at."
+            }
+            Tool::ReadTabs => {
+                "Read several of the person's open tabs at once, by their numbers from \
+                 list_tabs: the title, address and readable text of each. Use it to summarize, \
+                 compare or answer across tabs. Read-only: to act in a tab, use the tools above."
+            }
             Tool::Click => {
                 "Click a link, button, checkbox or other element, by its number from the last \
                  read_page."
@@ -85,6 +97,18 @@ impl Tool {
         let url = json!({ "type": "string", "description": "An http or https address." });
         let (mut properties, required) = match self {
             Tool::ReadPage | Tool::ListTabs => (json!({}), json!([])),
+            Tool::ReadTabs => (
+                json!({
+                    "tabs": {
+                        "type": "array",
+                        "items": { "type": "integer" },
+                        "minItems": 1,
+                        "maxItems": MAX_TABS,
+                        "description": "Tab numbers from list_tabs."
+                    }
+                }),
+                json!(["tabs"]),
+            ),
             Tool::Click => (json!({ "element": element }), json!(["element"])),
             Tool::Fill => (
                 json!({
@@ -201,6 +225,7 @@ fn clip(text: &str, max: usize) -> String {
 pub enum Use {
     ReadPage,
     ListTabs,
+    ReadTabs { tabs: Vec<u64> },
     Click { element: u32 },
     Fill { element: u32, text: String },
     GoTo { url: String },
@@ -232,6 +257,9 @@ impl Use {
         Ok(match tool {
             Tool::ReadPage => Use::ReadPage,
             Tool::ListTabs => Use::ListTabs,
+            Tool::ReadTabs => Use::ReadTabs {
+                tabs: tab_list(&args)?,
+            },
             Tool::Click => Use::Click {
                 element: element()?,
             },
@@ -255,6 +283,7 @@ impl Use {
         match self {
             Use::ReadPage => Tool::ReadPage,
             Use::ListTabs => Tool::ListTabs,
+            Use::ReadTabs { .. } => Tool::ReadTabs,
             Use::Click { .. } => Tool::Click,
             Use::Fill { .. } => Tool::Fill,
             Use::GoTo { .. } => Tool::GoTo,
@@ -288,6 +317,32 @@ pub fn tab_argument(tool: Tool, arguments: &str) -> Result<Option<u64>, String> 
     }
 }
 
+/// Tabs `read_tabs` reads at most at once.
+pub const MAX_TABS: usize = 8;
+
+/// The `tabs` list of a `read_tabs` call: numbers, each once, at most
+/// [`MAX_TABS`].
+fn tab_list(args: &Value) -> Result<Vec<u64>, String> {
+    let wrong = || "give the tabs as a list of numbers from list_tabs".to_owned();
+    let mut tabs = Vec::new();
+    for value in args["tabs"].as_array().ok_or_else(wrong)? {
+        let tab = value
+            .as_u64()
+            .or_else(|| value.as_str()?.trim().parse().ok())
+            .ok_or_else(wrong)?;
+        if !tabs.contains(&tab) {
+            tabs.push(tab);
+        }
+    }
+    if tabs.is_empty() {
+        return Err(wrong());
+    }
+    if tabs.len() > MAX_TABS {
+        return Err(format!("read at most {MAX_TABS} tabs at once"));
+    }
+    Ok(tabs)
+}
+
 fn web_address(args: &Value) -> Result<String, String> {
     let url = args["url"].as_str().unwrap_or_default().trim();
     let scheme_ok = url.starts_with("https://") || url.starts_with("http://");
@@ -319,6 +374,7 @@ impl Plan {
         match &self.call {
             Use::ReadPage => format!("Read {}", site.unwrap_or("the page")),
             Use::ListTabs => "Looked at your tabs".to_owned(),
+            Use::ReadTabs { tabs } => format!("Read {} tabs", tabs.len()),
             Use::Click { .. } => format!("Clicked {}", self.element_name()),
             Use::Fill { .. } => format!("Filled in {}", self.element_name()),
             Use::GoTo { url } => format!("Opened {}", host_or(url)),
@@ -381,6 +437,11 @@ pub fn plan(
                 format!("Read {site_name}"),
                 false,
             )
+        }
+        (Use::ReadTabs { .. }, _) => {
+            return Err(PlanError::Mistake(
+                "read_tabs is checked tab by tab".to_owned(),
+            ));
         }
         (Use::ListTabs, _) => (
             Action::ListTabs,
@@ -506,13 +567,114 @@ pub fn page_result(url: &str, title: &str, text: &str, elements: &[Element]) -> 
     untrusted("page", url, &body)
 }
 
-/// The `list_tabs` result for the model: one `title — url` line per tab.
-pub fn tabs_result(tabs: &[(String, String)]) -> String {
+/// One of the person's tabs, for `list_tabs`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TabInfo {
+    pub id: u64,
+    pub title: String,
+    pub url: String,
+    /// The tab the person is looking at.
+    pub current: bool,
+}
+
+/// The `list_tabs` result for the model: one `[tab N] title — url` line
+/// per tab.
+pub fn tabs_result(tabs: &[TabInfo]) -> String {
     let lines: Vec<String> = tabs
         .iter()
-        .map(|(title, url)| format!("- {} — {url}", title.trim()))
+        .map(|t| {
+            let mut line = format!("- [tab {}] {} — {}", t.id, t.title.trim(), t.url);
+            if t.current {
+                line.push_str(" (the person is looking at this one)");
+            }
+            line
+        })
         .collect();
     untrusted("tabs", "open tabs", &lines.join("\n"))
+}
+
+/// A tab `read_tabs` read: its number, address, title and text.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TabPage {
+    pub tab: u64,
+    pub url: String,
+    pub title: String,
+    pub text: String,
+}
+
+/// The `read_tabs` result for the model: each page in its own block, the
+/// text shared out so several pages fit, then the tabs it couldn't read
+/// and why.
+pub fn tab_pages_result(pages: &[TabPage], skipped: &[(u64, String)]) -> String {
+    let budget = (MAX_PAGE_CHARS * 2 / pages.len().max(1)).clamp(4_000, MAX_PAGE_CHARS);
+    let mut parts: Vec<String> = pages
+        .iter()
+        .map(|p| {
+            let mut text: String = p.text.trim().to_owned();
+            if text.chars().count() > budget {
+                text = text.chars().take(budget).collect();
+                text.push_str("\n[… page text cut here]");
+            }
+            let body = format!("Title: {}\nAddress: {}\n\n{text}", p.title.trim(), p.url);
+            format!("Tab {}:\n{}", p.tab, untrusted("page", &p.url, &body))
+        })
+        .collect();
+    for (tab, why) in skipped {
+        parts.push(format!("Tab {tab}: not read, {why}."));
+    }
+    parts.join("\n\n")
+}
+
+/// One question for the prompts reading several tabs raised: "Ion Agent
+/// wants to read pages on a.example and b.example", with the answers every
+/// prompt offers and "Allow" saying it covers each site. A single prompt is
+/// asked as it is. Like the prompts themselves, it is made from the agent's
+/// name and the sites' hosts only.
+pub fn batch_prompt(agent_name: &str, prompts: &[&Prompt]) -> (String, Vec<(Choice, String)>) {
+    let Some(first) = prompts.first() else {
+        return (String::new(), Vec::new());
+    };
+    if prompts.len() == 1 {
+        return (first.text.clone(), first.choices.clone());
+    }
+    let mut hosts: Vec<String> = Vec::new();
+    for prompt in prompts {
+        if let ion_safety::prompt::Subject::Agent(request) = &prompt.subject {
+            let host = request
+                .site
+                .as_ref()
+                .and_then(|o| o.display_host().map(str::to_owned))
+                .unwrap_or_else(|| "a page".to_owned());
+            if !hosts.contains(&host) {
+                hosts.push(host);
+            }
+        }
+    }
+    let sites = match hosts.as_slice() {
+        [] => "several pages".to_owned(),
+        [one] => one.clone(),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+    };
+    let choices = first
+        .choices
+        .iter()
+        .filter(|(choice, _)| {
+            prompts
+                .iter()
+                .all(|p| p.choices.iter().any(|(c, _)| c == choice))
+        })
+        .map(|(choice, label)| {
+            let label = match choice {
+                Choice::Allow if hosts.len() > 1 => "Allow on these sites".to_owned(),
+                _ => label.clone(),
+            };
+            (*choice, label)
+        })
+        .collect();
+    (
+        format!("{agent_name} wants to read pages on {sites}"),
+        choices,
+    )
 }
 
 #[cfg(test)]
@@ -754,12 +916,99 @@ mod tests {
 
     #[test]
     fn tabs_are_listed_one_per_line() {
+        let tab = |id, title: &str, url: &str, current| TabInfo {
+            id,
+            title: title.into(),
+            url: url.into(),
+            current,
+        };
         let result = tabs_result(&[
-            ("Ion".into(), "https://github.com/Mischa-dev/ion".into()),
-            ("News".into(), "https://lwn.net/".into()),
+            tab(3, "Ion", "https://github.com/Mischa-dev/ion", false),
+            tab(9, "News", "https://lwn.net/", true),
         ]);
-        assert!(
-            result.contains("- Ion — https://github.com/Mischa-dev/ion\n- News — https://lwn.net/")
+        assert!(result.contains(
+            "- [tab 3] Ion — https://github.com/Mischa-dev/ion\n\
+             - [tab 9] News — https://lwn.net/ (the person is looking at this one)"
+        ));
+    }
+
+    #[test]
+    fn read_tabs_takes_a_short_list() {
+        assert_eq!(
+            Use::parse(Tool::ReadTabs, r#"{"tabs": [3, "9", 3]}"#),
+            Ok(Use::ReadTabs { tabs: vec![3, 9] })
         );
+        assert!(Use::parse(Tool::ReadTabs, r#"{"tabs": []}"#).is_err());
+        assert!(Use::parse(Tool::ReadTabs, r#"{"tabs": 3}"#).is_err());
+        assert!(Use::parse(Tool::ReadTabs, r#"{"tabs": ["x"]}"#).is_err());
+        assert!(Use::parse(Tool::ReadTabs, r#"{"tabs": [1,2,3,4,5,6,7,8,9]}"#).is_err());
+        assert!(!Tool::ReadTabs.acts());
+        assert!(!Tool::ReadTabs.takes_tab());
+        assert!(matches!(
+            plan(
+                "ion",
+                Use::ReadTabs { tabs: vec![1] },
+                1,
+                "https://a.example/",
+                &[]
+            ),
+            Err(PlanError::Mistake(_))
+        ));
+    }
+
+    #[test]
+    fn several_sites_are_asked_about_at_once() {
+        let prompt = |url: &str| {
+            let plan = plan("ion", Use::ReadPage, 2, url, &[]).unwrap();
+            Prompt::for_agent(plan.request, "Ion Agent")
+        };
+        let (a, b, c) = (
+            prompt("https://a.example/x"),
+            prompt("https://b.example/"),
+            prompt("https://a.example/y"),
+        );
+        let (text, choices) = batch_prompt("Ion Agent", &[&a, &b, &c]);
+        assert_eq!(
+            text,
+            "Ion Agent wants to read pages on a.example and b.example"
+        );
+        let labels: Vec<&str> = choices.iter().map(|c| c.1.as_str()).collect();
+        assert_eq!(
+            labels,
+            ["Don't allow", "Allow once", "Allow on these sites"]
+        );
+        // One prompt is asked as it is.
+        assert_eq!(
+            batch_prompt("Ion Agent", &[&a]),
+            (a.text.clone(), a.choices.clone())
+        );
+        // A local file can't be remembered, so neither can the batch.
+        let file = prompt("file:///home/me/notes.html");
+        let (_, choices) = batch_prompt("Ion Agent", &[&a, &file]);
+        assert!(choices.iter().all(|c| c.0 != Choice::Allow));
+    }
+
+    #[test]
+    fn several_pages_share_the_room() {
+        let page = |tab, text: String| TabPage {
+            tab,
+            url: format!("https://site{tab}.example/"),
+            title: format!("Site {tab}"),
+            text,
+        };
+        let long = "word ".repeat(20_000);
+        let result = tab_pages_result(
+            &[
+                page(1, long.clone()),
+                page(2, long.clone()),
+                page(3, "short".into()),
+            ],
+            &[(4, "you said no".into())],
+        );
+        assert!(result.starts_with("Tab 1:\n<page source=\"https://site1.example/\">"));
+        assert!(result.contains("Tab 3:\n<page"));
+        assert!(result.contains("short"));
+        assert!(result.ends_with("Tab 4: not read, you said no."));
+        assert!(result.len() < MAX_PAGE_CHARS * 2 + 2_000);
     }
 }
