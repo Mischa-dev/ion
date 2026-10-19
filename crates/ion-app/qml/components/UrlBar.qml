@@ -230,7 +230,10 @@ TextField {
     }
 
     // Teach the address bar which page this text led to.
+    // Learns which page these words lead to; private windows learn nothing.
     function remember(url, title) {
+        if (Privacy.windowKind() === "private")
+            return
         if (typed.trim().length > 0 && url.length > 0)
             History.recordChoice(typed, url, title)
     }
