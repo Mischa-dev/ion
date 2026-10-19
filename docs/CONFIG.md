@@ -101,6 +101,11 @@ lists = ["easylist", "easyprivacy", "ublock-filters"]
 vim = false                  # j/k scroll, gg/G, d/u, H/L back/forward,
                              # f/F link hints (F opens in a new tab)
 
+[gestures]
+swipe = true                 # two fingers sideways on a touchpad: back/forward
+pinch = "zoom"               # "zoom" (page zoom, kept per site), "magnify"
+                             # (Chromium's magnifier, layout unchanged) or "off"
+
 [privacy]
 globalPrivacyControl = true  # Sec-GPC header and navigator.globalPrivacyControl
 blockThirdPartyCookies = true
