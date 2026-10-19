@@ -17,7 +17,12 @@ namespace ion {
 
 namespace {
 
-const QString kService = QStringLiteral("org.mpris.MediaPlayer2.ion");
+// One name per process, as the MPRIS spec suggests for several instances:
+// a private window runs in a process of its own.
+QString service() {
+    return QStringLiteral("org.mpris.MediaPlayer2.ion.instance%1")
+        .arg(QCoreApplication::applicationPid());
+}
 const QString kPath = QStringLiteral("/org/mpris/MediaPlayer2");
 const QString kRoot = QStringLiteral("org.mpris.MediaPlayer2");
 const QString kPlayer = QStringLiteral("org.mpris.MediaPlayer2.Player");
@@ -240,7 +245,7 @@ void mprisUpdate(bool active, const QString &title, const QString &artist, const
     Player *p = player();
     if (!active) {
         if (registered)
-            bus.unregisterService(kService);
+            bus.unregisterService(service());
         registered = false;
         return;
     }
@@ -259,7 +264,7 @@ void mprisUpdate(bool active, const QString &title, const QString &artist, const
     p->track = next;
     p->sinceUpdate.start();
     if (!registered) {
-        registered = bus.registerService(kService);
+        registered = bus.registerService(service());
         return;
     }
     QVariantMap changed;

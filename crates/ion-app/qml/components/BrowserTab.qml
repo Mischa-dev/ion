@@ -40,6 +40,8 @@ WebEngineView {
     // `mediaFrames`; `media` is the one that matters most.
     property var media: null
     property var mediaFrames: ({})
+    // The id of the frame `media` came from; actions go only there.
+    property string mediaFrame: ""
 
     // A login field's list asked for the password manager.
     signal managePasswords(string section)
@@ -152,20 +154,25 @@ WebEngineView {
             delete frames[report.frame]
         mediaFrames = frames
         let best = null
+        let bestFrame = ""
         for (const id in frames) {
-            if (!best || (frames[id].playing && !best.playing))
+            if (!best || (frames[id].playing && !best.playing)) {
                 best = frames[id]
+                bestFrame = id
+            }
         }
+        mediaFrame = bestFrame
         media = best
     }
     function clearMedia() {
         mediaFrames = {}
+        mediaFrame = ""
         media = null
     }
     onLifecycleStateChanged: if (lifecycleState === WebEngineView.LifecycleState.Discarded) clearMedia()
     // `action` as for Media.actionScript ("playpause", "next", "seekby", …).
     function mediaAction(action, value) {
-        const script = Media.actionScript(action, value || 0)
+        const script = Media.actionScript(action, value || 0, mediaFrame)
         if (script.length > 0)
             runInFrames(mainFrame, script)
     }

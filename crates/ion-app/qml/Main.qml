@@ -848,7 +848,10 @@ ApplicationWindow {
                         if (!deferred)
                             loadSavedUrl()
                     }
-                    Component.onDestruction: mediaSessions.update(view, true)
+                    Component.onDestruction: {
+                        pipWindow.forget(view)
+                        mediaSessions.update(view, true)
+                    }
                     onMediaChanged: mediaSessions.update(view, false)
                     onOnScreenChanged: {
                         if (onScreen && deferred) {

@@ -29,6 +29,11 @@ Window {
     property var videoState: ({ paused: false, muted: false, time: 0, duration: 0 })
     // Width people last gave the window, kept while Ion runs.
     property int preferredWidth: 480
+    // Bumped by each open and close; a frame scan answering for an older
+    // one is dropped.
+    property int generation: 0
+    // The tab the latest open is scanning.
+    property var pendingTab: null
 
     readonly property bool active: view !== null
 
@@ -56,6 +61,8 @@ Window {
             return
         if (view)
             restore(false)
+        const token = ++generation
+        pendingTab = tab
         const frames = framesUnder(tab.mainFrame, [], [])
         let pending = frames.length
         let best = null
@@ -64,13 +71,13 @@ Window {
                 const found = result ? JSON.parse(result) : null
                 if (found && (!best || found.score > best.score))
                     best = { score: found.score, playing: found.playing, entry: entry }
-                if (--pending === 0)
-                    pip.enter(tab, best, auto)
+                if (--pending === 0 && token === pip.generation)
+                    pip.enter(tab, best, auto, token)
             })
         }
     }
 
-    function enter(tab, best, auto) {
+    function enter(tab, best, auto, token) {
         if (!best || (auto && !best.playing)) {
             if (!auto)
                 tab.notify(qsTr("No video on this page"))
@@ -78,6 +85,13 @@ Window {
         }
         const entry = best.entry
         entry.frame.runJavaScript(Media.pipEnterScript, WebEngineScript.ApplicationWorld, size => {
+            if (token !== pip.generation) {
+                // Superseded meanwhile: undo what the page did for it,
+                // unless the newer request is for this same tab.
+                if (tab !== pip.pendingTab && tab !== pip.view)
+                    pip.runInFrames(tab.mainFrame, Media.pipExitScript)
+                return
+            }
             if (!size) {
                 if (!auto)
                     tab.notify(qsTr("No video on this page"))
@@ -93,6 +107,7 @@ Window {
             const parts = size.split("x")
             pip.videoFrame = entry.frame
             pip.automatic = auto
+            pip.pendingTab = null
             pip.view = tab
             tab.pictureInPicture = true
             tab.parent = content
@@ -113,13 +128,25 @@ Window {
     // window, as in other browsers).
     function restore(pause) {
         const tab = view
-        if (!tab)
-            return
-        if (pause)
-            control("pause")
-        runInFrames(tab.mainFrame, Media.pipExitScript)
-        tab.parent = home
-        tab.pictureInPicture = false
+        if (tab) {
+            if (pause)
+                control("pause")
+            runInFrames(tab.mainFrame, Media.pipExitScript)
+            tab.parent = home
+            tab.pictureInPicture = false
+        }
+        reset()
+    }
+
+    // The tab in picture-in-picture is going away: close without touching it.
+    function forget(tab) {
+        if (tab === view || tab === pendingTab)
+            reset()
+    }
+
+    function reset() {
+        generation++
+        pendingTab = null
         view = null
         videoFrame = null
         automatic = false

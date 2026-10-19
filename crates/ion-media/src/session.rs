@@ -139,9 +139,12 @@ impl Action {
     }
 }
 
-/// Script (Ion's world, each frame) that hands `action` to the page script,
-/// which uses the page's own Media Session handler when it has one.
-pub fn action_script(action: Action) -> String {
+/// Script (Ion's world, each frame) that hands `action` to the page script
+/// of the frame with id `frame` (as [`split`] gave it), which uses the page's
+/// own Media Session handler when it has one. Other frames ignore it.
+pub fn action_script(action: Action, frame: &str) -> String {
+    // Frame ids are the page script's own, but a page could log any text.
+    let frame: String = frame.chars().filter(char::is_ascii_alphanumeric).collect();
     let (name, value) = match action {
         Action::Play => ("play", 0.0),
         Action::Pause => ("pause", 0.0),
@@ -153,7 +156,7 @@ pub fn action_script(action: Action) -> String {
         Action::SeekTo(s) => ("seekto", s),
     };
     format!(
-        "document.dispatchEvent(new CustomEvent(\"ion-media-action\", {{ detail: \"{name} {value}\" }}));"
+        "document.dispatchEvent(new CustomEvent(\"ion-media-action\", {{ detail: \"{name} {value} {frame}\" }}));"
     )
 }
 
@@ -231,10 +234,10 @@ pub const PAGE_SCRIPT: &str = r#"(() => {
     document.addEventListener(type, report, true);
   setInterval(() => { if (reported) report(); }, 5000);
   document.addEventListener("ion-media-action", event => {
-    const [action, raw] = String(event.detail).split(" ");
+    const [action, raw, target] = String(event.detail).split(" ");
     const value = Number(raw) || 0;
     // Only the frame whose media Ion is showing; others keep still.
-    if (!reported) return;
+    if (!reported || target !== frame) return;
     const el = pick();
     const call = (name, details) => {
       const handler = handlers.get(name);
@@ -302,8 +305,10 @@ mod tests {
         );
         assert_eq!(Action::from_name("seekto", -3.0), Some(Action::SeekTo(0.0)));
         assert_eq!(Action::from_name("dance", 0.0), None);
-        assert!(action_script(Action::Next).contains("\"nexttrack 0\""));
-        assert!(action_script(Action::SeekBy(-10.0)).contains("\"seekby -10\""));
+        assert!(action_script(Action::Next, "ab12").contains("\"nexttrack 0 ab12\""));
+        assert!(action_script(Action::SeekBy(-10.0), "ab12").contains("\"seekby -10 ab12\""));
+        // A forged frame id can't break out of the string.
+        assert!(action_script(Action::Play, "x\"); alert(1); //").contains("\"play 0 xalert1\""));
     }
 
     #[test]

@@ -111,10 +111,11 @@ pub mod qobject {
         /// Script (Ion's world, each frame) asking the page to `action`:
         /// "play", "pause", "playpause", "stop", "next", "previous",
         /// "seekby" or "seekto" (both with `value` in seconds). "" for
-        /// anything else.
+        /// anything else. Only the frame with id `frame` (a report's
+        /// "frame") acts on it.
         #[qinvokable]
         #[cxx_name = "actionScript"]
-        fn action_script(self: &Media, action: &QString, value: f64) -> QString;
+        fn action_script(self: &Media, action: &QString, value: f64, frame: &QString) -> QString;
 
         /// Show this track in the system's media controls, or with `active`
         /// false take Ion out of them. Seconds for `duration` and `position`.
@@ -278,9 +279,11 @@ fn state_map(state: &session::State) -> QVariant {
 }
 
 impl qobject::Media {
-    fn action_script(&self, action: &QString, value: f64) -> QString {
+    fn action_script(&self, action: &QString, value: f64, frame: &QString) -> QString {
         match Action::from_name(&action.to_string(), value) {
-            Some(action) => QString::from(session::action_script(action).as_str()),
+            Some(action) => {
+                QString::from(session::action_script(action, &frame.to_string()).as_str())
+            }
             None => QString::default(),
         }
     }
