@@ -135,16 +135,6 @@ pub mod qobject {
         #[cxx_name = "pinTab"]
         fn pin_tab(self: Pin<&mut Tabs>, index: i32, pin: i32) -> i32;
 
-        /// One step of dragging a tab: like `moveTab`, but it only joins or
-        /// leaves a group once `dropTab` says where it was let go.
-        #[qinvokable]
-        #[cxx_name = "dragTab"]
-        fn drag_tab(self: Pin<&mut Tabs>, from: i32, to: i32) -> bool;
-
-        #[qinvokable]
-        #[cxx_name = "dropTab"]
-        fn drop_tab(self: Pin<&mut Tabs>, index: i32);
-
         /// Start a tab group with the tab at `index`. Returns the group's id, or
         /// -1 for a pinned tab.
         #[qinvokable]
@@ -377,6 +367,29 @@ pub mod qobject {
         #[cxx_name = "restoreLastSession"]
         fn restore_last_session(self: Pin<&mut Tabs>) -> bool;
 
+        /// Mark Ion as running. True when the last run ended without a
+        /// clean quit (a crash); `restoreCrashedSession()` then brings its
+        /// tabs back.
+        #[qinvokable]
+        #[cxx_name = "beginRun"]
+        fn begin_run(self: &Tabs) -> bool;
+
+        /// Mark a clean quit. Call after the last `saveSession()`.
+        #[qinvokable]
+        #[cxx_name = "endRun"]
+        fn end_run(self: &Tabs);
+
+        /// Replace the tabs with the ones open when the last run crashed.
+        /// False if there were none.
+        #[qinvokable]
+        #[cxx_name = "restoreCrashedSession"]
+        fn restore_crashed_session(self: Pin<&mut Tabs>) -> bool;
+
+        /// Forget the tabs kept from a crashed run.
+        #[qinvokable]
+        #[cxx_name = "discardCrashedSession"]
+        fn discard_crashed_session(self: &Tabs);
+
         /// Write the open tabs to disk for the next start.
         #[qinvokable]
         #[cxx_name = "saveSession"]
@@ -432,6 +445,20 @@ const ROLE_GROUP_COLLAPSED: i32 = ROLE_ID + 12;
 const ROLE_GROUP_FIRST: i32 = ROLE_ID + 13;
 const ROLE_GROUP_LAST: i32 = ROLE_ID + 14;
 const ROLE_SECTION_END: i32 = ROLE_ID + 15;
+
+/// Roles a move, pin or group change can change for other rows than the
+/// tab's own; see `rows_shifted`.
+const SHIFTED_ROLES: [i32; 9] = [
+    ROLE_ROW,
+    ROLE_PINNED,
+    ROLE_GROUP,
+    ROLE_GROUP_NAME,
+    ROLE_GROUP_COLOR,
+    ROLE_GROUP_COLLAPSED,
+    ROLE_GROUP_FIRST,
+    ROLE_GROUP_LAST,
+    ROLE_SECTION_END,
+];
 
 pub struct TabsRust {
     list: TabList,
@@ -582,8 +609,10 @@ impl qobject::Tabs {
     }
 
     /// Rows from `first` on changed position or neighbours: tell views
-    /// reading `row` or the group edges. Every role, since a move can change
-    /// a tab's group too.
+    /// reading `row`, pins or groups. Not the roles the strips filter on
+    /// (`workspace`, `essential`): a filter that sees them change drops and
+    /// recreates the rows, which ends a drag in progress. Callers that change
+    /// those for one tab say so with `notify_row`.
     fn rows_shifted(mut self: Pin<&mut Self>, first: usize) {
         let len = self.list.len();
         if first >= len {
@@ -592,8 +621,11 @@ impl qobject::Tabs {
         let root = QModelIndex::default();
         let top = self.index(first as i32, 0, &root);
         let bottom = self.index(len as i32 - 1, 0, &root);
-        self.as_mut()
-            .data_changed(&top, &bottom, &QList::<i32>::default());
+        let mut roles = QList::<i32>::default();
+        for role in SHIFTED_ROLES {
+            roles.append(role);
+        }
+        self.as_mut().data_changed(&top, &bottom, &roles);
     }
 
     /// Move the row at `from` to `to` around `apply`, which makes the same
@@ -718,30 +750,6 @@ impl qobject::Tabs {
         true
     }
 
-    fn drag_tab(mut self: Pin<&mut Self>, from: i32, to: i32) -> bool {
-        let len = self.list.len();
-        let (Some(f), Some(t)) = (to_index(from, len), to_index(to, len)) else {
-            return false;
-        };
-        let Some(t) = self.list.move_target(f, t) else {
-            return false;
-        };
-        self.as_mut().move_row_with(f, t, |list| {
-            list.drag_tab(f, t);
-        });
-        true
-    }
-
-    fn drop_tab(mut self: Pin<&mut Self>, index: i32) {
-        let Some(i) = to_index(index, self.list.len()) else {
-            return;
-        };
-        if self.as_mut().rust_mut().list.drop_tab(i) {
-            self.as_mut().rows_shifted(0);
-            self.sync();
-        }
-    }
-
     fn pin_tab(mut self: Pin<&mut Self>, index: i32, pin: i32) -> i32 {
         let Some(i) = to_index(index, self.list.len()) else {
             return -1;
@@ -757,6 +765,8 @@ impl qobject::Tabs {
         self.as_mut().move_row_with(i, to, |list| {
             list.pin(i, kind);
         });
+        self.as_mut().notify_row(to as i32, ROLE_ESSENTIAL);
+        self.as_mut().notify_row(to as i32, ROLE_WORKSPACE);
         to as i32
     }
 
@@ -793,6 +803,8 @@ impl qobject::Tabs {
         self.as_mut().move_row_with(i, to, |list| {
             list.set_group(i, group);
         });
+        // Joining a group can move the tab to the group's workspace.
+        self.as_mut().notify_row(to as i32, ROLE_WORKSPACE);
     }
 
     fn rename_group(mut self: Pin<&mut Self>, id: i32, name: &QString) {
@@ -1220,6 +1232,7 @@ impl qobject::Tabs {
         self.as_mut().move_row_with(i, to, |list| {
             list.move_to_workspace(i, id);
         });
+        self.as_mut().notify_row(to as i32, ROLE_WORKSPACE);
     }
 
     fn workspace_at(&self, index: i32) -> i32 {
@@ -1283,6 +1296,48 @@ impl qobject::Tabs {
                 warn("could not restore the last session", err);
                 false
             }
+        }
+    }
+
+    fn begin_run(&self) -> bool {
+        self.store.as_ref().is_some_and(|store| {
+            store
+                .begin_run()
+                .map_err(|err| warn("could not mark Ion as running", err))
+                .unwrap_or(false)
+        })
+    }
+
+    fn end_run(&self) {
+        if let Some(store) = &self.store
+            && let Err(err) = store.end_run()
+        {
+            warn("could not mark a clean quit", err);
+        }
+    }
+
+    fn restore_crashed_session(self: Pin<&mut Self>) -> bool {
+        let Some(store) = self.store.clone() else {
+            return false;
+        };
+        let restored = match store.load_crashed() {
+            Ok(Some(session)) if !session.tabs.is_empty() => {
+                self.replace_with(&session);
+                true
+            }
+            Ok(_) => false,
+            Err(err) => {
+                warn("could not restore the tabs from before the crash", err);
+                false
+            }
+        };
+        let _ = store.discard_crashed();
+        restored
+    }
+
+    fn discard_crashed_session(&self) {
+        if let Some(store) = &self.store {
+            let _ = store.discard_crashed();
         }
     }
 
