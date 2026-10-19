@@ -664,6 +664,9 @@ ApplicationWindow {
             pipWindow.restore(false)
             return
         }
+        // Back before its video popped out: it stays put.
+        if (currentView && pipWindow.pendingTab === currentView)
+            pipWindow.forget(currentView)
         if (left && left !== currentView && !left.pictureInPicture && left.recentlyAudible
                 && !left.audioMuted && Config.value("media.autoPictureInPicture") !== false)
             pipWindow.open(left, true)

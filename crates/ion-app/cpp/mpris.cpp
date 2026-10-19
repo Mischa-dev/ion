@@ -51,12 +51,12 @@ public:
         };
     }
 
+    QString trackPath() const { return QStringLiteral("/dev/ion/Ion/track/%1").arg(trackNumber); }
+
     QVariantMap metadata() const
     {
         QVariantMap map;
-        map.insert(QStringLiteral("mpris:trackid"),
-                   QVariant::fromValue(QDBusObjectPath(
-                       QStringLiteral("/dev/ion/Ion/track/%1").arg(trackNumber))));
+        map.insert(QStringLiteral("mpris:trackid"), QVariant::fromValue(QDBusObjectPath(trackPath())));
         if (!track.title.isEmpty())
             map.insert(QStringLiteral("xesam:title"), track.title);
         if (!track.artist.isEmpty())
@@ -93,7 +93,7 @@ public:
             { QStringLiteral("Metadata"), metadata() },
             { QStringLiteral("Position"), positionNow() },
             { QStringLiteral("CanGoNext"), track.canNext },
-            { QStringLiteral("CanGoPrevious"), true },
+            { QStringLiteral("CanGoPrevious"), track.canPrevious },
             { QStringLiteral("CanPlay"), true },
             { QStringLiteral("CanPause"), true },
             { QStringLiteral("CanSeek"), track.lengthUs > 0 },
@@ -195,6 +195,11 @@ public:
                 action = QStringLiteral("seekby");
                 value = args.value(0).toLongLong() / 1e6;
             } else if (member == QLatin1String("SetPosition")) {
+                // A request for a track no longer showing does nothing.
+                if (args.value(0).value<QDBusObjectPath>().path() != trackPath()) {
+                    connection.send(message.createReply());
+                    return true;
+                }
                 action = QStringLiteral("seekto");
                 value = args.value(1).toLongLong() / 1e6;
             } else if (member == QLatin1String("OpenUri")) {
