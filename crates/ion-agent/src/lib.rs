@@ -7,17 +7,22 @@
 //! - [`tool::Tool`] lists the browser tools agents may call, each mapped to
 //!   the [`ion_safety::Action`] the safety model decides on.
 //! - [`history::History`] keeps finished conversations across restarts.
-//! - [`openai::OpenAi`] talks to any OpenAI-compatible chat completions API.
+//! - [`openai::OpenAi`] talks to any OpenAI-compatible chat completions API,
+//!   [`anthropic::Anthropic`] to Anthropic's Messages API.
 //!
 //! Every tool call goes through `ion-safety` first ([`tool::plan`]);
 //! page content reaches the model only inside marked blocks the system
 //! prompt tells it to treat as data (docs/SAFETY.md §5).
 
+pub mod anthropic;
 pub mod history;
+mod http;
 pub mod invoke;
+pub mod keys;
 pub mod markdown;
 pub mod model;
 pub mod openai;
+pub mod provider;
 pub mod task;
 pub mod tool;
 

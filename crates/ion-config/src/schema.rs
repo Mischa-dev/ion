@@ -369,6 +369,10 @@ pub struct Agent {
     /// outside agent, or Ion Agent, which runs on `[ai]`).
     #[serde(skip_serializing_if = "String::is_empty")]
     pub model: String,
+    /// How to talk to its model service, like `ai.provider`; empty uses
+    /// `ai.provider`.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub provider: String,
     /// The model service's base URL; empty uses `ai.baseUrl`.
     #[serde(skip_serializing_if = "String::is_empty")]
     pub base_url: String,
@@ -432,6 +436,9 @@ impl Default for Safety {
     }
 }
 
+/// Values `ai.provider` and `[agents.<id>] provider` take.
+pub const PROVIDERS: [&str; 2] = ["openai", "anthropic"];
+
 /// `[ai]`: Ion Agent and the model it runs on. Off by default while agents
 /// are new: with `enable = false` there is no agent UI and nothing starts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -440,14 +447,16 @@ pub struct Ai {
     /// Turn on Ion Agent: `@ion …` and `!ai …` in the address bar.
     pub enable: bool,
     /// Which kind of model service: `"openai"` is any OpenAI-compatible
-    /// chat completions API (OpenAI, OpenRouter, Ollama, llama.cpp).
+    /// chat completions API (OpenAI, OpenRouter, Ollama, llama.cpp), and
+    /// `"anthropic"` Anthropic's Messages API (Claude).
     pub provider: String,
     /// The model id sent to the service.
     pub model: String,
     /// The service's base URL, up to and including `/v1`.
     pub base_url: String,
-    /// The environment variable that holds the API key. The key itself
-    /// never goes in config. Empty sends no key (local servers).
+    /// The environment variable that holds the API key when none is saved
+    /// in the system keyring (Ion's agent setup saves it there). The key
+    /// itself never goes in config. Empty sends no key (local servers).
     pub api_key_env: String,
     /// Days finished agent conversations are kept, to reopen from the
     /// agent sidebar. 0 keeps none. Page contents are never kept.
@@ -557,11 +566,20 @@ impl Config {
         if self.agents.profiles.contains_key("mcp") {
             problems.push("agents.mcp is Ion's MCP server settings, not an agent".into());
         }
-        if self.ai.provider != "openai" {
+        if !PROVIDERS.contains(&self.ai.provider.as_str()) {
             problems.push(format!(
-                "ai.provider {:?} isn't supported yet; use \"openai\" (any OpenAI-compatible API)",
+                "ai.provider {:?} isn't supported; use \"openai\" (any OpenAI-compatible API) \
+                 or \"anthropic\"",
                 self.ai.provider
             ));
+        }
+        for (id, agent) in &self.agents.profiles {
+            if !agent.provider.is_empty() && !PROVIDERS.contains(&agent.provider.as_str()) {
+                problems.push(format!(
+                    "agents.{id}.provider {:?} isn't supported; use \"openai\" or \"anthropic\"",
+                    agent.provider
+                ));
+            }
         }
         if self.safety.audit_retention_days == 0 {
             problems.push("safety.auditRetentionDays must be at least 1".into());
@@ -837,6 +855,11 @@ mod tests {
         assert_eq!(config.ai.model, "qwen3:8b");
         assert_eq!(config.ai.api_key_env, "");
 
+        let config: Config = toml::from_str("[ai]\nprovider = \"anthropic\"").unwrap();
+        assert!(config.check().is_empty());
+        let config: Config =
+            toml::from_str("[agents.x]\nmodel = \"m\"\nprovider = \"gemini\"").unwrap();
+        assert_eq!(config.check().len(), 1);
         let config: Config = toml::from_str("[ai]\nprovider = \"chatgpt\"").unwrap();
         assert_eq!(config.check().len(), 1);
     }

@@ -202,6 +202,8 @@ ApplicationWindow {
             extensionPaths = Extensions.paths()
             extensionPaths.forEach(path => extensionManager.loadExtension(path))
         }
+        // True when the last run crashed; its tabs are kept aside.
+        const crashed = Tabs.beginRun()
         if (Config.value("general.restoreSession")) {
             // Restoring replaces every tab; keep any opened while waiting
             // (Ctrl+T, a URL handed over by a second launch).
@@ -210,6 +212,9 @@ ApplicationWindow {
                 early.push(Tabs.urlAt(i))
             if (Tabs.restoreLastSession())
                 early.forEach((target, i) => openTab(target, i === 0))
+            Tabs.discardCrashedSession()
+        } else if (crashed) {
+            crashRestore.offer()
         }
         // URLs on the command line (`ion %U` from the desktop file) open as new
         // tabs after the restored ones; the first one becomes current.
@@ -305,6 +310,7 @@ ApplicationWindow {
             // saved session.
             if (window.startupFinished)
                 Tabs.saveSession()
+            Tabs.endRun()
             History.save()
             window.clearOnExit(false)
         }
@@ -461,7 +467,19 @@ ApplicationWindow {
                         const background = request.destination === WebEngineNewWindowRequest.InNewBackgroundTab
                         const tab = window.openPageTab(!background)
                         tab.showNewTabPage = false
+                        tab.openerTabId = view.tabId
                         request.openIn(tab)
+                    }
+                    // A page a script opened may close itself (window.close()),
+                    // like a "Sign in with Google" or PayPal popup once it's
+                    // done; the tab goes and its opener comes back.
+                    property int openerTabId: -1
+                    onWindowCloseRequested: {
+                        const opener = Tabs.indexOfTab(openerTabId)
+                        const wasCurrent = current
+                        window.closeTab(index)
+                        if (wasCurrent && opener >= 0)
+                            Tabs.activate(Tabs.indexOfTab(openerTabId))
                     }
                     onOpenInNewTab: target => window.openTab(target, false)
                     onAskAgent: input => window.askAgent(input)
@@ -520,11 +538,19 @@ ApplicationWindow {
     function showAgentActivity() {
         agentActivity.show()
     }
+    function showAgentSetup() {
+        agentSetup.show("")
+    }
     function toggleAgentSidebar() {
         agentSidebar.toggle(window.currentView ? Agent.latestTask(window.currentView.tabId) : -1)
     }
 
     AgentsStoppedNotice {}
+    CrashRestoreNotice { id: crashRestore }
     AgentActivity { id: agentActivity }
+    AgentSetup {
+        id: agentSetup
+        onAsk: input => window.askAgent(input)
+    }
     AgentTools { views: views }
 }
