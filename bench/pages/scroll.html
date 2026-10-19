@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bench scroll</title>
+<!-- A heavy page to scroll: many cards with shadows, rounded corners,
+     gradients, a sticky header, a running CSS animation and canvases. -->
+<style>
+  body { margin: 0; font: 15px/1.5 system-ui, sans-serif; background: #eceff4; }
+  header { position: sticky; top: 0; z-index: 2; padding: 14px 24px; background: #ffffffd0; box-shadow: 0 2px 12px #0003; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 3px solid #5e81ac; border-right-color: transparent; animation: spin 0.8s linear infinite; vertical-align: middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; padding: 24px; }
+  .card { background: linear-gradient(160deg, #fff, #e5e9f0); border-radius: 16px; box-shadow: 0 6px 20px #0002, 0 1px 3px #0003; padding: 16px; }
+  .card canvas { width: 100%; height: 120px; border-radius: 10px; display: block; }
+  .card h3 { margin: 10px 0 4px; }
+</style>
+<script src="report.js"></script>
+</head>
+<body>
+<header><span class="spinner"></span> <strong>Scrolling</strong> <span id="status">waiting</span></header>
+<div class="grid" id="grid"></div>
+<script>
+  const grid = document.getElementById("grid");
+  const cards = [];
+  for (let i = 0; i < 900; i++)
+    cards.push(`<div class="card"><canvas width="260" height="120" data-i="${i}"></canvas><h3>Card ${i + 1}</h3><p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore.</p></div>`);
+  grid.innerHTML = cards.join("");
+  for (const canvas of document.querySelectorAll("canvas")) {
+    const ctx = canvas.getContext("2d");
+    const i = +canvas.dataset.i;
+    ctx.fillStyle = `hsl(${(i * 23) % 360} 60% 65%)`;
+    ctx.fillRect(0, 0, 260, 120);
+    ctx.fillStyle = "#fff8";
+    for (let k = 0; k < 6; k++) ctx.fillRect((i * 17 + k * 41) % 240, (k * 19) % 100, 20, 20);
+  }
+
+  // Scroll down smoothly (compositor-driven, like a wheel or trackpad) for a
+  // few seconds and time every frame with requestAnimationFrame.
+  const DURATION = 5000;
+  function run() {
+    document.getElementById("status").textContent = "running";
+    const frames = [];
+    let last = performance.now();
+    const start = last;
+    const step = setInterval(() => window.scrollBy({ top: 500, behavior: "smooth" }), 250);
+    function frame(now) {
+      frames.push(now - last);
+      last = now;
+      if (now - start < DURATION) {
+        requestAnimationFrame(frame);
+        return;
+      }
+      clearInterval(step);
+      frames.shift();
+      const sorted = [...frames].sort((a, b) => a - b);
+      const median = sorted[Math.floor(sorted.length / 2)];
+      const long = frames.filter(f => f > median * 1.5).length;
+      const result = {
+        frames: frames.length,
+        fps: frames.length / ((now - start) / 1000),
+        medianMs: median,
+        p95Ms: sorted[Math.floor(sorted.length * 0.95)],
+        longFramesPercent: (100 * long) / frames.length,
+      };
+      document.getElementById("status").textContent = JSON.stringify(result);
+      benchReport("scroll", result);
+    }
+    requestAnimationFrame(frame);
+  }
+  // Give the browser a moment after load, as a person would.
+  addEventListener("load", () => setTimeout(run, 1500));
+</script>
+</body>
+</html>
