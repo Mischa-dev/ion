@@ -157,10 +157,10 @@ pub fn forget_site_searches(site: Option<&str>) {
     with_site_searches(|s| {
         let forgot = match site {
             Some(site) => s.engines.forget_site(site),
+            // Always rewritten: a file Ion couldn't read may still name sites.
             None => {
-                let had = !s.engines.is_empty();
                 s.engines.clear();
-                had
+                true
             }
         };
         s.tried.clear();

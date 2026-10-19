@@ -7,6 +7,7 @@
 //! Each found engine becomes a bang (`!youtube`, `!docs.rs`) alongside the
 //! built-in ones, never replacing a bang that already exists.
 
+use std::net::IpAddr;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -122,15 +123,27 @@ pub fn may_fetch(page: &str, description: &str) -> bool {
 
 /// Fetches the OpenSearch description at `description`, linked from `page`.
 /// Every address on the way, each redirect included, has to pass
-/// [`may_fetch`] before it is requested. Blocks; sends no cookies.
+/// [`may_fetch`] before it is requested, and unless the page itself is on a
+/// local network the names have to resolve to public addresses, so a site
+/// can't point Ion at your router through its own DNS. Blocks; sends no
+/// cookies and uses no proxy (a proxy would resolve the names itself).
 pub fn fetch(page: &str, description: &str) -> Option<String> {
-    let agent: ureq::Agent = ureq::Agent::config_builder()
+    let local = url::Url::parse(page)
+        .ok()
+        .and_then(|url| url.host_str().map(is_local_host))
+        .unwrap_or(false);
+    let config = ureq::Agent::config_builder()
         .timeout_global(Some(Duration::from_secs(10)))
         .max_redirects(0)
         .http_status_as_error(false)
+        .proxy(None)
         .user_agent(concat!("Ion/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .into();
+        .build();
+    let agent = ureq::Agent::with_parts(
+        config,
+        ureq::unversioned::transport::DefaultConnector::default(),
+        Resolve { local },
+    );
     let mut address = url::Url::parse(description).ok()?;
     for _ in 0..=MAX_HOPS {
         if !may_fetch(page, address.as_str()) {
@@ -154,6 +167,84 @@ pub fn fetch(page: &str, description: &str) -> Option<String> {
             .ok();
     }
     None
+}
+
+/// Resolves names for [`fetch`], keeping only public addresses unless the
+/// page was `local`. ureq connects to exactly what this returns.
+#[derive(Debug)]
+struct Resolve {
+    local: bool,
+}
+
+impl ureq::unversioned::resolver::Resolver for Resolve {
+    fn resolve(
+        &self,
+        uri: &ureq::http::Uri,
+        config: &ureq::config::Config,
+        timeout: ureq::unversioned::transport::NextTimeout,
+    ) -> Result<ureq::unversioned::resolver::ResolvedSocketAddrs, ureq::Error> {
+        let found = ureq::unversioned::resolver::DefaultResolver::default()
+            .resolve(uri, config, timeout)?;
+        let mut kept = self.empty();
+        for address in found.iter().filter(|a| self.local || is_public(a.ip())) {
+            kept.push(*address);
+        }
+        if kept.is_empty() {
+            return Err(ureq::Error::HostNotFound);
+        }
+        Ok(kept)
+    }
+}
+
+/// Whether `host` names a machine on a local network: a non-public IP,
+/// `localhost`, a bare name, or a local-only domain.
+fn is_local_host(host: &str) -> bool {
+    let host = host
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .to_lowercase();
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        return !is_public(ip);
+    }
+    !host.contains('.')
+        || [".localhost", ".local", ".internal", ".lan", ".home.arpa"]
+            .iter()
+            .any(|suffix| host.ends_with(suffix))
+}
+
+/// Whether `ip` is reachable on the public internet (not loopback, private,
+/// link-local, shared, documentation, multicast or reserved).
+fn is_public(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => {
+            let [a, b, c, _] = v4.octets();
+            !(v4.is_loopback()
+                || v4.is_private()
+                || v4.is_link_local()
+                || v4.is_unspecified()
+                || v4.is_broadcast()
+                || v4.is_documentation()
+                || v4.is_multicast()
+                || a == 0
+                || a >= 240
+                || (a == 100 && (64..128).contains(&b))
+                || (a == 192 && b == 0 && c == 0)
+                || (a == 198 && (18..20).contains(&b)))
+        }
+        IpAddr::V6(v6) => {
+            if let Some(v4) = v6.to_ipv4_mapped() {
+                return is_public(IpAddr::V4(v4));
+            }
+            let first = v6.segments()[0];
+            !(v6.is_loopback()
+                || v6.is_unspecified()
+                || v6.is_multicast()
+                || (first & 0xfe00) == 0xfc00
+                || (first & 0xffc0) == 0xfe80
+                || (first & 0xffc0) == 0xfec0
+                || (first == 0x2001 && v6.segments()[1] == 0x0db8))
+        }
+    }
 }
 
 /// Whether two hosts belong to one site: equal, or one a subdomain of the
@@ -439,6 +530,54 @@ mod tests {
         let page = format!("{base}/");
         // 10.0.0.1 is never contacted: the hop is refused before any request.
         assert_eq!(fetch(&page, &format!("{base}/os.xml")), None);
+    }
+
+    #[test]
+    fn only_public_addresses_count_as_public() {
+        for ip in [
+            "127.0.0.1",
+            "10.1.2.3",
+            "172.16.0.1",
+            "192.168.1.1",
+            "169.254.1.1",
+            "100.64.0.1",
+            "0.0.0.0",
+            "::1",
+            "fd00::1",
+            "fe80::1",
+            "::ffff:192.168.1.1",
+        ] {
+            assert!(!is_public(ip.parse().unwrap()), "{ip}");
+        }
+        for ip in ["1.1.1.1", "93.184.216.34", "2606:4700::1111"] {
+            assert!(is_public(ip.parse().unwrap()), "{ip}");
+        }
+        assert!(is_local_host("localhost"));
+        assert!(is_local_host("printer.local"));
+        assert!(is_local_host("192.168.1.10"));
+        assert!(is_local_host("nas"));
+        assert!(!is_local_host("en.wikipedia.org"));
+        assert!(!is_local_host("1.1.1.1"));
+    }
+
+    #[test]
+    fn public_pages_never_reach_local_addresses() {
+        // A site's DNS can point anywhere; what matters is the address the
+        // name resolves to, checked before anything is sent.
+        let resolve = Resolve { local: false };
+        let uri: ureq::http::Uri = "http://127.0.0.1:9/".parse().unwrap();
+        let config = ureq::config::Config::default();
+        let timeout = ureq::unversioned::transport::NextTimeout {
+            after: ureq::unversioned::transport::time::Duration::NotHappening,
+            reason: ureq::Timeout::Global,
+        };
+        use ureq::unversioned::resolver::Resolver;
+        assert!(resolve.resolve(&uri, &config, timeout).is_err());
+        assert!(
+            Resolve { local: true }
+                .resolve(&uri, &config, timeout)
+                .is_ok()
+        );
     }
 
     #[test]
