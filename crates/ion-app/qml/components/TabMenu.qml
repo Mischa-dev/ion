@@ -102,7 +102,7 @@ IonMenu {
     }
     IonMenuItem {
         text: qsTr("Split with a new tab")
-        visible: root.isCurrent && root.splitHasRoom
+        visible: root.isCurrent && root.splitHasRoom && root.pin !== 2
         height: visible ? implicitHeight : 0
         onTriggered: {
             const index = Tabs.openTabNextToCurrent("", false)

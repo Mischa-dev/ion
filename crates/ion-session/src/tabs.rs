@@ -307,14 +307,20 @@ impl TabList {
         }
         let saved_ids: Vec<TabId> = list.tabs.iter().map(|t| t.id).collect();
         for saved in &session.splits {
-            let tabs: Vec<TabId> = saved
+            // Essentials never share the page; files from before that rule
+            // may list them, so they drop out and the other panes stay.
+            let essential = |id: TabId| list.tabs.iter().any(|t| t.id == id && t.essential);
+            let panes: Vec<(TabId, Option<f64>)> = saved
                 .tabs
                 .iter()
-                .filter_map(|&i| saved_ids.get(i).copied())
+                .enumerate()
+                .filter_map(|(n, &i)| Some((*saved_ids.get(i)?, saved.sizes.get(n).copied())))
+                .filter(|&(id, _)| !essential(id))
                 .take(SPLIT_MAX_PANES)
                 .collect();
-            let essential = |id: &TabId| list.tabs.iter().any(|t| t.id == *id && t.essential);
-            if tabs.iter().any(essential) {
+            let tabs: Vec<TabId> = panes.iter().map(|&(id, _)| id).collect();
+            let sizes: Vec<f64> = panes.iter().filter_map(|&(_, s)| s).collect();
+            if tabs.len() < 2 {
                 continue;
             }
             let taken = |id: &TabId| list.splits.iter().any(|s| s.tabs.contains(id));
@@ -325,7 +331,7 @@ impl TabList {
             let id = next_free_id(list.splits.iter().map(|s| s.id));
             list.splits.push(Split {
                 id,
-                sizes: normalize_sizes(&saved.sizes, tabs.len()),
+                sizes: normalize_sizes(&sizes, tabs.len()),
                 tabs,
                 vertical: saved.vertical,
             });
@@ -1888,18 +1894,23 @@ mod tests {
 
     #[test]
     fn essentials_never_join_splits() {
-        let mut l = list(&["a", "b", "c"]);
-        let e = l.pin(2, Pin::Everywhere).unwrap();
+        let mut l = list(&["a", "b", "c", "d"]);
+        let e = l.pin(3, Pin::Everywhere).unwrap();
         assert_eq!(l.split_tabs(1, e), None);
         assert_eq!(l.split_tabs(e, 1), None);
+        // A file saved before the rule: the Essential drops out of the
+        // three-pane split, the other two keep theirs.
         let mut session = l.to_session();
         session.splits.push(crate::session::SavedSplit {
-            tabs: vec![e, 1],
-            sizes: vec![0.5, 0.5],
+            tabs: vec![e, 1, 2],
+            sizes: vec![0.2, 0.2, 0.6],
             vertical: false,
         });
-        assert!(TabList::from_session(&session).current_split().is_none());
-        assert!(TabList::from_session(&session).split_of(1).is_none());
+        let restored = TabList::from_session(&session);
+        assert!(restored.split_of(e).is_none());
+        let split = restored.split_of(1).unwrap();
+        assert_eq!(split.tabs.len(), 2);
+        assert!((split.sizes[1] - 0.75).abs() < 1e-9);
     }
 
     #[test]
