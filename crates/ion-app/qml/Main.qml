@@ -183,7 +183,9 @@ ApplicationWindow {
             extensionPaths = Extensions.paths()
             extensionPaths.forEach(path => extensionManager.loadExtension(path))
         }
-        // A private window starts empty and is never saved.
+        // True when the last run crashed; its tabs are kept aside. A private
+        // window starts empty, is never saved and leaves the record alone.
+        const crashed = !window.privateWindow && Tabs.beginRun()
         if (Config.value("general.restoreSession") && !window.privateWindow) {
             // Restoring replaces every tab; keep any opened while waiting
             // (Ctrl+T, a URL handed over by a second launch).
@@ -192,6 +194,9 @@ ApplicationWindow {
                 early.push(Tabs.urlAt(i))
             if (Tabs.restoreLastSession())
                 early.forEach((target, i) => openTab(target, i === 0))
+            Tabs.discardCrashedSession()
+        } else if (crashed) {
+            crashRestore.offer()
         }
         // URLs on the command line (`ion %U` from the desktop file) open as new
         // tabs after the restored ones; the first one becomes current.
@@ -288,6 +293,7 @@ ApplicationWindow {
                 return
             if (window.startupFinished)
                 Tabs.saveSession()
+            Tabs.endRun()
             History.save()
             window.clearOnExit(false)
         }
@@ -513,6 +519,7 @@ ApplicationWindow {
     }
 
     AgentsStoppedNotice {}
+    CrashRestoreNotice { id: crashRestore }
     AgentActivity { id: agentActivity }
     AgentTools { views: views }
 }

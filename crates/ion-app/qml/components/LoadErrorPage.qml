@@ -3,7 +3,7 @@ import QtQuick.Controls
 import Ion
 
 // Ion's own page for a load that failed (no connection, unknown site, bad
-// certificate), drawn over Chromium's. The text comes from `LoadErrors`.
+// certificate) or a page that crashed, drawn over Chromium's. The text comes from `LoadErrors`.
 Rectangle {
     id: root
 
@@ -40,6 +40,18 @@ Rectangle {
         detail = lines[1]
         insecureUrl = ""
         pageUrl = info.url.toString()
+        visible = true
+    }
+
+    // Shows the page for a tab whose page process ended (crashed, or was
+    // killed to free memory). Reload brings the page back.
+    function showCrash(status, url) {
+        const lines = LoadErrors.describeCrash(status, url.toString())
+        if (lines.length < 2)
+            return
+        title = lines[0]
+        detail = lines[1]
+        pageUrl = url.toString()
         visible = true
     }
 

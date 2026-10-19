@@ -13,8 +13,9 @@ QtObject {
     function install() {
         if (!profile)
             return
-        // The profile's own user agent; per-site ones are set per request.
-        Sites.setEngineUserAgent(profile.httpUserAgent)
+        // The engine's user agent, which Ion's default (set as the
+        // profile's own) is made from; per-site ones are set per request.
+        profile.httpUserAgent = Sites.setEngineUserAgent(profile.httpUserAgent)
         const scripts = Sites.scripts().map(script => ({
             name: script.name,
             sourceCode: script.sourceCode,
