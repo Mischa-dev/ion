@@ -53,6 +53,11 @@ pub struct Gestures {
     pub swipe: bool,
     /// What pinching on a touchpad does.
     pub pinch: PinchAction,
+    /// Hold the right mouse button and draw a stroke to run a command.
+    pub mouse: bool,
+    /// Mouse strokes ("L", "DR"…: moves left, right, up, down) to command
+    /// ids, on top of the built-in ones; `""` turns a stroke off.
+    pub mouse_strokes: BTreeMap<String, String>,
 }
 
 impl Default for Gestures {
@@ -60,6 +65,8 @@ impl Default for Gestures {
         Self {
             swipe: true,
             pinch: PinchAction::Zoom,
+            mouse: false,
+            mouse_strokes: BTreeMap::new(),
         }
     }
 }

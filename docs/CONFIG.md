@@ -106,6 +106,12 @@ vim = false                  # j/k scroll, gg/G, d/u, H/L back/forward,
 swipe = true                 # two fingers sideways on a touchpad: back/forward
 pinch = "zoom"               # "zoom" (page zoom, kept per site), "magnify"
                              # (Chromium's magnifier, layout unchanged) or "off"
+mouse = false                # hold the right button and draw: L back, R forward,
+                             # D new tab, DR close tab, DL reopen closed tab,
+                             # UD reload, U reset zoom, RL duplicate tab
+[gestures.mouseStrokes]      # change or add strokes: moves to a command id
+# U = "new-tab"
+# D = ""                     # "" turns a stroke off
 
 [privacy]
 globalPrivacyControl = true  # Sec-GPC header and navigator.globalPrivacyControl

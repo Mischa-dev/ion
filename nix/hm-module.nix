@@ -212,6 +212,16 @@ in
                 "off"
               ])
               "What a touchpad pinch does: page zoom remembered per site (default), Chromium's magnifier, or nothing.";
+          mouse = setting types.bool "Hold the right mouse button and draw a stroke to run a command (default false).";
+          mouseStrokes = mkOption {
+            type = types.attrsOf types.str;
+            default = { };
+            example = {
+              U = "new-tab";
+              D = "";
+            };
+            description = "Mouse strokes (moves L, R, U, D, e.g. \"DR\") to command ids, on top of the built-in ones; \"\" turns one off.";
+          };
         };
 
         privacy = {

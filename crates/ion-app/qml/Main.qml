@@ -445,7 +445,8 @@ ApplicationWindow {
 
     PlatformIntegration { window: window }
 
-    // Two-finger swipes go back and forward; pinching zooms the page.
+    // Two-finger swipes go back and forward; pinching zooms the page; with
+    // `gestures.mouse`, right-button strokes run commands.
     Gestures {
         id: gestures
         area: {
@@ -534,6 +535,8 @@ ApplicationWindow {
             else
                 view.zoomFactor = factor
         }
+        onCommand: id => window.runCommand(id)
+        onStrokeMoved: (x, y) => strokeTrail.add(x, y)
         Component.onCompleted: attach(window)
     }
 
@@ -768,6 +771,12 @@ ApplicationWindow {
         }
     }
 
+    StrokeTrail {
+        id: strokeTrail
+        parent: pageArea
+        active: gestures.stroking
+        label: gestures.strokeLabel
+    }
     SwipeIndicator {
         parent: pageArea
         direction: gestures.swipeDirection

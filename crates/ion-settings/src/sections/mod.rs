@@ -9,6 +9,7 @@ mod appearance;
 mod blocking;
 mod downloads;
 mod general;
+mod gestures;
 mod keyboard;
 mod new_tab;
 mod passwords;
@@ -26,6 +27,7 @@ pub fn all(ctx: &Context) -> Vec<Section> {
         blocking::section(ctx),
         downloads::section(ctx),
         keyboard::section(ctx),
+        gestures::section(ctx),
         agent::section(ctx),
         about::section(ctx),
     ]
