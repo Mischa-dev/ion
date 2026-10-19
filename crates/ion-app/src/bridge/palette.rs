@@ -49,7 +49,7 @@ pub mod qobject {
 use std::sync::{Arc, Mutex};
 
 use cxx_qt_lib::{QList, QMap, QMapPair_QString_QVariant, QString, QStringList, QVariant};
-use ion_bangs::{Action, BangTable, Item, Palette, SettingValue, Sources, TabEntry};
+use ion_bangs::{Action, BangTable, Item, Kind, Palette, SettingValue, Sources, TabEntry};
 use ion_config::Config;
 use ion_core::navigation::{Omnibox, SearchEngine};
 
@@ -173,7 +173,25 @@ impl qobject::PaletteSearch {
             recent: &recent,
         };
 
-        rows(self.palette().query(&input.to_string(), &sources))
+        let input = input.to_string();
+        let mut items = self.palette().query(&input, &sources);
+        // A sum or unit conversion answers right at the top; Enter copies it.
+        if let Some(answer) = ion_omnibox::answer::answer(input.trim_start_matches('>'))
+            .filter(|_| !input.trim_start().starts_with(['!', '*']))
+        {
+            items.insert(
+                0,
+                Item {
+                    kind: Kind::Answer,
+                    title: answer.text,
+                    subtitle: String::new(),
+                    hint: "Copy".to_owned(),
+                    action: Action::Copy(answer.value),
+                    score: i32::MAX,
+                },
+            );
+        }
+        rows(items)
     }
 }
 

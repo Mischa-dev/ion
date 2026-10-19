@@ -92,6 +92,9 @@ Popup {
             Keymap.noteUsed(item.value)
             browser.runCommand(item.value)
             break
+        case "copy":
+            copyText(item.value)
+            break
         case "set":
             for (let i = 0; i + 1 < item.value.length; i += 2) {
                 const error = Config.set(item.value[i], item.value[i + 1])
