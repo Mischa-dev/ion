@@ -4,17 +4,26 @@ pub fn section(_: &Context) -> Section {
     Section::new(
         "new-tab",
         "New tab",
-        "▦",
+        "grid",
         "The page a new tab opens on.",
         vec![Group::new(
             "Shortcuts",
             vec![
                 Setting::new(
+                    "newTab.shortcuts",
+                    "Pinned shortcuts",
+                    Control::Custom {
+                        component: "NewTabTiles".into(),
+                    },
+                )
+                .help("Always shown first, in this order.")
+                .keywords("tiles pin speed dial favorites"),
+                Setting::new(
                     "newTab.mostVisited",
                     "Show the sites you visit most",
                     Control::Toggle,
                 )
-                .help("After any shortcuts pinned in your config.")
+                .help("After your pinned shortcuts.")
                 .keywords("tiles top sites speed dial"),
                 Setting::new(
                     "newTab.tiles",

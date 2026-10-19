@@ -7,6 +7,7 @@ import Ion
 //
 // `browser` (the main window) provides openTab(url), newTab(), closeTab(i),
 // closeOtherTabs(i), focusUrlBar(), toggleBookmark(), showImport(),
+// showPasswords(query, section), openPrivateWindow(), showProfiles(),
 // showExtensions(), toggleFullScreen(), askAgent(input), startAgentQuestion(),
 // toggleAgentSidebar(), showAgentActivity(), openPage(id, path),
 // showClearData(), profile and currentView.
@@ -69,8 +70,15 @@ Item {
         case "back": view?.goBack(); break
         case "forward": view?.goForward(); break
         case "bookmark-page": browser.toggleBookmark(); break
-        case "bookmarks": Qt.callLater(() => commandPalette.show("*")); break
+        case "bookmarks": browser.openPage("bookmarks"); break
+        case "history": browser.openPage("history"); break
+        case "all-downloads": browser.openPage("downloads"); break
         case "import-browser-data": browser.showImport(); break
+        case "passwords": browser.showPasswords(""); break
+        case "addresses": browser.showPasswords("", "addresses"); break
+        case "generate-password": Passwords.copySecret(Passwords.generate()); break
+        case "new-private-window": browser.openPrivateWindow(); break
+        case "profiles": browser.showProfiles(); break
         case "clear-cookies": Privacy.clearCookies(browser.profile); break
         case "clear-cache": browser.profile.clearHttpCache(); break
         case "clear-history": History.clear(); History.save(); break
@@ -114,6 +122,7 @@ Item {
         case "tab-8": Tabs.activateNth(7); break
         case "last-tab": Tabs.activateNth(-1); break
         case "settings": browser.openPage("settings"); break
+        case "welcome": browser.openPage("welcome"); break
         case "clear-browsing-data": browser.showClearData(); break
         case "quit": Qt.quit(); break
         default: console.warn("Commands: unknown command", id)

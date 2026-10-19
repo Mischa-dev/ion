@@ -3,8 +3,10 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Ion
 
-// The ad blocker's panel: what was blocked here, the switch for this site,
-// and the state of the filter lists.
+// The shield's panel: what was blocked on this page and by whom, the one
+// switch that turns protections off for a site that breaks, how each
+// protection stands here (trackers, cross-site cookies, fingerprinting,
+// HTTPS, Global Privacy Control), and the state of the filter lists.
 Popup {
     id: popup
 
@@ -82,19 +84,127 @@ Popup {
         contentItem: Item {}
     }
 
+    // One protection: a status dot, what it is, and how it stands here.
+    component Protection: RowLayout {
+        id: protection
+        property string label
+        property string status
+        // "on", "off" or "warn".
+        property string level: "on"
+        Layout.fillWidth: true
+        spacing: Theme.spacing
+
+        Rectangle {
+            implicitWidth: Theme.spacing + 2
+            implicitHeight: implicitWidth
+            radius: width / 2
+            color: protection.level === "on" ? Theme.success
+                 : protection.level === "warn" ? Theme.warning : Theme.textMuted
+        }
+        Label {
+            Layout.fillWidth: true
+            text: protection.label
+            color: Theme.text
+            font.pixelSize: Theme.fontSize
+            elide: Text.ElideRight
+        }
+        Label {
+            text: protection.status
+            color: protection.level === "warn" ? Theme.warning : Theme.textMuted
+            font.pixelSize: Theme.fontSize - 1
+        }
+    }
+
+    // Config.revision makes these follow config changes.
+    readonly property bool cookiesBlocked: Config.revision >= 0 && Privacy.thirdPartyCookiesBlocked()
+    readonly property bool fingerprinting: Config.revision >= 0 && Privacy.fingerprinting()
+    readonly property bool gpc: Config.revision >= 0 && Privacy.globalPrivacyControl()
+    readonly property bool secure: pageUrl.toString().startsWith("https:")
+    readonly property var blockedHosts: {
+        Adblock.revision
+        return popup.opened ? JSON.parse(Adblock.blockedHostsOn(pageUrl, 5)) : []
+    }
+
     contentItem: ColumnLayout {
         spacing: Theme.spacing * 1.5
 
+        // The site, what was stopped on it, and its one switch.
+        ColumnLayout {
+            visible: popup.site.length > 0
+            Layout.fillWidth: true
+            spacing: Theme.spacing
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spacing
+
+                Label {
+                    Layout.fillWidth: true
+                    text: popup.site
+                    color: Theme.text
+                    font.pixelSize: Theme.fontSize + 1
+                    font.weight: Font.DemiBold
+                    elide: Text.ElideMiddle
+                }
+                ThemedSwitch {
+                    checked: popup.siteEnabled
+                    onToggled: {
+                        const changed = Adblock.setEnabledOn(popup.pageUrl, checked)
+                        // Toggling breaks the binding; restore it so a rejected
+                        // switch (e.g. on github.io) snaps back.
+                        checked = Qt.binding(() => popup.siteEnabled)
+                        if (changed)
+                            popup.view?.reload()
+                    }
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 600
+                    ToolTip.text: checked ? qsTr("Turn protections off for this site if it breaks")
+                                          : qsTr("Turn protections back on")
+                }
+            }
+
+            Label {
+                Layout.fillWidth: true
+                text: !popup.siteEnabled ? qsTr("Protections are off on this site")
+                    : !Adblock.enabled ? qsTr("Ad and tracker blocking is off")
+                    : qsTr("%n blocked on this page", "", popup.blocked)
+                color: popup.siteEnabled && Adblock.enabled ? Theme.accent : Theme.textMuted
+                font.pixelSize: Theme.fontSize + 3
+                font.weight: Font.DemiBold
+            }
+
+            // Who the page tried to reach.
+            Repeater {
+                model: popup.siteEnabled ? popup.blockedHosts : []
+                delegate: RowLayout {
+                    id: hostRow
+                    required property var modelData
+                    Layout.fillWidth: true
+                    Caption {
+                        text: hostRow.modelData.host
+                        elide: Text.ElideMiddle
+                        wrapMode: Text.NoWrap
+                    }
+                    Caption {
+                        Layout.fillWidth: false
+                        text: hostRow.modelData.count
+                    }
+                }
+            }
+
+            Rectangle { Layout.fillWidth: true; implicitHeight: Theme.hairline; color: Theme.border }
+        }
+
+        // Every protection and how it stands on this page.
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.spacing
 
-            Label {
-                Layout.fillWidth: true
-                text: qsTr("Ad blocker")
-                color: Theme.text
-                font.pixelSize: Theme.fontSize
-                font.weight: Font.DemiBold
+            Protection {
+                label: qsTr("Ads and trackers")
+                level: Adblock.enabled && popup.siteEnabled ? "on" : "off"
+                status: !Adblock.enabled ? qsTr("Off everywhere")
+                      : !popup.siteEnabled ? qsTr("Off here") : qsTr("Blocked")
             }
             ThemedSwitch {
                 id: globalSwitch
@@ -117,57 +227,32 @@ Popup {
                 ToolTip.text: checked ? qsTr("Turn off everywhere") : qsTr("Turn on")
             }
         }
-
-        ColumnLayout {
-            visible: popup.site.length > 0 && Adblock.enabled
-            Layout.fillWidth: true
-            spacing: Theme.spacing
-
-            Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.border }
-
-            Label {
-                Layout.fillWidth: true
-                text: popup.site
-                color: Theme.text
-                font.pixelSize: Theme.fontSize
-                elide: Text.ElideMiddle
-            }
-
-            Label {
-                Layout.fillWidth: true
-                text: popup.siteEnabled ? qsTr("%n blocked on this page", "", popup.blocked)
-                                        : qsTr("Not blocking on this site")
-                color: popup.siteEnabled ? Theme.accent : Theme.textMuted
-                font.pixelSize: Theme.fontSize + 3
-                font.weight: Font.DemiBold
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Theme.spacing
-
-                Label {
-                    Layout.fillWidth: true
-                    text: qsTr("Block ads and trackers on this site")
-                    color: Theme.text
-                    font.pixelSize: Theme.fontSize
-                    wrapMode: Text.Wrap
-                }
-                ThemedSwitch {
-                    checked: popup.siteEnabled
-                    onToggled: {
-                        const changed = Adblock.setEnabledOn(popup.pageUrl, checked)
-                        // Toggling breaks the binding; restore it so a rejected
-                        // switch (e.g. on github.io) snaps back.
-                        checked = Qt.binding(() => popup.siteEnabled)
-                        if (changed)
-                            popup.view?.reload()
-                    }
-                }
-            }
+        Protection {
+            label: qsTr("Cross-site cookies")
+            level: popup.cookiesBlocked ? "on" : "off"
+            status: popup.cookiesBlocked ? qsTr("Blocked") : qsTr("Allowed")
+        }
+        Protection {
+            label: qsTr("Fingerprinting")
+            level: popup.fingerprinting && popup.siteEnabled ? "on" : "off"
+            status: !popup.fingerprinting ? qsTr("Off everywhere")
+                  : !popup.siteEnabled ? qsTr("Off here") : qsTr("Resisted")
+        }
+        Protection {
+            visible: popup.site.length > 0
+            label: qsTr("Connection")
+            level: popup.secure ? "on" : "warn"
+            status: popup.secure ? qsTr("Encrypted")
+                  : Privacy.httpAllowed(popup.pageUrl.toString()) ? qsTr("Site has no HTTPS")
+                  : qsTr("Not encrypted")
+        }
+        Protection {
+            label: qsTr("“Don't sell my data” signal")
+            level: popup.gpc ? "on" : "off"
+            status: popup.gpc ? qsTr("Sent") : qsTr("Off")
         }
 
-        Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.border }
+        Rectangle { Layout.fillWidth: true; implicitHeight: Theme.hairline; color: Theme.border }
 
         RowLayout {
             Layout.fillWidth: true
