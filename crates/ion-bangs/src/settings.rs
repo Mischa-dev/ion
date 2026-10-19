@@ -6,6 +6,7 @@
 //! config (and so the Nix config) is left untouched.
 
 use ion_config::{Autoplay, Config, Density, PinchAction, TabLayout, ThemeSource};
+use ion_core::engines::{ENGINES, Engine};
 
 /// A value to store under a config key.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,16 +26,6 @@ pub struct SettingOption {
     /// Whether the config already has these values.
     pub active: bool,
 }
-
-/// Search engines offered as one-step choices.
-const SEARCH_ENGINES: &[(&str, &str)] = &[
-    ("DuckDuckGo", "https://duckduckgo.com/?q={}"),
-    ("Google", "https://www.google.com/search?q={}"),
-    ("Brave Search", "https://search.brave.com/search?q={}"),
-    ("Kagi", "https://kagi.com/search?q={}"),
-    ("Startpage", "https://www.startpage.com/do/search?query={}"),
-    ("Ecosia", "https://www.ecosia.org/search?q={}"),
-];
 
 fn text(value: &str) -> SettingValue {
     SettingValue::Text(value.to_owned())
@@ -227,7 +218,7 @@ pub fn options<'a>(
         });
     }
 
-    for &(name, template) in SEARCH_ENGINES {
+    for &Engine { name, template, .. } in ENGINES {
         options.push(SettingOption {
             title: format!("Search with {name}"),
             keywords: "settings default search engine",
@@ -319,7 +310,7 @@ mod tests {
 
     #[test]
     fn search_engine_templates_have_a_query_slot() {
-        for &(name, template) in SEARCH_ENGINES {
+        for &Engine { name, template, .. } in ENGINES {
             assert!(template.contains("{}"), "{name}");
         }
     }

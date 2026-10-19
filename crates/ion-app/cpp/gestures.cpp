@@ -4,6 +4,8 @@
 #include <QtCore/QTimer>
 #include <QtGui/QNativeGestureEvent>
 #include <QtGui/QWheelEvent>
+#include <QtQuick/QQuickItem>
+#include <QtQuick/QQuickWindow>
 
 namespace ion {
 
@@ -18,6 +20,7 @@ class GestureFilter : public QObject
 public:
     GestureFilter(QObject *window, QObject *target)
         : QObject(window)
+        , m_window(qobject_cast<QQuickWindow *>(window))
         , m_target(target)
     {
         m_pause.setSingleShot(true);
@@ -72,8 +75,13 @@ private:
         switch (event->gestureType()) {
         case Qt::BeginNativeGesture:
             stage = 0;
+            m_overPopup = overPopup(event->position());
             break;
         case Qt::ZoomNativeGesture:
+            // A pinch that starts over a popup (downloads, menus) leaves the
+            // page under it alone.
+            if (m_overPopup)
+                return false;
             stage = 1;
             delta = event->value();
             break;
@@ -91,8 +99,25 @@ private:
         return swallow;
     }
 
+    // Whether a popup in the window's overlay covers `position`.
+    bool overPopup(const QPointF &position) const
+    {
+        if (!m_window)
+            return false;
+        for (QQuickItem *item : m_window->contentItem()->childItems()) {
+            if (!item->inherits("QQuickOverlay"))
+                continue;
+            const QPointF local = item->mapFromScene(position);
+            if (item->isVisible() && item->childAt(local.x(), local.y()))
+                return true;
+        }
+        return false;
+    }
+
+    QPointer<QQuickWindow> m_window;
     QPointer<QObject> m_target;
     QTimer m_pause;
+    bool m_overPopup = false;
 };
 
 } // namespace

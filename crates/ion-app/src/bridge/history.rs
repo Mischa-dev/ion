@@ -1,8 +1,12 @@
 //! `History` QML singleton: pages visited, backed by `ion_session::History`.
 //!
 //! Web views report finished loads with `recordVisit`; the command palette asks
-//! `search`, which returns a JSON array of `{url, title, visits, lastVisit}` so
-//! QML can merge it with other result sources using `JSON.parse`.
+//! `search`, which returns a JSON array of `{url, title, visits, lastVisit,
+//! frecency}` so QML can merge it with other result sources using `JSON.parse`.
+//!
+//! It also keeps the address bar's input history (`ion_omnibox::inputs`):
+//! which page was picked after typing what. That is history too, so removing a
+//! page or clearing history forgets it as well.
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -36,6 +40,17 @@ pub mod qobject {
         #[qinvokable]
         fn search(self: &History, query: &QString, limit: i32) -> QString;
 
+        /// Remember that the address bar's `input` led to `url` (titled
+        /// `title`), so typing it again ranks that page first.
+        #[qinvokable]
+        #[cxx_name = "recordChoice"]
+        fn record_choice(self: Pin<&mut History>, input: &QString, url: &QString, title: &QString);
+
+        /// Pages picked before after typing text starting with `query`, as
+        /// a JSON array of `{url, title, boost}`, strongest first.
+        #[qinvokable]
+        fn chosen(self: &History, query: &QString) -> QString;
+
         /// Pages matching `query`, newest first, as JSON like `search`.
         #[qinvokable]
         fn recent(self: &History, query: &QString, limit: i32) -> QString;
@@ -68,11 +83,14 @@ use std::path::PathBuf;
 
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::QString;
+use ion_omnibox::InputHistory;
 use ion_session::history::{self, History};
 
 pub struct HistoryRust {
     history: History,
     path: Option<PathBuf>,
+    inputs: InputHistory,
+    inputs_path: Option<PathBuf>,
 }
 
 impl Default for HistoryRust {
@@ -87,7 +105,23 @@ impl Default for HistoryRust {
                 })
             })
             .unwrap_or_default();
-        Self { history, path }
+        let inputs_path = ion_session::paths::data_dir().map(|d| d.join("inputs.json"));
+        let inputs = inputs_path
+            .as_deref()
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .map(|json| {
+                InputHistory::from_json(&json).unwrap_or_else(|err| {
+                    eprintln!("ion: could not read address bar history: {err}");
+                    InputHistory::default()
+                })
+            })
+            .unwrap_or_default();
+        Self {
+            history,
+            path,
+            inputs,
+            inputs_path,
+        }
     }
 }
 
@@ -134,14 +168,53 @@ impl qobject::History {
             .rust_mut()
             .history
             .remove_site(&site.to_string());
-        if removed > 0 {
+        // What the address bar learned about the site goes with it.
+        let forgot = self
+            .as_mut()
+            .rust_mut()
+            .inputs
+            .forget_site(&site.to_string());
+        if removed > 0 || forgot {
             self.changed();
         }
         i32::try_from(removed).unwrap_or(i32::MAX)
     }
 
+    fn record_choice(mut self: Pin<&mut Self>, input: &QString, url: &QString, title: &QString) {
+        let (input, url, title) = (input.to_string(), url.to_string(), title.to_string());
+        if !history::is_recordable(&url) {
+            return;
+        }
+        if self
+            .as_mut()
+            .rust_mut()
+            .inputs
+            .record(&input, &url, &title, history::now())
+        {
+            self.changed();
+        }
+    }
+
+    fn chosen(&self, query: &QString) -> QString {
+        let pages: Vec<serde_json::Value> = self
+            .inputs
+            .boosts(&query.to_string(), history::now())
+            .into_iter()
+            .map(|page| {
+                serde_json::json!({
+                    "url": page.url,
+                    "title": page.title,
+                    "boost": page.frecency,
+                })
+            })
+            .collect();
+        QString::from(serde_json::Value::Array(pages).to_string().as_str())
+    }
+
     fn remove(mut self: Pin<&mut Self>, url: &QString) -> bool {
-        let removed = self.as_mut().rust_mut().history.remove(&url.to_string());
+        let url = url.to_string();
+        let forgot = self.as_mut().rust_mut().inputs.forget_url(&url);
+        let removed = self.as_mut().rust_mut().history.remove(&url) || forgot;
         if removed {
             self.changed();
         }
@@ -150,6 +223,7 @@ impl qobject::History {
 
     fn clear(mut self: Pin<&mut Self>) {
         self.as_mut().rust_mut().history.clear();
+        self.as_mut().rust_mut().inputs.clear();
         self.changed();
     }
 
@@ -172,14 +246,22 @@ impl qobject::History {
         let Some(path) = &self.path else {
             return false;
         };
-        self.history
+        let saved = self
+            .history
             .save(path)
             .map_err(|err| eprintln!("ion: could not save history: {err}"))
-            .is_ok()
+            .is_ok();
+        let inputs_saved = self.inputs_path.as_deref().is_none_or(|path| {
+            ion_session::paths::write_atomic(path, self.inputs.to_json().as_bytes())
+                .map_err(|err| eprintln!("ion: could not save address bar history: {err}"))
+                .is_ok()
+        });
+        saved && inputs_saved
     }
 }
 
 fn to_json(entries: Vec<&history::HistoryEntry>) -> QString {
+    let now = history::now();
     let hits: Vec<serde_json::Value> = entries
         .into_iter()
         .map(|e| {
@@ -188,6 +270,7 @@ fn to_json(entries: Vec<&history::HistoryEntry>) -> QString {
                 "title": e.title,
                 "visits": e.visits,
                 "lastVisit": e.last_visit,
+                "frecency": e.frecency(now),
             })
         })
         .collect();

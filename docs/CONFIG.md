@@ -35,8 +35,10 @@ restoreSession = true
 suspendTabsAfter = 30        # minutes before an unseen background tab is unloaded; 0 = never
 
 [search]
-engine = "DuckDuckGo"
+engine = "DuckDuckGo"        # also Google, Bing, Brave Search, Kagi, Startpage, Ecosia
 template = "https://duckduckgo.com/?q={}"
+suggestions = true           # ask the engine for suggestions while typing in the address bar
+# suggestTemplate = "https://search.example/suggest?q={}"   # OpenSearch JSON; empty: the engine's own
 
 [ui]
 density = "comfortable"      # "comfortable" | "compact"

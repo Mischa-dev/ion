@@ -1,0 +1,15 @@
+[package]
+name = "ion-panels"
+description = "Side panels for the Ion browser: web apps and notes"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+url.workspace = true
+
+[lints]
+workspace = true

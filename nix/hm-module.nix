@@ -132,6 +132,8 @@ in
         search = {
           engine = setting types.str "Name of the default search engine.";
           template = setting types.str "Search URL with `{}` where the query goes.";
+          suggestions = setting types.bool "Whether to ask the search engine for suggestions while typing in the address bar.";
+          suggestTemplate = setting types.str "Suggestions URL with `{}` for the query (OpenSearch JSON); empty uses the engine's own.";
         };
 
         ui = {
