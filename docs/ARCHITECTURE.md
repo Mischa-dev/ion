@@ -35,6 +35,7 @@ crates/
   ion-reader/             reader mode: article extraction and the themed reader page
   ion-safety/             permissions and agent trust: decisions, prompts, activity log
   ion-agent/              Ion Agent's runtime: tasks, browser tools, model access
+  ion-panels/             the side panel: web panels and notes (clippings)
   ion-input/              keyboard shortcuts (the keymap and its remaps), touchpad
                           swipe and pinch recognizers
   ion-app/                the binary (`ion`)
@@ -143,6 +144,10 @@ from `config.toml` and offer to go back to it.
   back/forward swipe (`ion_input::swipe`, drawn by `SwipeIndicator.qml`);
   pinching zooms the page (`ion_input::pinch`) and the result is saved per
   site like Ctrl+scroll.
+- The side panel (`SidePanel.qml`, Ctrl+Shift+L) holds notes (`NotesPanel.qml`)
+  and web panels; `Panels` (`bridge/panels.rs`) keeps both through
+  `ion_panels` in `panels.json` and `notes.json` in the data directory. Each
+  web panel's view loads on first show and then stays alive.
   `Palette::suggest` is the URL bar's narrower version (typed entry first,
   then tabs, history and bang completions), and `ion_bangs::autofill` fills
   in addresses inline; both lists draw their rows with
