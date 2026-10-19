@@ -206,7 +206,9 @@ impl qobject::Gestures {
         let action = ion_config::global().config().gestures.pinch;
         match action {
             PinchAction::Magnify => return false,
-            PinchAction::Off => return true,
+            // Only the zoom steps: begin and end bracket other native
+            // gestures too.
+            PinchAction::Off => return stage == 1,
             PinchAction::Zoom => {}
         }
         match stage {
