@@ -78,20 +78,20 @@ Rectangle {
         spacing: Theme.spacing / 2
 
         IconButton {
-            glyph: "←"
+            iconName: "back"
             tip: qsTr("Back")
             enabled: bar.view?.canGoBack ?? false
             onClicked: bar.view.goBack()
         }
         IconButton {
-            glyph: "→"
+            iconName: "forward"
             tip: qsTr("Forward")
             enabled: bar.view?.canGoForward ?? false
             onClicked: bar.view.goForward()
         }
         IconButton {
             readonly property bool loading: bar.view?.loading ?? false
-            glyph: loading ? "✕" : "↻"
+            iconName: loading ? "close" : "reload"
             tip: loading ? qsTr("Stop") : qsTr("Reload")
             enabled: bar.view !== null
             onClicked: loading ? bar.view.stop() : bar.view.reload()
@@ -142,7 +142,7 @@ Rectangle {
         }
         IconButton {
             readonly property bool reading: bar.view?.reader.active ?? false
-            glyph: "¶"
+            iconName: "reader"
             tip: reading ? qsTr("Leave reader mode") : qsTr("Reader mode")
             enabled: bar.view !== null
             opacity: reading ? 1 : 0.7
@@ -152,7 +152,7 @@ Rectangle {
             readonly property string pageUrl: (bar.view?.url ?? "").toString()
             // Reading revision makes the binding re-run when bookmarks change.
             readonly property bool bookmarked: Bookmarks.revision >= 0 && Bookmarks.contains(pageUrl)
-            glyph: bookmarked ? "★" : "☆"
+            iconName: bookmarked ? "star-filled" : "star"
             tip: bookmarked ? qsTr("Remove bookmark") : qsTr("Bookmark this page")
             enabled: pageUrl.startsWith("http") || pageUrl.startsWith("file:")
             onClicked: bar.bookmarkToggled()

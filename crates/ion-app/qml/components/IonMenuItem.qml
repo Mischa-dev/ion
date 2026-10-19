@@ -3,10 +3,12 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Ion
 
-// One row of an IonMenu: the label, then a check mark when checked or an arrow
-// when it opens a submenu.
+// One row of an IonMenu: an optional icon (`iconName`, from IconSet.qml), the
+// label, then a check mark when checked or an arrow when it opens a submenu.
 MenuItem {
     id: item
+
+    property string iconName
 
     implicitHeight: Theme.tabHeight
     leftPadding: Theme.spacing * 2
@@ -16,8 +18,13 @@ MenuItem {
     arrow: null
 
     contentItem: RowLayout {
-        spacing: Theme.spacing
+        spacing: Theme.spacing * 1.5
 
+        Icon {
+            visible: item.iconName.length > 0
+            name: item.iconName
+            color: item.highlighted ? Theme.text : Theme.textMuted
+        }
         Text {
             Layout.fillWidth: true
             text: item.text
@@ -30,23 +37,22 @@ MenuItem {
             elide: Text.ElideRight
             verticalAlignment: Text.AlignVCenter
         }
-        Text {
+        Icon {
             visible: item.checkable && item.checked
-            text: "✓"
+            name: "check"
             color: Theme.accent
-            font.pixelSize: Theme.fontSize
         }
-        Text {
+        Icon {
             visible: item.subMenu !== null
-            text: "›"
+            name: "chevron-right"
+            size: Theme.iconSize - 2
             color: Theme.textMuted
-            font.pixelSize: Theme.fontSize + 2
         }
     }
 
     background: Rectangle {
-        implicitWidth: Theme.tabMaxWidth - Theme.spacing
-        radius: Math.max(0, Theme.radius - 2)
-        color: item.highlighted && item.enabled ? Theme.surfaceHover : "transparent"
+        implicitWidth: Theme.tabMaxWidth
+        radius: Theme.radiusSmall
+        color: item.highlighted && item.enabled ? Theme.hoverOverlay : "transparent"
     }
 }

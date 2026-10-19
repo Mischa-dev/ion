@@ -25,6 +25,7 @@ fn main() {
             .set_organization_name(&QString::from(ion_core::APP_NAME));
     }
     QGuiApplication::set_desktop_file_name(&QString::from(ion_core::APP_ID));
+    bridge::fonts::install_ui_font();
 
     // Before the browser profile opens its files.
     bridge::privacy::clear_profile_files();

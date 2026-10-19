@@ -184,7 +184,7 @@ FocusScope {
                 visible: conversation.renewable && !conversation.working
                 implicitWidth: Theme.urlBarHeight - Theme.spacing
                 implicitHeight: implicitWidth
-                glyph: "+"
+                iconName: "plus"
                 tip: qsTr("New conversation")
                 onClicked: conversation.newRequested()
             }
@@ -193,14 +193,14 @@ FocusScope {
                 visible: conversation.movable
                 implicitWidth: Theme.urlBarHeight - Theme.spacing
                 implicitHeight: implicitWidth
-                glyph: "◨"
+                iconName: "sidebar-right"
                 tip: qsTr("Move to the side")
                 onClicked: conversation.moveRequested()
             }
             IconButton {
                 implicitWidth: Theme.urlBarHeight - Theme.spacing
                 implicitHeight: implicitWidth
-                glyph: "✕"
+                iconName: "close"
                 tip: qsTr("Close")
                 onClicked: conversation.closeRequested()
             }

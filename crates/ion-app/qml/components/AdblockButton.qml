@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Shapes
 import Ion
 
 // Shield next to the URL bar: lit while the ad blocker works on this page,
@@ -29,21 +28,11 @@ ToolButton {
     onClicked: popup.opened ? popup.close() : popup.open()
 
     contentItem: Item {
-        Shape {
+        Icon {
             id: shield
             anchors.centerIn: parent
-            width: Theme.iconSize
-            height: Theme.iconSize
-            preferredRendererType: Shape.CurveRenderer
-
-            ShapePath {
-                strokeColor: control.active ? Theme.accent : Theme.textMuted
-                strokeWidth: 1.5
-                fillColor: control.active ? Theme.accent : "transparent"
-                joinStyle: ShapePath.RoundJoin
-                scale: Qt.size(shield.width / 16, shield.height / 16)
-                PathSvg { path: "M 8 1 L 14 3.5 L 14 8 C 14 11.5 11.4 14 8 15 C 4.6 14 2 11.5 2 8 L 2 3.5 Z" }
-            }
+            name: control.active ? "shield-check" : "shield"
+            color: control.active ? Theme.accent : Theme.textMuted
         }
 
         // Count badge, bottom right of the shield.
@@ -54,23 +43,25 @@ ToolButton {
             width: Math.max(height, badgeText.implicitWidth + Theme.spacing)
             height: badgeText.implicitHeight
             radius: height / 2
-            color: Theme.text
+            color: Theme.accent
+            border.width: Theme.hairline * 1.5
+            border.color: Theme.background
 
             Text {
                 id: badgeText
                 anchors.centerIn: parent
                 text: control.blocked > 99 ? "99+" : control.blocked
-                color: Theme.background
-                font.pixelSize: Theme.fontSize - 4
-                font.weight: Font.DemiBold
+                color: Theme.onAccent
+                font.pixelSize: Theme.fontSizeMin + 1
+                font.weight: Theme.weightBold
             }
         }
     }
 
     background: Rectangle {
         radius: Theme.radius
-        color: control.down || popup.opened ? Theme.surfaceRaised
-             : control.hovered ? Theme.surfaceHover : "transparent"
+        color: control.down || popup.opened ? Theme.pressOverlay
+             : control.hovered ? Theme.hoverOverlay : "transparent"
     }
 
     ToolTip.visible: hovered && !popup.opened

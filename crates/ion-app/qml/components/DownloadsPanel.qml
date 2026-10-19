@@ -100,12 +100,7 @@ Popup {
         NumberAnimation { property: "opacity"; from: 1; to: 0; duration: Theme.animationMs }
     }
 
-    background: Rectangle {
-        radius: Theme.radius
-        color: Theme.surface
-        border.color: Theme.border
-        border.width: 1
-    }
+    background: IonSurface {}
 
     contentItem: ColumnLayout {
         id: column
