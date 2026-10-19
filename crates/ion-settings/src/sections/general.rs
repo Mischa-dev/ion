@@ -42,7 +42,7 @@ pub fn section(_: &Context) -> Section {
                             slider: true,
                         },
                     )
-                    .help("Frees memory from tabs you haven't looked at; they reload when you return. 0 keeps every tab awake.")
+                    .help("Frees memory from tabs you haven't looked at; they reload when you return. Tabs sleep sooner when the system runs low on memory. 0 keeps every tab awake.")
                     .keywords("suspend discard memory performance sleep"),
                 ],
             ),

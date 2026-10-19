@@ -463,15 +463,34 @@ ApplicationWindow {
                 Tabs.setSuspended(index, true)
         }
     }
-    // Every minute, for tabs idle for `general.suspendTabsAfter` minutes.
+    // Every minute, for tabs idle for `general.suspendTabsAfter` minutes, or
+    // sooner while the system runs short of memory: after five minutes under
+    // moderate pressure, at once under critical pressure (as Chrome and
+    // Safari do, so the system doesn't start killing processes). 0 keeps
+    // every tab awake regardless.
+    function sleepForPressure() {
+        const minutes = Config.value("general.suspendTabsAfter")
+        if (!(minutes > 0))
+            return
+        const pressure = Performance.memoryPressure
+        if (pressure === "critical")
+            sleepIdleTabs(0)
+        else if (pressure === "moderate")
+            sleepIdleTabs(Math.min(minutes, 5) * 60)
+        else
+            sleepIdleTabs(minutes * 60)
+    }
     Timer {
         interval: 60 * 1000
         repeat: true
         running: true
-        onTriggered: {
-            const minutes = Config.value("general.suspendTabsAfter")
-            if (minutes > 0)
-                window.sleepIdleTabs(minutes * 60)
+        onTriggered: window.sleepForPressure()
+    }
+    Connections {
+        target: Performance
+        function onMemoryPressureChanged() {
+            if (Performance.memoryPressure !== "normal")
+                window.sleepForPressure()
         }
     }
     Timer {
