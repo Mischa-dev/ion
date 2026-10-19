@@ -42,12 +42,7 @@ Popup {
         color: Qt.rgba(Theme.background.r, Theme.background.g, Theme.background.b, Theme.scrimOpacity)
     }
 
-    background: Rectangle {
-        radius: Theme.radius
-        color: Theme.surface
-        border.width: 1
-        border.color: Theme.border
-    }
+    background: IonSurface {}
 
     enter: Transition {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.animationMs }

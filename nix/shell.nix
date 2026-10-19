@@ -12,6 +12,7 @@
   rustPlatform,
   nixfmt,
   python3,
+  inter,
   ion,
 }:
 let
@@ -41,6 +42,8 @@ mkShell {
   }
   // lib.optionalAttrs stdenv.hostPlatform.isLinux {
     QTWEBENGINEPROCESS_PATH = "${qt6.qtwebengine}/libexec/QtWebEngineProcess";
+    # The interface font the package ships (nix/package.nix).
+    ION_FONT_DIR = "${inter}/share/fonts";
   };
 
   # qtbase's setup hook points QMAKE at qtbase alone; cxx-qt-build needs the

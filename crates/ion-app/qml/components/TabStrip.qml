@@ -134,7 +134,7 @@ Rectangle {
                     IconButton {
                         Layout.preferredWidth: Theme.tabHeight - Theme.spacing * 2
                         Layout.preferredHeight: Theme.tabHeight - Theme.spacing * 2
-                        glyph: "×"
+                        iconName: "close"
                         tip: qsTr("Close tab")
                         visible: tab.current || tabMouse.containsMouse || hovered
                         onClicked: strip.closeRequested(tab.row)
@@ -145,7 +145,7 @@ Rectangle {
 
         IconButton {
             Layout.alignment: Qt.AlignVCenter
-            glyph: "+"
+            iconName: "plus"
             tip: qsTr("New tab")
             onClicked: strip.newTabRequested()
         }
@@ -153,7 +153,7 @@ Rectangle {
         IconButton {
             id: menuButton
             Layout.alignment: Qt.AlignVCenter
-            glyph: "⋯"
+            iconName: "more"
             tip: qsTr("Tabs and sessions")
             onClicked: strip.menuRequested(menuButton)
         }
