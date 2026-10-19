@@ -21,8 +21,9 @@ Item {
 
     readonly property var control: setting.control
     readonly property string kind: control.kind
-    // Lists and checkboxes go under the label; everything else beside it.
-    readonly property bool wide: kind === "list" || kind === "flags"
+    // Lists, checkboxes and custom editors go under the label; everything
+    // else beside it.
+    readonly property bool wide: kind === "list" || kind === "flags" || kind === "custom"
     readonly property bool active: !setting.requires
         || (Config.revision >= 0 && Config.value(setting.requires) === true)
     // Why the last change was refused, if it was.
@@ -173,7 +174,6 @@ Item {
                                : row.kind === "number" ? numberControl
                                : row.kind === "folder" ? folderControl
                                : row.kind === "action" ? actionControl
-                               : row.kind === "custom" ? customControl
                                : null
             }
         }
@@ -181,7 +181,9 @@ Item {
         Loader {
             Layout.fillWidth: true
             active: row.wide
-            sourceComponent: row.kind === "list" ? listControl : flagsControl
+            sourceComponent: row.kind === "list" ? listControl
+                           : row.kind === "custom" ? customControl
+                           : flagsControl
         }
     }
 

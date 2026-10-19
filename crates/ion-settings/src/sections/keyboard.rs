@@ -4,7 +4,7 @@ pub fn section(_: &Context) -> Section {
     Section::new(
         "keyboard",
         "Keyboard",
-        "⌨",
+        "key",
         "Ways to browse without the mouse.",
         vec![Group::new(
             "",

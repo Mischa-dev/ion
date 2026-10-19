@@ -102,10 +102,9 @@ LibraryFrame {
                     anchors.leftMargin: Theme.spacing * 2 + folderRow.modelData.depth * Theme.spacing * 3
                     anchors.rightMargin: Theme.spacing * 2
                     spacing: Theme.spacing * 2
-                    Text {
-                        text: folderRow.modelData.path === "*" ? "☆" : "▸"
+                    Icon {
+                        name: folderRow.modelData.path === "*" ? "star" : "folder"
                         color: folderRow.on ? Theme.accent : Theme.textMuted
-                        font.pixelSize: Theme.fontSize - 1
                     }
                     Text {
                         Layout.fillWidth: true

@@ -49,9 +49,9 @@ Rectangle {
 
                 Repeater {
                     model: [
-                        { id: "history", title: qsTr("History"), icon: "◷" },
-                        { id: "bookmarks", title: qsTr("Bookmarks"), icon: "☆" },
-                        { id: "downloads", title: qsTr("Downloads"), icon: "↓" }
+                        { id: "history", title: qsTr("History"), icon: "history" },
+                        { id: "bookmarks", title: qsTr("Bookmarks"), icon: "bookmark" },
+                        { id: "downloads", title: qsTr("Downloads"), icon: "download" }
                     ]
                     delegate: Rectangle {
                         id: link
@@ -68,12 +68,9 @@ Rectangle {
                             anchors.leftMargin: Theme.spacing * 2
                             anchors.rightMargin: Theme.spacing * 2
                             spacing: Theme.spacing * 2
-                            Text {
-                                Layout.preferredWidth: Theme.iconSize
-                                text: link.modelData.icon
+                            Icon {
+                                name: link.modelData.icon
                                 color: link.on ? Theme.accent : Theme.textMuted
-                                font.pixelSize: Theme.fontSize + 1
-                                horizontalAlignment: Text.AlignHCenter
                             }
                             Text {
                                 Layout.fillWidth: true

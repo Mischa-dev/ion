@@ -4,7 +4,7 @@ pub fn section(_: &Context) -> Section {
     Section::new(
         "privacy",
         "Privacy",
-        "◎",
+        "eye-off",
         "What sites can learn about you, and what Ion forgets.",
         vec![
             Group::new(

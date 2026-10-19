@@ -7,7 +7,7 @@ pub fn section(_: &Context) -> Section {
     Section::new(
         "agent",
         "Ion Agent",
-        "✦",
+        "agent",
         "Ask about a page, or have Ion do things for you, from the address bar.",
         vec![
             Group::new(
