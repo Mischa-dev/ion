@@ -23,9 +23,6 @@ use crate::settings::{SettingOption, SettingValue};
 
 /// Most results returned for one query.
 pub const MAX_RESULTS: usize = 100;
-/// Most suggestions shown under the URL bar.
-pub const SUGGESTIONS: usize = 6;
-
 /// Points a bang loses against a tab or command with the same match quality.
 const BANG_PENALTY: i32 = 2;
 /// Points a history page loses against an open tab with the same match quality.
@@ -72,6 +69,10 @@ pub enum Kind {
     Open,
     /// Search the web for what was typed.
     Search,
+    /// A search the search engine suggested for what was typed.
+    Suggestion,
+    /// An inline answer, such as a sum or a unit conversion.
+    Answer,
 }
 
 impl Kind {
@@ -86,6 +87,8 @@ impl Kind {
             Kind::Bang => "bang",
             Kind::Open => "open",
             Kind::Search => "search",
+            Kind::Suggestion => "suggestion",
+            Kind::Answer => "answer",
         }
     }
 }
@@ -107,6 +110,8 @@ pub enum Action {
     Set(Vec<(&'static str, SettingValue)>),
     /// Replace the palette's input with this text and keep it open.
     Complete(String),
+    /// Copy this text to the clipboard.
+    Copy(String),
 }
 
 /// One palette row.
@@ -132,6 +137,16 @@ impl Palette {
     /// `omnibox` should already include `bangs` as a step, as the URL bar's does.
     pub fn new(omnibox: Omnibox, bangs: Arc<BangTable>) -> Self {
         Self { omnibox, bangs }
+    }
+
+    /// How typed text resolves, including bangs.
+    pub fn omnibox(&self) -> &Omnibox {
+        &self.omnibox
+    }
+
+    /// The bangs this palette knows.
+    pub fn bangs(&self) -> &BangTable {
+        &self.bangs
     }
 
     /// Ranked results for `input`, best first.
@@ -202,69 +217,8 @@ impl Palette {
         finish(items)
     }
 
-    /// Suggestions under the URL bar for `input`, at most [`SUGGESTIONS`].
-    ///
-    /// The first row is always what Enter would do with the text as typed;
-    /// after it come bang completions while a `!trigger` is being typed, then
-    /// other open tabs and history pages. Commands, settings and sessions stay
-    /// in the palette so the URL bar remains about places.
-    pub fn suggest(&self, input: &str, sources: &Sources) -> Vec<Item> {
-        let query = input.trim();
-        let Some(first) = self.bang_search(query).or_else(|| self.typed(query)) else {
-            return Vec::new();
-        };
-
-        let mut rest = Vec::new();
-        // Typing a trigger without the "!" offers that site's search; Tab
-        // (or choosing it) switches the input to "!trigger ".
-        if let Some(bang) = self.bangs.get(query).filter(|_| !query.starts_with('!')) {
-            rest.push(Item {
-                kind: Kind::Bang,
-                title: format!("Search {}", bang.name),
-                subtitle: bang.home(),
-                hint: "Tab".to_owned(),
-                action: Action::Complete(format!("!{} ", bang.trigger)),
-                score: i32::MAX,
-            });
-        }
-        if let Some(trigger) = query.strip_prefix('!')
-            && !trigger.contains(char::is_whitespace)
-        {
-            let exact = trigger.to_lowercase();
-            rest.extend(
-                self.bang_completions(trigger)
-                    .into_iter()
-                    .filter(|item| item.hint[1..] != exact),
-            );
-        }
-        if !query.starts_with('!') {
-            // Switching to the tab you're already in isn't a suggestion.
-            rest.extend(
-                tab_items(sources.tabs, sources.current_tab, query)
-                    .into_iter()
-                    .filter(|item| {
-                        !matches!(item.action, Action::SwitchTab(i) if Some(i) == sources.current_tab)
-                    })
-                    .map(|item| Item {
-                        hint: "Switch to tab".to_owned(),
-                        ..item
-                    }),
-            );
-            rest.extend(bookmark_items(sources.bookmarks, sources.tabs, query));
-            rest.extend(history_items(
-                sources.history,
-                sources.tabs,
-                sources.bookmarks,
-                query,
-            ));
-        }
-        let mut items = vec![first];
-        items.extend(finish(rest).into_iter().take(SUGGESTIONS - 1));
-        items
-    }
-
     /// The single result for input that uses a known bang, like `!gh ion`.
-    fn bang_search(&self, query: &str) -> Option<Item> {
+    pub fn bang_search(&self, query: &str) -> Option<Item> {
         let (bang, rest) = self.bangs.parse(query)?;
         let title = if rest.is_empty() {
             format!("Open {}", bang.name)
@@ -283,7 +237,7 @@ impl Palette {
     }
 
     /// Bangs whose trigger or name matches what follows the `!`.
-    fn bang_completions(&self, trigger: &str) -> Vec<Item> {
+    pub fn bang_completions(&self, trigger: &str) -> Vec<Item> {
         self.bangs
             .iter()
             .filter_map(|bang| {
@@ -308,7 +262,7 @@ impl Palette {
     }
 
     /// The URL bar's reading of `query`: open it as an address or search for it.
-    fn typed(&self, query: &str) -> Option<Item> {
+    pub fn typed(&self, query: &str) -> Option<Item> {
         Some(match self.omnibox.resolve(query)? {
             Resolved::Url(url) => Item {
                 kind: Kind::Open,
@@ -828,89 +782,6 @@ mod tests {
         assert_eq!(palette().query("", &sources).len(), MAX_RESULTS);
     }
 
-    fn suggest(input: &str) -> Vec<Item> {
-        let tabs = tabs();
-        let history = history();
-        palette().suggest(
-            input,
-            &Sources {
-                tabs: &tabs,
-                current_tab: Some(0),
-                history: &history,
-                ..Sources::default()
-            },
-        )
-    }
-
-    #[test]
-    fn suggestions_start_with_what_enter_does() {
-        assert!(suggest("  ").is_empty());
-
-        // "rust" is also a bang trigger, so its search comes right after.
-        let items = suggest("rust");
-        assert_eq!(items[0].kind, Kind::Search);
-        assert_eq!(items[1].action, Action::Complete("!rust ".into()));
-        assert_eq!(items[2].action, Action::SwitchTab(1));
-        assert_eq!(items[2].hint, "Switch to tab");
-        assert_eq!(items[3].kind, Kind::History);
-
-        let items = suggest("example.com");
-        assert_eq!(items[0].kind, Kind::Open);
-    }
-
-    #[test]
-    fn suggestions_include_bookmarks_before_history() {
-        let tabs = tabs();
-        let history = history();
-        let bookmarks = vec![TabEntry {
-            title: "The Rust Book".into(),
-            url: "https://doc.rust-lang.org/book/".into(),
-        }];
-        let items = palette().suggest(
-            "rust book",
-            &Sources {
-                tabs: &tabs,
-                current_tab: Some(0),
-                history: &history,
-                bookmarks: &bookmarks,
-                ..Sources::default()
-            },
-        );
-        let book = |i: &&Item| i.action == Action::Open("https://doc.rust-lang.org/book/".into());
-        let found: Vec<&Item> = items.iter().filter(book).collect();
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].kind, Kind::Bookmark);
-    }
-
-    #[test]
-    fn suggestions_skip_the_current_tab_commands_and_settings() {
-        let items = suggest("ion");
-        assert!(items.iter().all(|i| i.action != Action::SwitchTab(0)));
-        assert!(suggest("reload").iter().all(|i| i.kind != Kind::Command));
-        assert!(suggest("nord").iter().all(|i| i.kind != Kind::Setting));
-    }
-
-    #[test]
-    fn suggestions_expand_and_complete_bangs() {
-        let items = suggest("!gh ion");
-        assert_eq!(items.len(), 1);
-        assert_eq!(
-            items[0].action,
-            Action::Open("https://github.com/search?q=ion".into())
-        );
-
-        // "!g" alone opens Google; other bangs starting with g follow.
-        let items = suggest("!g");
-        assert_eq!(items[0].title, "Open Google");
-        assert!(items[1..].iter().all(|i| i.hint != "!g"));
-        assert!(
-            items[1..]
-                .iter()
-                .any(|i| i.action == Action::Complete("!gh ".into()))
-        );
-        assert!(items.len() <= SUGGESTIONS);
-    }
-
     #[test]
     fn typing_save_session_offers_to_save_one() {
         for input in [
@@ -938,13 +809,5 @@ mod tests {
         assert_eq!(items[0].action, Action::Run("copy-url"), "{items:#?}");
         assert_eq!(query("ads")[0].action, Action::Run("toggle-adblock"));
         assert_eq!(query("full screen")[0].action, Action::Run("fullscreen"));
-    }
-
-    #[test]
-    fn typing_a_trigger_offers_tab_to_search() {
-        let items = suggest("gh");
-        assert_eq!(items[1].action, Action::Complete("!gh ".into()));
-        assert_eq!(items[1].hint, "Tab");
-        assert!(suggest("ghx").iter().all(|i| i.hint != "Tab"));
     }
 }

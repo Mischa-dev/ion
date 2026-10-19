@@ -4,6 +4,7 @@
 //! this directory automatically; only the `mod` line below is shared.
 
 pub mod adblock;
+pub mod address_bar;
 pub mod agent;
 pub mod basics;
 pub mod bookmarks;

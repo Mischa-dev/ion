@@ -415,7 +415,12 @@ ApplicationWindow {
     }
     Connections {
         target: History
-        function onChanged() { historySaveTimer.restart() }
+        // A private window shares the data directory; the normal window's
+        // process owns history.json and inputs.json.
+        function onChanged() {
+            if (!window.privateWindow)
+                historySaveTimer.restart()
+        }
     }
     // `[privacy]` cookie settings follow config changes live.
     Connections {
@@ -598,6 +603,7 @@ ApplicationWindow {
             downloads: downloads
             agentSidebar: agentSidebar
             onBookmarkToggled: window.toggleBookmark()
+            onRunCommand: id => window.runCommand(id)
             onPasswordsRequested: query => window.showPasswords(query)
             onProfilesRequested: window.showProfiles()
         }
