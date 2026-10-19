@@ -40,9 +40,14 @@ Menu {
             request.isContentEditable,
             Number(request.editFlags),
             hasSelection))
-        // With agents on, selected text can be explained right away.
-        if (hasSelection && Config.value("ai.enable") === true) {
+        // Selected text can be clipped to notes, and with agents on,
+        // explained right away.
+        if (hasSelection) {
             const at = ids.indexOf("searchSelection")
+            ids.splice(at >= 0 ? at + 1 : ids.length, 0, "clipSelection")
+        }
+        if (hasSelection && Config.value("ai.enable") === true) {
+            const at = ids.indexOf("clipSelection")
             ids.splice(at >= 0 ? at + 1 : ids.length, 0, "explainSelection")
         }
         // A link can open in a private window, where it leaves no trace.
@@ -90,6 +95,7 @@ Menu {
                 ? qsTr("Search for “%1”").arg(preview)
                 : qsTr("Go to %1").arg(preview)
         }
+        case "clipSelection": return qsTr("Clip to Notes")
         case "explainSelection": return qsTr("Explain with Ion Agent")
         case "savePage": return qsTr("Save Page As…")
         case "screenshot": return qsTr("Take Screenshot")
@@ -139,6 +145,10 @@ Menu {
                 menu.openInNewTab(target)
             break
         }
+        case "clipSelection":
+            Panels.clip(selectedText, v.url.toString(), v.title)
+            Panels.show("notes")
+            break
         case "explainSelection": menu.askAgent("@ion Explain this."); break
         case "savePage": v.triggerWebAction(WebEngineView.SavePage); break
         case "screenshot": v.takeScreenshot(false); break

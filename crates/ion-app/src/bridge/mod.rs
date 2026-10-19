@@ -20,6 +20,7 @@ pub mod notifications;
 pub mod omnibox;
 pub mod pages;
 pub mod palette;
+pub mod panels;
 pub mod passwords;
 pub mod platform;
 pub mod privacy;

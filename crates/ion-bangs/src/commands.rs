@@ -354,6 +354,30 @@ pub const COMMANDS: &[Command] = &[
     ),
     command("downloads", "Show downloads", "files saved", &["Ctrl+J"]),
     command(
+        "side-panel",
+        "Show or hide side panel",
+        "sidebar web panels apps notes",
+        &["Ctrl+Shift+L"],
+    ),
+    command(
+        "notes",
+        "Notes",
+        "side panel jot write clippings scratch",
+        &["Ctrl+Alt+N"],
+    ),
+    command(
+        "clip-to-notes",
+        "Clip selection to notes",
+        "save quote highlight snippet side panel",
+        &["Ctrl+Alt+C"],
+    ),
+    command(
+        "add-web-panel",
+        "Keep page in side panel",
+        "web panel pin app sidebar vivaldi",
+        &[],
+    ),
+    command(
         "keyboard-shortcuts",
         "Keyboard shortcuts",
         "keys keybindings hotkeys remap customize edit",

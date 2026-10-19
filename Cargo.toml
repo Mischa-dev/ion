@@ -27,6 +27,7 @@ ion-keyring = { path = "crates/ion-keyring" }
 ion-passwords = { path = "crates/ion-passwords" }
 ion-privacy = { path = "crates/ion-privacy" }
 ion-input = { path = "crates/ion-input" }
+ion-panels = { path = "crates/ion-panels" }
 
 cxx = "1.0"
 cxx-qt = "0.10"
