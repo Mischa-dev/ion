@@ -137,13 +137,18 @@ def _linux_tree(root: int) -> list[int]:
 
 
 def _linux_kib(pid: int) -> int:
+    """PSS, or RSS where PSS isn't readable (as in ion_perf::process)."""
     try:
         for line in Path(f"/proc/{pid}/smaps_rollup").read_text().splitlines():
             if line.startswith("Pss:"):
                 return int(line.split()[1])
     except OSError:
         pass
-    return 0
+    try:
+        resident_pages = int(Path(f"/proc/{pid}/statm").read_text().split()[1])
+        return resident_pages * os.sysconf("SC_PAGE_SIZE") // 1024
+    except (OSError, IndexError, ValueError):
+        return 0
 
 
 def tree_memory_mib(root: int) -> tuple[float, int]:
