@@ -1,4 +1,4 @@
-use crate::{Context, Control, Group, Section, Setting};
+use crate::{Context, Control, Group, Section, Setting, choices};
 
 pub fn section(_: &Context) -> Section {
     let text = |placeholder: &str| Control::Text {
@@ -16,20 +16,42 @@ pub fn section(_: &Context) -> Section {
                     Setting::new("ai.enable", "Ion Agent", Control::Toggle)
                         .help("Type @ion in the address bar to ask. Nothing is sent anywhere while this is off.")
                         .keywords("ai assistant llm chat @ion"),
+                    Setting::new(
+                        "ai.setUp",
+                        "Set up",
+                        Control::Action {
+                            action: "set-up-agent".into(),
+                            button: "Set up Ion Agent".into(),
+                        },
+                    )
+                    .help("Pick Claude, OpenAI, OpenRouter, Ollama or another service, paste a key and choose a model.")
+                    .keywords("api key claude openai ollama provider keyring"),
                 ],
             ),
             Group::new(
                 "Model",
                 vec![
+                    Setting::new(
+                        "ai.provider",
+                        "Kind of service",
+                        Control::Choice {
+                            options: choices(&[
+                                ("openai", "OpenAI-compatible"),
+                                ("anthropic", "Anthropic (Claude)"),
+                            ]),
+                        },
+                    )
+                    .keywords("provider claude anthropic openai api")
+                    .requires("ai.enable"),
                     Setting::new("ai.model", "Model", text("gpt-5-mini"))
                         .keywords("llm openai ollama")
                         .requires("ai.enable"),
                     Setting::new("ai.baseUrl", "Service address", text("https://api.openai.com/v1"))
-                        .help("Any OpenAI-compatible API, such as http://127.0.0.1:11434/v1 for Ollama.")
+                        .help("Up to and including /v1, such as http://127.0.0.1:11434/v1 for Ollama.")
                         .keywords("endpoint url local ollama openrouter llama.cpp")
                         .requires("ai.enable"),
                     Setting::new("ai.apiKeyEnv", "API key variable", text("OPENAI_API_KEY"))
-                        .help("The environment variable that holds your key; the key itself is never stored. Empty for local models.")
+                        .help("Used when no key is saved in the system keyring (Set up Ion Agent saves it there). Empty for local models.")
                         .keywords("token secret environment")
                         .requires("ai.enable"),
                 ],

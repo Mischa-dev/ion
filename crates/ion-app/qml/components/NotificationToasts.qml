@@ -3,9 +3,11 @@ import QtQuick.Layouts
 import QtWebEngine
 import Ion
 
-// Shows the web notifications sites send once they are allowed to. Toasts
-// stack in the bottom-right corner; clicking one tells the page it was
-// clicked, × or the timeout dismisses it.
+// Shows the web notifications sites send once they are allowed to: as
+// desktop notifications when a notification server is running (Linux), so
+// they reach you while Ion is in the background; otherwise as toasts that
+// stack in the bottom-right corner. Clicking one tells the page it was
+// clicked (and brings Ion forward); × or the timeout dismisses it.
 ColumnLayout {
     id: toasts
 
@@ -15,7 +17,13 @@ ColumnLayout {
     readonly property int maxVisible: 3
     property var items: []
 
+    // Desktop notifications on screen, by id. Holding them here also keeps
+    // the page's notification objects alive until they go away.
+    property var desktop: ({})
+
     function present(notification) {
+        if (DesktopNotifications.available && presentOnDesktop(notification))
+            return
         notification.show()
         // A notification with the same tag from the same site replaces the
         // old one instead of stacking beside it.
@@ -41,10 +49,66 @@ ColumnLayout {
         dismiss(notification)
     }
 
+    // False if the notification server refused it; it becomes a toast.
+    function presentOnDesktop(notification) {
+        // A notification with the same tag from the same site updates the
+        // old one in place.
+        let replaces = 0
+        for (const id in desktop) {
+            const old = desktop[id]
+            if (notification.tag.length > 0 && old.tag === notification.tag
+                    && old.origin.toString() === notification.origin.toString())
+                replaces = Number(id)
+        }
+        const site = notification.origin.toString().replace(/^[a-z][a-z0-9+.-]*:\/\//i, "")
+        const id = DesktopNotifications.show(notification.title, notification.message, site,
+                                             notification.icon, replaces)
+        if (id === 0)
+            return false
+        notification.show()
+        if (replaces !== 0 && replaces !== id)
+            delete desktop[replaces]
+        desktop[id] = notification
+        // The page closing it takes the desktop one down too.
+        notification.closed.connect(() => {
+            if (toasts.desktop[id] === notification) {
+                delete toasts.desktop[id]
+                DesktopNotifications.close(id)
+            }
+        })
+        return true
+    }
+
     Connections {
         target: toasts.profile
         function onPresentNotification(notification) {
             toasts.present(notification)
+        }
+    }
+    Connections {
+        target: DesktopNotifications
+        function onClicked(id, activationToken) {
+            const notification = toasts.desktop[id]
+            if (!notification)
+                return
+            delete toasts.desktop[id]
+            const window = toasts.Window.window
+            if (window) {
+                if (window.visibility === Window.Minimized)
+                    window.showNormal()
+                Platform.prepareActivation(activationToken)
+                window.raise()
+                window.requestActivate()
+            }
+            notification.click()
+            notification.close()
+        }
+        function onClosed(id) {
+            const notification = toasts.desktop[id]
+            if (!notification)
+                return
+            delete toasts.desktop[id]
+            notification.close()
         }
     }
 
@@ -110,6 +174,7 @@ ColumnLayout {
                     Text {
                         Layout.fillWidth: true
                         text: toast.notification.title
+                        textFormat: Text.PlainText
                         color: Theme.text
                         font.pixelSize: Theme.fontSize
                         font.bold: true
@@ -119,6 +184,7 @@ ColumnLayout {
                         Layout.fillWidth: true
                         visible: text.length > 0
                         text: toast.notification.message
+                        textFormat: Text.PlainText
                         color: Theme.text
                         font.pixelSize: Theme.fontSize - 1
                         wrapMode: Text.Wrap

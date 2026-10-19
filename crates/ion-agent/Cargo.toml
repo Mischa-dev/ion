@@ -7,6 +7,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+ion-keyring.workspace = true
 ion-safety.workspace = true
 serde.workspace = true
 serde_json.workspace = true
