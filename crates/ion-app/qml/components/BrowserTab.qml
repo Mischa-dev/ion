@@ -15,6 +15,8 @@ WebEngineView {
     // Saved passwords on this tab's pages: `passwords.prompt`, `passwords.formOnPage`.
     readonly property alias passwords: formFill
     readonly property alias findBar: findBar
+    // Ion's own page drawn over this tab, if any (`builtinPage.active`).
+    readonly property alias builtinPage: builtinPage
 
     // Emitted when the page asks for a new tab or window (target=_blank, window.open).
     signal newTabRequested(var request)
@@ -32,6 +34,7 @@ WebEngineView {
     // A tab with no page yet matches the browser chrome instead of glaring
     // white. Pages get the web's usual white canvas, which many rely on.
     backgroundColor: url.toString().length === 0 || url.toString() === "about:blank"
+            || Pages.pageOf(url).length > 0
         ? Theme.background : Theme.pageCanvas
 
     // Pages follow Ion's theme (theme.pages, [theme.sites]). QtWebEngine reads
@@ -179,6 +182,7 @@ WebEngineView {
         view: view
         onManageRequested: section => view.managePasswords(section)
     }
+    BuiltinPage { id: builtinPage; view: view }
     AdblockCosmetics { view: view }
     FindBar { id: findBar; view: view }
     PermissionPrompt { view: view; tabId: view.tabId }

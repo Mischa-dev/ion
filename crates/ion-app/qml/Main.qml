@@ -149,6 +149,44 @@ ApplicationWindow {
         passwordManager.show(query || "", section || "passwords")
     }
 
+    function showPalette() {
+        palette.show()
+    }
+
+    function showClearData() {
+        clearDataDialog.show()
+    }
+
+    // Show one of Ion's own pages (`ion://settings/privacy` is "settings",
+    // "privacy"): in the current tab if it is already there or blank, else
+    // in a tab already showing it, else in a new tab.
+    function openPage(id, path) {
+        const target = Pages.url(id, path || "")
+        const view = window.currentView
+        if (view && (Pages.pageOf(view.url) === id || Basics.isNewTabUrl(view.url))) {
+            if (view.url.toString() !== target)
+                view.url = target
+            return
+        }
+        for (let i = 0; i < Tabs.count; i++) {
+            if (Tabs.workspaceAt(i) === Tabs.workspace && Pages.pageOf(Tabs.urlAt(i)) === id) {
+                Tabs.activate(i)
+                const tab = window.viewAt(i)
+                if (path && tab)
+                    tab.url = target
+                return
+            }
+        }
+        window.openTab(target)
+    }
+
+    // Served documents match the theme, so Ion's pages never flash white.
+    Binding {
+        target: Pages
+        property: "background"
+        value: Theme.background.toString()
+    }
+
     // Keyboard focus follows the visible page (so Space, arrows and Find work
     // right after switching tabs), unless the person is typing in the URL bar.
     onCurrentViewChanged: Qt.callLater(focusPage)
@@ -234,6 +272,7 @@ ApplicationWindow {
     Component.onCompleted: {
         profile = profilePrototype.instance()
         Adblock.attach(window.profile)
+        Pages.attach(window.profile)
         Privacy.apply(window.profile)
         // Again at start, in case the last quit was cut short; the rest of
         // startup waits for it. A private window has nothing to clear.
@@ -331,6 +370,7 @@ ApplicationWindow {
     ImportDialog { id: importDialog }
     PasswordManager { id: passwordManager }
     ProfilesDialog { id: profilesDialog }
+    ClearDataDialog { id: clearDataDialog; profile: window.profile }
     ExtensionsDialog { id: extensionsDialog; browser: window }
 
     // Per-site CSS and userscripts, installed on the profile.
