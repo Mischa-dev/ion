@@ -206,8 +206,13 @@ Rectangle {
             Text {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.topMargin: Theme.spacing * 6
-                text: qsTr("Type to search or enter an address  ·  %1 for commands")
-                      .arg(Qt.platform.os === "osx" || Qt.platform.os === "macos" ? "⌘K" : "Ctrl+K")
+                text: {
+                    Config.revision
+                    const keys = Keymap.keys("palette")
+                    return keys.length > 0
+                        ? qsTr("Type to search or enter an address  ·  %1 for commands").arg(Keymap.display(keys[0]))
+                        : qsTr("Type to search or enter an address")
+                }
                 color: Theme.textSubtle
                 font.pixelSize: Theme.fontSizeSmall
             }
