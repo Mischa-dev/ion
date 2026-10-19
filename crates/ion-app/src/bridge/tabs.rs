@@ -1419,6 +1419,10 @@ impl qobject::Tabs {
         self.as_mut().rust_mut().list = TabList::from_session(session);
         self.as_mut().end_reset_model();
         self.as_mut().workspaces_changed();
+        // The new list's revisions may equal the old one's, so sync() alone
+        // could miss that its groups and splits are different.
+        self.as_mut().groups_changed();
+        self.as_mut().splits_changed();
         self.as_mut().rust_mut().restoring = false;
         self.as_mut().restoring_changed();
         self.sync();

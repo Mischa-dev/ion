@@ -84,7 +84,8 @@ ApplicationWindow {
         }
         // A workspace's last tab makes way for a blank one, so closing it
         // doesn't jump to another workspace.
-        if (index === Tabs.currentIndex && Tabs.workspaceTabCount(Tabs.workspace) === 1)
+        if (index === Tabs.currentIndex && Tabs.pinnedAt(index) !== 2
+                && Tabs.workspaceTabCount(Tabs.workspace) === 1)
             Tabs.openTabAt(index + 1, "", true)
         Tabs.closeTab(index)
     }
@@ -141,7 +142,8 @@ ApplicationWindow {
             if (previous >= 0)
                 Tabs.activate(previous)
         }
-        panes.showDrop(panes.mapFromItem(null, scenePos))
+        const split = JSON.parse(Tabs.currentSplit())
+        panes.showDrop(split && split.tabs.length >= 4 ? null : panes.mapFromItem(null, scenePos))
     }
 
     // Let go over the page, the dragged tab opens beside the page shown, on
@@ -156,7 +158,10 @@ ApplicationWindow {
                 Tabs.activate(index)
             return
         }
-        if (Tabs.splitTabs(Tabs.currentIndex, index) >= 0 && side === "left")
+        // A full split view (four panes) takes no more; the page stays put.
+        if (Tabs.splitTabs(Tabs.currentIndex, index) < 0)
+            return
+        if (side === "left")
             Tabs.movePane(index, -1)
         Tabs.activate(index)
     }
@@ -592,13 +597,16 @@ ApplicationWindow {
                     lifecycleState: suspended ? WebEngineView.LifecycleState.Discarded
                                               : WebEngineView.LifecycleState.Active
 
+                    // The current tab, or a pane of the split view showing.
+                    readonly property bool onScreen: current || inSplit
+
                     Component.onCompleted: {
-                        deferred = Tabs.restoring && !current
+                        deferred = Tabs.restoring && !onScreen
                         if (!deferred)
                             loadSavedUrl()
                     }
-                    onCurrentChanged: {
-                        if (current && deferred) {
+                    onOnScreenChanged: {
+                        if (onScreen && deferred) {
                             deferred = false
                             loadSavedUrl()
                         }
