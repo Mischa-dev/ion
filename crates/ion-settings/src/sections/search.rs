@@ -48,6 +48,22 @@ pub fn section(_: &Context) -> Section {
                 )
                 .help("For any other engine: its search URL, with {} where your words go.")
                 .keywords("custom url template query"),
+                Setting::new(
+                    "search.suggestions",
+                    "Show search suggestions while typing",
+                    Control::Toggle,
+                )
+                .help("Sends what you type to your search engine as you type. History, tabs, bookmarks and answers still appear with this off.")
+                .keywords("autocomplete predictions remote privacy"),
+                Setting::new(
+                    "search.suggestTemplate",
+                    "Suggestions address",
+                    Control::Text {
+                        placeholder: "Your engine's own".into(),
+                    },
+                )
+                .help("Leave empty for the built-in engines. For another engine: its OpenSearch suggestions URL, with {} where your words go.")
+                .keywords("opensearch suggest url custom"),
             ],
         ),
             Group::new(
