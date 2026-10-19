@@ -46,6 +46,15 @@ TextField {
         searchEngineName: Config.searchEngineName
         searchTemplate: Config.searchTemplate
     }
+    // Changing the search engine makes cached suggestions stale.
+    Connections {
+        target: Config
+        function onRevisionChanged() {
+            field.remoteCache = {}
+            field.remote = []
+            field.remoteQuery = ""
+        }
+    }
     // QML has no clipboard API; an invisible text field copies answers.
     TextInput { id: clipboard; visible: false }
 
