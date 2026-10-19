@@ -139,6 +139,16 @@ hardwareVideo = true         # VA-API video decoding on Linux (read at startup;
 autoplay = "muted"           # what pages may play before you click or type:
                              # "allow", "muted" (silent video only; sound waits
                              # for you) or "block" (nothing)
+autoPictureInPicture = true  # a playing video pops out into its own small
+                             # window when you switch tabs, and back when you
+                             # return (title "Picture-in-Picture", for window
+                             # rules that float and pin it)
+
+[reader]                     # reader mode; its toolbar changes these
+fontSize = 19                # 12 to 32
+font = "serif"               # or "sans"
+width = "medium"             # "narrow", "medium" or "wide"
+theme = "match"              # Ion's colors, or "light", "sepia", "dark" paper
 
 [ai]                         # Ion Agent: @ion or !ai in the address bar
 enable = false               # off until you turn it on

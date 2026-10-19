@@ -12,4 +12,4 @@ mod extract;
 mod render;
 
 pub use extract::{Article, extract};
-pub use render::{Style, render};
+pub use render::{Style, preset, render, style_script};

@@ -297,6 +297,26 @@ in
 
         media = {
           autoplay = setting autoplayType "What pages may play before you interact: `allow`, `muted` (silent only) or `block`.";
+          autoPictureInPicture = setting types.bool "Pop a playing video into picture-in-picture when you switch tabs.";
+        };
+
+        reader = {
+          fontSize = setting (types.ints.between 12 32) "Reader mode text size in pixels.";
+          font = setting (types.enum [
+            "serif"
+            "sans"
+          ]) "Reader mode typeface.";
+          width = setting (types.enum [
+            "narrow"
+            "medium"
+            "wide"
+          ]) "How wide reader mode's column of text runs.";
+          theme = setting (types.enum [
+            "match"
+            "light"
+            "sepia"
+            "dark"
+          ]) "Reader mode colors: Ion's theme (`match`) or light, sepia or dark paper.";
         };
 
         ai = {

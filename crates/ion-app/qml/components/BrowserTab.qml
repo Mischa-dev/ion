@@ -15,6 +15,8 @@ WebEngineView {
     // Saved passwords on this tab's pages: `passwords.prompt`, `passwords.formOnPage`.
     readonly property alias passwords: formFill
     readonly property alias findBar: findBar
+    // Page translation: `translator.translate()`, `translator.showOriginal()`.
+    readonly property alias translator: translator
     // A dialog (alert, sign-in…) is waiting for this tab to be shown.
     readonly property bool needsAttention: pageDialog.item ? pageDialog.item.waiting : false
     // Ion's own page drawn over this tab, if any (`builtinPage.active`).
@@ -26,6 +28,21 @@ WebEngineView {
     signal openInNewTab(url target)
     // The page's menu asked an agent about the selection (`@ion …`).
     signal askAgent(string input)
+    // The page's own picture-in-picture button (requestPictureInPicture())
+    // or exitPictureInPicture().
+    signal pictureInPictureRequested(bool enter)
+
+    // In Ion's picture-in-picture window rather than the tab stack.
+    property bool pictureInPicture: false
+
+    // What the page is playing (Media.sessionReport's state: playing,
+    // title, artist, artwork, …), or null. One entry per reporting frame in
+    // `mediaFrames`; `media` is the one that matters most.
+    property var media: null
+    property var mediaFrames: ({})
+    // The id of the frame `media` came from; actions go only there.
+    property string mediaFrame: ""
+
     // A login field's list asked for the password manager.
     signal managePasswords(string section)
 
@@ -103,6 +120,72 @@ WebEngineView {
         // The default policy until the first navigation; a page a script
         // opens and fills itself (window.open("")) never has one.
         applyAutoplay("about:blank")
+        installPictureInPicture()
+        installMediaSession()
+    }
+
+    // Sites' own picture-in-picture buttons reach Ion through this script,
+    // which logs one of two fixed messages (see ion_media::pip).
+    function installPictureInPicture() {
+        const script = WebEngine.script()
+        script.name = "ion-pip"
+        script.sourceCode = Media.pipPageScript
+        script.injectionPoint = WebEngineScript.DocumentCreation
+        script.worldId = WebEngineScript.MainWorld
+        script.runsOnSubFrames = true
+        userScripts.insert(script)
+    }
+    // Pages report what they play through this script (ion_media::session);
+    // Ion's now-playing controls and the system's answer with mediaAction.
+    function installMediaSession() {
+        const script = WebEngine.script()
+        script.name = "ion-media-session"
+        script.sourceCode = Media.sessionScript
+        script.injectionPoint = WebEngineScript.DocumentCreation
+        script.worldId = WebEngineScript.MainWorld
+        script.runsOnSubFrames = true
+        userScripts.insert(script)
+    }
+    function mediaReported(report) {
+        const frames = Object.assign({}, mediaFrames)
+        if (report.state)
+            frames[report.frame] = report.state
+        else
+            delete frames[report.frame]
+        mediaFrames = frames
+        let best = null
+        let bestFrame = ""
+        for (const id in frames) {
+            if (!best || (frames[id].playing && !best.playing)) {
+                best = frames[id]
+                bestFrame = id
+            }
+        }
+        mediaFrame = bestFrame
+        media = best
+    }
+    function clearMedia() {
+        mediaFrames = {}
+        mediaFrame = ""
+        media = null
+    }
+    onLifecycleStateChanged: if (lifecycleState === WebEngineView.LifecycleState.Discarded) clearMedia()
+    // `action` as for Media.actionScript ("playpause", "next", "seekby", …).
+    function mediaAction(action, value) {
+        const script = Media.actionScript(action, value || 0, mediaFrame)
+        if (script.length > 0)
+            runInFrames(mainFrame, script)
+    }
+    onJavaScriptConsoleMessage: (level, message, lineNumber, sourceId) => {
+        if (message === Media.pipEnterMessage)
+            pictureInPictureRequested(true)
+        else if (message === Media.pipExitMessage)
+            pictureInPictureRequested(false)
+        else {
+            const report = Media.sessionReport(message)
+            if (report)
+                mediaReported(report)
+        }
     }
 
     // A site of its own may darken differently.
@@ -159,6 +242,10 @@ WebEngineView {
             Theme.engine.applyPageScheme()
             applyPageTheme()
         }
+        // A new document starts with nothing playing; the old one's frames
+        // never say goodbye.
+        if (info.status === WebEngineView.LoadStartedStatus)
+            clearMedia()
         // Failed loads too, so an error page doesn't keep the last site's zoom.
         if (info.status === WebEngineView.LoadSucceededStatus
                 || info.status === WebEngineView.LoadFailedStatus)
@@ -183,6 +270,7 @@ WebEngineView {
     // A crashed (or killed) page shows Ion's page instead of a blank tab;
     // Try again or Reload starts a fresh page process.
     onRenderProcessTerminated: (terminationStatus, exitCode) => {
+        clearMedia()
         if (terminationStatus !== WebEngineView.NormalTerminationStatus)
             loadError.item?.showCrash(terminationStatus, view.url)
     }
@@ -201,6 +289,11 @@ WebEngineView {
     // clipboard permission).
     settings.javascriptCanAccessClipboard: true
     settings.javascriptCanPaste: true
+    // PDFs open in Chromium's viewer (zoom, page thumbnails, search,
+    // print, download) instead of only downloading. The viewer is built in
+    // as a plugin, so plugins have to be on for it; Qt 6 runs no others.
+    settings.pluginsEnabled: true
+    settings.pdfViewerEnabled: true
 
     // Zoom, remembered per site by the `Zoom` singleton.
     function setZoom(factor) {
@@ -287,6 +380,8 @@ WebEngineView {
     }
 
     ReaderMode { id: readerMode; view: view }
+    ReaderBar { reader: readerMode }
+    PageTranslator { id: translator; view: view }
     PageNotice { id: notice }
 
     // Per-site JavaScript switch from `[sites]` in config, applied as each
@@ -346,8 +441,6 @@ WebEngineView {
         }
         view.navigationEnd = target
         view.settings.javascriptEnabled = Sites.javascriptEnabled(target)
-        if (!target.startsWith("about:"))
-            view.autoplayInherited = ""
         view.applyAutoplay(target)
         autoplayCheck.restart()
     }
@@ -361,10 +454,19 @@ WebEngineView {
         interval: 1500
         onTriggered: view.applyAutoplay(view.autoplayUrl())
     }
+    // A blank popup's inherited site lasts until a real page starts loading,
+    // so a navigation that's called off leaves it in place. A settings change
+    // that came during the load applies to the page once it's done.
     function autoplayLoading(info) {
         if (info.status === WebEngineView.LoadStartedStatus) {
             autoplayCheck.stop()
-            applyAutoplay(info.url.toString())
+            const target = info.url.toString()
+            if (!target.startsWith("about:"))
+                autoplayInherited = ""
+            applyAutoplay(target)
+        } else if (autoplaySettingsChanged) {
+            autoplaySettingsChanged = false
+            reconcileAutoplay()
         } else {
             applyAutoplay(autoplayUrl())
         }
@@ -391,16 +493,21 @@ WebEngineView {
         target: Config
         function onRevisionChanged() {
             if (view.loading)
-                return
-            const before = view.autoplayPolicy
-            view.applyAutoplay(view.autoplayUrl())
-            if (view.autoplayPolicy === before)
-                return
-            if (view.autoplayPolicy === "block")
-                view.runInFrames(view.mainFrame, Media.blockAutoplayScript, WebEngineScript.MainWorld)
-            else if (before === "block")
-                view.runInFrames(view.mainFrame, Media.unblockAutoplayScript, WebEngineScript.MainWorld)
+                view.autoplaySettingsChanged = true
+            else
+                view.reconcileAutoplay()
         }
+    }
+    property bool autoplaySettingsChanged: false
+    function reconcileAutoplay() {
+        const before = autoplayPolicy
+        applyAutoplay(autoplayUrl())
+        if (autoplayPolicy === before)
+            return
+        if (autoplayPolicy === "block")
+            runInFrames(mainFrame, Media.blockAutoplayScript, WebEngineScript.MainWorld)
+        else if (before === "block")
+            runInFrames(mainFrame, Media.unblockAutoplayScript, WebEngineScript.MainWorld)
     }
 
     // `[media] autoplay` for the page about to load. The engine's gesture

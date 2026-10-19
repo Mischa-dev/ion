@@ -93,7 +93,8 @@ fn renderer_clamps_font_size_and_rejects_css_injection() {
 
     let page = render(&article, &style);
 
-    assert!(page.contains("background: inherit"));
-    assert!(page.contains("font: 32px/1.65 system-ui"));
+    assert!(page.contains("--bg: inherit;"));
+    assert!(page.contains("--size: 32px;"));
+    assert!(page.contains("--font: system-ui"));
     assert!(!page.contains("display:none"));
 }

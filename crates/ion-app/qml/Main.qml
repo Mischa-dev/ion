@@ -287,7 +287,10 @@ ApplicationWindow {
 
     // Keyboard focus follows the visible page (so Space, arrows and Find work
     // right after switching tabs), unless the person is typing in the URL bar.
-    onCurrentViewChanged: Qt.callLater(focusPage)
+    onCurrentViewChanged: {
+        Qt.callLater(focusPage)
+        autoPictureInPicture()
+    }
     function focusPage() {
         if (currentView && !navBar.urlBar.activeFocus && !palette.opened && !tabSearch.opened)
             currentView.forceActiveFocus()
@@ -459,7 +462,7 @@ ApplicationWindow {
     function sleepIdleTabs(seconds) {
         for (const index of Tabs.idleTabs(seconds)) {
             const view = views.itemAt(index)
-            if (view && !view.recentlyAudible && !view.needsAttention)
+            if (view && !view.recentlyAudible && !view.needsAttention && !view.pictureInPicture)
                 Tabs.setSuspended(index, true)
         }
     }
@@ -641,6 +644,48 @@ ApplicationWindow {
     // Tab search (Ctrl/Cmd+Shift+A).
     TabSearch { id: tabSearch; browser: window }
 
+    // Picture-in-picture: a tab's video in its own small window.
+    PictureInPicture {
+        id: pipWindow
+        home: views.parent
+        browser: window
+    }
+    function togglePictureInPicture() {
+        if (pipWindow.active)
+            pipWindow.restore(false)
+        else
+            pipWindow.open(window.currentView, false)
+    }
+
+    // Switching away from a tab playing a video pops it out (and back when
+    // you return), with `media.autoPictureInPicture`.
+    property var previousView: null
+    function autoPictureInPicture() {
+        const left = previousView
+        previousView = currentView
+        if (pipWindow.automatic && currentView && pipWindow.view === currentView) {
+            pipWindow.restore(false)
+            return
+        }
+        if (left && left !== currentView && !left.pictureInPicture && left.recentlyAudible
+                && !left.audioMuted && Config.value("media.autoPictureInPicture") !== false)
+            pipWindow.open(left, true)
+    }
+
+    // What tabs are playing, for the now-playing button and the system's
+    // media controls.
+    MediaSessions { id: mediaSessions; browser: window; pip: pipWindow }
+
+    // Print preview (Ctrl+P, window.print(), the PDF viewer's print button).
+    PrintPreview { id: printPreview }
+    // `saveAsPdf` starts on "Save as PDF" rather than the default printer.
+    function printPage(saveAsPdf) {
+        // The page, not just its video.
+        if (pipWindow.view && pipWindow.view === window.currentView)
+            pipWindow.restore(false)
+        printPreview.open(window.currentView, saveAsPdf === true)
+    }
+
     // Dialogs are built the first time they open (Lazy.get()).
     Lazy { id: importDialog; sourceComponent: ImportDialog {} }
     Lazy { id: passwordManager; sourceComponent: PasswordManager {} }
@@ -685,6 +730,7 @@ ApplicationWindow {
             Layout.fillWidth: true
             view: window.currentView
             downloads: downloads
+            mediaSessions: mediaSessions
             agentSidebar: agentSidebar
             onBookmarkToggled: window.toggleBookmark()
             onRunCommand: id => window.runCommand(id)
@@ -741,6 +787,25 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.fillHeight: true
 
+            // Shown in place of a tab whose video is in picture-in-picture.
+            Column {
+                anchors.centerIn: parent
+                spacing: Theme.spacing * 2
+                visible: window.currentView?.pictureInPicture ?? false
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: qsTr("Playing in picture-in-picture")
+                    color: Theme.textMuted
+                    font.pixelSize: Theme.fontSize + 2
+                }
+                DialogButton {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: qsTr("Bring it back")
+                    onClicked: pipWindow.restore(false)
+                }
+            }
+
             // Above the views: the current pane's outline, resize handles and
             // the drop hint for tabs dragged onto the page.
             SplitPanes { id: panes; anchors.fill: parent; z: 1 }
@@ -771,11 +836,12 @@ ApplicationWindow {
                             url = target
                     }
 
-                    x: pane.x
-                    y: pane.y
-                    width: pane.width
-                    height: pane.height
-                    visible: current || inSplit
+                    // A tab in picture-in-picture fills that window instead.
+                    x: pictureInPicture ? 0 : pane.x
+                    y: pictureInPicture ? 0 : pane.y
+                    width: pictureInPicture ? parent.width : pane.width
+                    height: pictureInPicture ? parent.height : pane.height
+                    visible: current || inSplit || pictureInPicture
                     profile: window.profile
                     // Clicking into a pane of a split view makes its tab current;
                     // the click still reaches the page.
@@ -802,6 +868,11 @@ ApplicationWindow {
                         if (!deferred)
                             loadSavedUrl()
                     }
+                    Component.onDestruction: {
+                        pipWindow.forget(view)
+                        mediaSessions.update(view, true)
+                    }
+                    onMediaChanged: mediaSessions.update(view, false)
                     onOnScreenChanged: {
                         if (onScreen && deferred) {
                             deferred = false
@@ -847,6 +918,14 @@ ApplicationWindow {
                         tab.applyAutoplay(blank ? tab.autoplayInherited : target)
                         request.openIn(tab)
                     }
+                    onPictureInPictureRequested: enter => {
+                        if (enter)
+                            pipWindow.open(view, false)
+                        else if (pipWindow.view === view)
+                            pipWindow.restore(false)
+                    }
+                    onPrintRequested: printPreview.open(view)
+                    onPrintRequestedByFrame: printPreview.open(view)
                     // A page a script opened may close itself (window.close()),
                     // like a "Sign in with Google" or PayPal popup once it's
                     // done; the tab goes and its opener comes back.

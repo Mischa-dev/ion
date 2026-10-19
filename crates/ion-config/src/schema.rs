@@ -45,6 +45,7 @@ pub struct Config {
     pub ai: Ai,
     pub performance: Performance,
     pub media: Media,
+    pub reader: Reader,
 }
 
 /// `[gestures]`: touchpad and mouse gestures.
@@ -542,11 +543,76 @@ impl Default for Safety {
 }
 
 /// `[media]`: sound, video and what pages may play on their own.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Media {
     /// Which media pages may start playing before you interact with them.
     pub autoplay: Autoplay,
+    /// Pop a playing video out into picture-in-picture when you switch to
+    /// another tab, and back in when you return.
+    pub auto_picture_in_picture: bool,
+}
+
+impl Default for Media {
+    fn default() -> Self {
+        Self {
+            autoplay: Autoplay::default(),
+            auto_picture_in_picture: true,
+        }
+    }
+}
+
+/// `[reader]`: how reader mode sets an article. The reader's own toolbar
+/// changes these.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Reader {
+    /// Body text size in CSS pixels (12 to 32).
+    pub font_size: u32,
+    pub font: ReaderFont,
+    /// How wide the column of text runs.
+    pub width: ReaderWidth,
+    /// The page's colors: Ion's theme, or a paper-like one of its own.
+    pub theme: ReaderTheme,
+}
+
+impl Default for Reader {
+    fn default() -> Self {
+        Self {
+            font_size: 19,
+            font: ReaderFont::default(),
+            width: ReaderWidth::default(),
+            theme: ReaderTheme::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ReaderFont {
+    #[default]
+    Serif,
+    Sans,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ReaderWidth {
+    Narrow,
+    #[default]
+    Medium,
+    Wide,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ReaderTheme {
+    /// Ion's own colors.
+    #[default]
+    Match,
+    Light,
+    Sepia,
+    Dark,
 }
 
 /// What a page may play before you click or type on it.
@@ -665,6 +731,9 @@ as_str!(RuleEffect { Allow => "allow", Ask => "ask", Deny => "deny" });
 as_str!(ThemeSource { Builtin => "builtin", Dms => "dms", System => "system", Manual => "manual" });
 as_str!(PageTheming { Match => "match", System => "system", Darken => "darken" });
 as_str!(Autoplay { Allow => "allow", Muted => "muted", Block => "block" });
+as_str!(ReaderFont { Serif => "serif", Sans => "sans" });
+as_str!(ReaderWidth { Narrow => "narrow", Medium => "medium", Wide => "wide" });
+as_str!(ReaderTheme { Match => "match", Light => "light", Sepia => "sepia", Dark => "dark" });
 
 impl Config {
     /// Problems serde cannot express, as human-readable messages. The config
@@ -900,6 +969,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(Config::default().media.autoplay, Autoplay::Muted);
+        assert_eq!(Config::default().reader.font_size, 19);
         assert_eq!(config.media.autoplay, Autoplay::Block);
         assert_eq!(config.sites["youtube.com"].autoplay, Some(Autoplay::Allow));
     }
