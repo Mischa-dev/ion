@@ -101,6 +101,7 @@ WebEngineView {
     // Ion's when this tab's first load starts. Later loads don't reset it.
     property bool pageSchemeRestored: false
     onLoadingChanged: info => {
+        autoplayLoading(info)
         // Ion's own error page covers Chromium's until something replaces it;
         // a load that only starts, or is stopped, leaves Chromium's in place.
         if (info.status === WebEngineView.LoadFailedStatus)
@@ -248,6 +249,25 @@ WebEngineView {
         view.navigationEnd = target
         view.settings.javascriptEnabled = Sites.javascriptEnabled(target)
         view.applyAutoplay(target)
+        autoplayCheck.restart()
+    }
+
+    // A navigation can still be called off after it's requested (a
+    // beforeunload prompt, a download): the page that stays keeps its own
+    // autoplay policy. A load that starts takes its destination's; one that
+    // ends, or never starts, goes back to the committed page's.
+    Timer {
+        id: autoplayCheck
+        interval: 1500
+        onTriggered: view.applyAutoplay(view.url.toString())
+    }
+    function autoplayLoading(info) {
+        if (info.status === WebEngineView.LoadStartedStatus) {
+            autoplayCheck.stop()
+            applyAutoplay(info.url.toString())
+        } else {
+            applyAutoplay(url.toString())
+        }
     }
 
     // `[media] autoplay` for the page about to load. The engine's gesture
