@@ -34,7 +34,11 @@ Rectangle {
             return
         }
         cancel()
+        const request = bar.request
         view.runJavaScript(Translator.collectScript, WebEngineScript.ApplicationWorld, page => {
+            // Navigated, or asked again, meanwhile.
+            if (request !== bar.request)
+                return
             if (!page) {
                 bar.view.notify(qsTr("Ion couldn't read this page's text."))
                 return
@@ -48,7 +52,11 @@ Rectangle {
         })
     }
 
+    // Bumped by each cancel, so a page read for an earlier request is dropped.
+    property int request: 0
+
     function cancel() {
+        request++
         if (job !== 0)
             Translator.cancel(job)
         job = 0

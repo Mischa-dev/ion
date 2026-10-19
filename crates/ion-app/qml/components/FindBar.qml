@@ -22,10 +22,12 @@ Rectangle {
     property bool answered: false
 
     function open() {
-        // A short selection on the page is what you want to find.
+        // A short selection on the page is what you want to find, unless
+        // you've typed something meanwhile.
+        const before = field.text
         view.runJavaScript("String(window.getSelection())", WebEngineScript.ApplicationWorld, text => {
             const selection = String(text ?? "").trim()
-            if (bar.visible && selection.length > 0 && selection.length <= 200
+            if (bar.visible && field.text === before && selection.length > 0 && selection.length <= 200
                     && selection.indexOf("\n") < 0 && selection !== field.text) {
                 field.text = selection
                 field.selectAll()
