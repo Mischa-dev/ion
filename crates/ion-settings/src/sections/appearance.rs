@@ -94,6 +94,13 @@ pub fn section(ctx: &Context) -> Section {
                     .help("It opens while the pointer is over it.")
                     .keywords("vertical tabs collapse compact"),
                     Setting::new(
+                        "ui.tabPreviews",
+                        "Preview tabs on hover",
+                        Control::Toggle,
+                    )
+                    .help("A card with the tab's full title, its site and a picture of the page.")
+                    .keywords("hover card thumbnail tooltip"),
+                    Setting::new(
                         "ui.density",
                         "Density",
                         Control::Choice {

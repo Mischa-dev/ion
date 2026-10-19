@@ -8,7 +8,8 @@ import Ion
 // `browser` (the main window) provides openTab(url), newTab(), closeTab(i),
 // closeOtherTabs(i), focusUrlBar(), toggleBookmark(), showImport(),
 // showPasswords(query, section), openPrivateWindow(), showProfiles(),
-// showExtensions(), toggleFullScreen(), askAgent(input), startAgentQuestion(),
+// showExtensions(), toggleFullScreen(), searchTabs(), toggleSplit(),
+// sleepIdleTabs(seconds), askAgent(input), startAgentQuestion(),
 // toggleAgentSidebar(), showAgentActivity(), openPage(id, path),
 // showClearData(), profile and currentView.
 Item {
@@ -44,6 +45,9 @@ Item {
         case "close-tab": browser.closeTab(Tabs.currentIndex); break
         case "duplicate-tab": browser.openTab(view ? view.url : ""); break
         case "reopen-tab": Tabs.reopenClosedTab(); break
+        case "search-tabs": browser.searchTabs(); break
+        case "split-view": browser.toggleSplit(); break
+        case "sleep-tabs": browser.sleepIdleTabs(0); break
         case "next-tab": Tabs.cycle(1); break
         case "previous-tab": Tabs.cycle(-1); break
         case "move-tab-left": Tabs.moveTab(Tabs.currentIndex, Tabs.neighbour(Tabs.currentIndex, -1)); break

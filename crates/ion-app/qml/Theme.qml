@@ -160,6 +160,14 @@ QtObject {
 
     // Things that are present but asleep, like a suspended tab's icon.
     readonly property real dimmedOpacity: 0.45
+    // A color laid thinly over a surface, like a tab group's header.
+    readonly property real tintOpacity: 0.16
+    // The colored line that ties a tab group's tabs together.
+    readonly property int groupLineWidth: 2
+    // Tab hover previews: the page picture's width, and how often the tab on
+    // screen refreshes its picture.
+    readonly property int previewWidth: 260
+    readonly property int snapshotMs: 10000
 
     readonly property SystemPalette systemPalette: SystemPalette {}
 

@@ -242,6 +242,8 @@ pub struct Ui {
     /// With vertical tabs, shrink the sidebar to favicons; it expands while
     /// the pointer is over it.
     pub collapse_sidebar: bool,
+    /// Show a card with the page's title and picture when hovering a tab.
+    pub tab_previews: bool,
     pub animations: Animations,
 }
 
@@ -252,6 +254,7 @@ impl Default for Ui {
             corner_radius: 8,
             tabs: TabLayout::default(),
             collapse_sidebar: false,
+            tab_previews: true,
             animations: Animations::default(),
         }
     }
