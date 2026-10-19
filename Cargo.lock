@@ -1317,6 +1317,7 @@ dependencies = [
  "ion-omnibox",
  "ion-panels",
  "ion-passwords",
+ "ion-perf",
  "ion-platform",
  "ion-privacy",
  "ion-reader",
@@ -1430,6 +1431,13 @@ dependencies = [
  "serde",
  "serde_json",
  "url",
+]
+
+[[package]]
+name = "ion-perf"
+version = "0.1.0"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

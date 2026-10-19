@@ -9,6 +9,7 @@ Read `docs/ARCHITECTURE.md` first; it says which directory each feature owns.
 - Lint: `cargo clippy --workspace --all-targets -- -D warnings`
 - Format: `cargo fmt --all` and `nixfmt flake.nix nix/*.nix`
 - Everything CI runs: `nix flake check -L`
+- Speed and memory benchmark: `bench/bench.py` (see `docs/performance.md`)
 
 Outside the dev shell the build fails: cxx-qt needs `QMAKE` pointing at the
 merged Qt prefix the shell sets up.

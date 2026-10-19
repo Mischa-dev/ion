@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bench article</title>
+<!-- A typical long article: web fonts aside, the usual text, figures, code
+     and a sticky header. Built by script so the file stays small. -->
+<style>
+  body { margin: 0; font: 17px/1.6 system-ui, sans-serif; color: #222; background: #fafaf7; }
+  header { position: sticky; top: 0; background: #fff; box-shadow: 0 1px 8px #0002; padding: 12px 24px; z-index: 2; }
+  main { max-width: 720px; margin: 0 auto; padding: 24px; }
+  figure { margin: 24px 0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 24px #0002; }
+  canvas { display: block; width: 100%; height: auto; }
+  pre { background: #1e1e2e; color: #cdd6f4; padding: 16px; border-radius: 8px; overflow: auto; }
+  aside { border-left: 4px solid #89b4fa; padding: 8px 16px; background: #eef4ff; }
+</style>
+<script src="report.js"></script>
+</head>
+<body>
+<header><strong>Ion bench</strong> · a long article</header>
+<main id="main"></main>
+<script>
+  const words = "the quick brown fox jumps over a lazy dog while browsers render pages fast and smooth with little memory".split(" ");
+  let seed = 7;
+  const rand = n => (seed = (seed * 16807) % 2147483647) % n;
+  const sentence = () => Array.from({ length: 8 + rand(14) }, () => words[rand(words.length)]).join(" ") + ". ";
+  const main = document.getElementById("main");
+  const parts = [];
+  for (let i = 0; i < 60; i++) {
+    parts.push(`<h2>Section ${i + 1}</h2>`);
+    for (let p = 0; p < 4; p++)
+      parts.push(`<p>${Array.from({ length: 5 }, sentence).join("")}</p>`);
+    if (i % 5 === 0) parts.push(`<figure><canvas width="720" height="360" data-hue="${(i * 37) % 360}"></canvas></figure>`);
+    if (i % 7 === 3) parts.push(`<pre>fn main() {\n    println!("section ${i}");\n}</pre>`);
+    if (i % 9 === 4) parts.push(`<aside>${sentence()}</aside>`);
+  }
+  main.innerHTML = parts.join("");
+  for (const canvas of document.querySelectorAll("canvas")) {
+    const ctx = canvas.getContext("2d");
+    const hue = +canvas.dataset.hue;
+    const g = ctx.createLinearGradient(0, 0, 720, 360);
+    g.addColorStop(0, `hsl(${hue} 70% 60%)`);
+    g.addColorStop(1, `hsl(${(hue + 120) % 360} 70% 40%)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 720, 360);
+    for (let c = 0; c < 40; c++) {
+      ctx.fillStyle = `hsla(${(hue + c * 9) % 360} 80% 70% / 0.4)`;
+      ctx.beginPath();
+      ctx.arc(rand(720), rand(360), 10 + rand(60), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  addEventListener("load", () => {
+    const nav = performance.getEntriesByType("navigation")[0];
+    benchReport("load", { loadEventMs: nav ? nav.loadEventStart : 0 });
+  });
+</script>
+</body>
+</html>
