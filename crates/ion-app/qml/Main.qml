@@ -749,6 +749,14 @@ ApplicationWindow {
             }
         }
 
+        // Notes and web panels (Ctrl+Shift+L).
+        SidePanel {
+            id: sidePanel
+            Layout.fillHeight: true
+            Layout.preferredWidth: implicitWidth
+            browser: window
+        }
+
         AgentSidebar {
             id: agentSidebar
             Layout.fillHeight: true
@@ -789,6 +797,8 @@ ApplicationWindow {
         downloads: downloads
     }
     function runCommand(id) { commands.run(id) }
+    // What the side-panel command reopens when nothing is showing.
+    function lastPanel() { return sidePanel.lastOpen }
     function canRunCommand(id) { return commands.available(id) }
 
     ShortcutEditor { id: shortcutEditor }

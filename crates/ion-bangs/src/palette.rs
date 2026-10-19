@@ -934,7 +934,8 @@ mod tests {
 
     #[test]
     fn new_commands_are_found() {
-        assert_eq!(query(">copy")[0].action, Action::Run("copy-url"));
+        let items = query(">copy");
+        assert_eq!(items[0].action, Action::Run("copy-url"), "{items:#?}");
         assert_eq!(query("ads")[0].action, Action::Run("toggle-adblock"));
         assert_eq!(query("full screen")[0].action, Action::Run("fullscreen"));
     }
