@@ -286,12 +286,16 @@ in
         };
 
         shortcuts = mkOption {
-          type = types.attrsOf types.str;
+          type = types.attrsOf (types.either types.str (types.listOf types.str));
           default = { };
           example = {
             palette = "Ctrl+K";
+            reload = [
+              "F5"
+              "Ctrl+R"
+            ];
           };
-          description = "Shortcut remaps: command id to Qt key sequence.";
+          description = "Shortcut remaps: command (camelCase, e.g. newTab) to a Qt key sequence, a list of them, or \"\" for none.";
         };
       };
     };

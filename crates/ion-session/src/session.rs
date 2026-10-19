@@ -154,6 +154,58 @@ impl SessionStore {
         }
     }
 
+    fn running_path(&self) -> PathBuf {
+        self.dir.join("running")
+    }
+
+    fn crashed_path(&self) -> PathBuf {
+        self.dir.join("crashed.json")
+    }
+
+    /// Mark Ion as running. Returns true when the last run never reached
+    /// [`end_run`](Self::end_run) (it crashed, or the machine lost power);
+    /// its tabs are then kept aside for [`load_crashed`](Self::load_crashed),
+    /// since this run saves over `last.json` as soon as it opens a tab.
+    pub fn begin_run(&self) -> io::Result<bool> {
+        let unclean = self.running_path().exists();
+        if unclean {
+            match std::fs::read(self.last_path()) {
+                Ok(json) => write_atomic(&self.crashed_path(), &json)?,
+                Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e),
+            }
+        } else {
+            self.discard_crashed()?;
+        }
+        write_atomic(
+            &self.running_path(),
+            std::process::id().to_string().as_bytes(),
+        )?;
+        Ok(unclean)
+    }
+
+    /// Mark a clean quit, after the last save.
+    pub fn end_run(&self) -> io::Result<()> {
+        match std::fs::remove_file(self.running_path()) {
+            Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
+            _ => Ok(()),
+        }
+    }
+
+    /// The tabs that were open when the last run ended uncleanly, if
+    /// [`begin_run`](Self::begin_run) kept them.
+    pub fn load_crashed(&self) -> io::Result<Option<Session>> {
+        read(&self.crashed_path())
+    }
+
+    /// Forget the tabs kept from an unclean end.
+    pub fn discard_crashed(&self) -> io::Result<()> {
+        match std::fs::remove_file(self.crashed_path()) {
+            Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
+            _ => Ok(()),
+        }
+    }
+
     /// Names of the saved sessions, sorted case-insensitively.
     pub fn list_named(&self) -> io::Result<Vec<String>> {
         let entries = match std::fs::read_dir(self.named_dir()) {
@@ -228,6 +280,32 @@ mod tests {
                 .collect(),
             ..Session::default()
         }
+    }
+
+    #[test]
+    fn unclean_runs_keep_their_tabs_aside() {
+        let dir = test_dir("crash");
+        let store = SessionStore::new(&dir);
+        // First run ever: clean.
+        assert!(!store.begin_run().unwrap());
+        store.save_last(&session(&["https://a.example/"])).unwrap();
+        // It crashes (no end_run); the next run finds out and keeps its tabs
+        // even after saving its own.
+        assert!(store.begin_run().unwrap());
+        store
+            .save_last(&session(&["https://home.example/"]))
+            .unwrap();
+        assert_eq!(
+            store.load_crashed().unwrap().unwrap().tabs[0].url,
+            "https://a.example/"
+        );
+        // A clean quit and start forget them.
+        store.end_run().unwrap();
+        assert!(!store.begin_run().unwrap());
+        assert_eq!(store.load_crashed().unwrap(), None);
+        store.end_run().unwrap();
+        store.end_run().unwrap();
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

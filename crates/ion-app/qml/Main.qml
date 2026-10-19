@@ -180,6 +180,8 @@ ApplicationWindow {
             extensionPaths = Extensions.paths()
             extensionPaths.forEach(path => extensionManager.loadExtension(path))
         }
+        // True when the last run crashed; its tabs are kept aside.
+        const crashed = Tabs.beginRun()
         if (Config.value("general.restoreSession")) {
             // Restoring replaces every tab; keep any opened while waiting
             // (Ctrl+T, a URL handed over by a second launch).
@@ -188,6 +190,9 @@ ApplicationWindow {
                 early.push(Tabs.urlAt(i))
             if (Tabs.restoreLastSession())
                 early.forEach((target, i) => openTab(target, i === 0))
+            Tabs.discardCrashedSession()
+        } else if (crashed) {
+            crashRestore.offer()
         }
         // URLs on the command line (`ion %U` from the desktop file) open as new
         // tabs after the restored ones; the first one becomes current.
@@ -282,6 +287,7 @@ ApplicationWindow {
             // saved session.
             if (window.startupFinished)
                 Tabs.saveSession()
+            Tabs.endRun()
             History.save()
             window.clearOnExit(false)
         }
@@ -467,50 +473,21 @@ ApplicationWindow {
         onPageActiveChanged: if (pageActive) downloads.close()
     }
 
-    // Keyboard shortcuts. "Ctrl" maps to Cmd on macOS automatically.
-    Shortcut { sequences: [StandardKey.AddTab]; onActivated: window.newTab() }
-    Shortcut { sequences: [StandardKey.Close]; onActivated: window.closeTab(Tabs.currentIndex) }
-    Shortcut { sequence: "Ctrl+Shift+T"; onActivated: Tabs.reopenClosedTab() }
-    Shortcut { sequences: ["Ctrl+L", "Alt+D", "F6"]; onActivated: window.focusUrlBar() }
-    Shortcut { sequences: ["Ctrl+Tab", "Ctrl+PgDown"]; onActivated: Tabs.cycle(1) }
-    Shortcut { sequences: ["Ctrl+Shift+Tab", "Ctrl+PgUp"]; onActivated: Tabs.cycle(-1) }
-    Shortcut { sequence: "Ctrl+Shift+PgDown"; onActivated: Tabs.moveTab(Tabs.currentIndex, Tabs.neighbour(Tabs.currentIndex, 1)) }
-    Shortcut { sequence: "Ctrl+Shift+PgUp"; onActivated: Tabs.moveTab(Tabs.currentIndex, Tabs.neighbour(Tabs.currentIndex, -1)) }
-    Shortcut { sequence: "Ctrl+Alt+PgDown"; onActivated: Tabs.cycleWorkspace(1) }
-    Shortcut { sequence: "Ctrl+Alt+PgUp"; onActivated: Tabs.cycleWorkspace(-1) }
-    // Ctrl+1…8 pick a tab of the workspace by position, Ctrl+9 its last one.
-    Shortcut { sequence: "Ctrl+1"; onActivated: Tabs.activateNth(0) }
-    Shortcut { sequence: "Ctrl+2"; onActivated: Tabs.activateNth(1) }
-    Shortcut { sequence: "Ctrl+3"; onActivated: Tabs.activateNth(2) }
-    Shortcut { sequence: "Ctrl+4"; onActivated: Tabs.activateNth(3) }
-    Shortcut { sequence: "Ctrl+5"; onActivated: Tabs.activateNth(4) }
-    Shortcut { sequence: "Ctrl+6"; onActivated: Tabs.activateNth(5) }
-    Shortcut { sequence: "Ctrl+7"; onActivated: Tabs.activateNth(6) }
-    Shortcut { sequence: "Ctrl+8"; onActivated: Tabs.activateNth(7) }
-    Shortcut { sequence: "Ctrl+9"; onActivated: Tabs.activateNth(-1) }
-    Shortcut { sequences: [StandardKey.Refresh, "Ctrl+R"]; onActivated: window.currentView?.reload() }
-    Shortcut { sequences: [StandardKey.Back]; onActivated: window.currentView?.goBack() }
-    Shortcut { sequences: [StandardKey.Forward]; onActivated: window.currentView?.goForward() }
-    Shortcut { sequences: [StandardKey.Quit]; onActivated: Qt.quit() }
-    Shortcut { sequences: [StandardKey.ZoomIn, "Ctrl+="]; onActivated: window.currentView?.zoomIn() }
-    Shortcut { sequences: [StandardKey.ZoomOut]; onActivated: window.currentView?.zoomOut() }
-    Shortcut { sequences: ["Ctrl+0"]; onActivated: window.currentView?.resetZoom() }
-    Shortcut { sequence: "Ctrl+D"; onActivated: window.toggleBookmark() }
-    Shortcut { sequence: "Ctrl+Alt+R"; onActivated: window.currentView?.reader.toggle() }
-    Shortcut { sequence: "Ctrl+Shift+M"; onActivated: window.toggleMute() }
-    Shortcut { sequence: "Ctrl+Shift+S"; onActivated: window.currentView?.takeScreenshot(false) }
-    Shortcut { sequence: "Ctrl+Alt+Shift+S"; onActivated: window.currentView?.takeScreenshot(true) }
-    Shortcut {
-        sequence: { Config.revision; return Config.value("shortcuts.palette") || "Ctrl+K" }
-        onActivated: palette.show()
+    // Every command, from its shortcut, the palette or anywhere else; keys
+    // come from `Keymap` ("Ctrl" is Cmd on macOS). Stopping every agent
+    // (docs/SAFETY.md) is one of them; resuming is deliberate: the notice's
+    // button or the palette, never the same key again.
+    Commands {
+        id: commands
+        browser: window
+        commandPalette: palette
+        shortcutEditor: shortcutEditor
+        downloads: downloads
     }
-    // Stops every agent at once (docs/SAFETY.md). Resuming is deliberate:
-    // the notice's button or the palette, never the same key again.
-    Shortcut {
-        sequence: { Config.revision; return Config.value("shortcuts.stopAgents") || "Ctrl+Shift+." }
-        context: Qt.ApplicationShortcut
-        onActivated: Safety.stopAgents()
-    }
+    function runCommand(id) { commands.run(id) }
+    function canRunCommand(id) { return commands.available(id) }
+
+    ShortcutEditor { id: shortcutEditor }
 
     // Agents, from shortcuts, the palette and the page's menu.
     function askAgent(input) {
@@ -529,20 +506,8 @@ ApplicationWindow {
         agentSidebar.toggle(window.currentView ? Agent.latestTask(window.currentView.tabId) : -1)
     }
 
-    Shortcut {
-        sequence: { Config.revision; return Config.value("shortcuts.askAgent") || "Ctrl+E" }
-        enabled: { Config.revision; return Config.value("ai.enable") === true }
-        onActivated: window.startAgentQuestion()
-    }
-
-    // The agent sidebar, with the current tab's latest conversation.
-    Shortcut {
-        sequence: { Config.revision; return Config.value("shortcuts.agentSidebar") || "Ctrl+Shift+E" }
-        enabled: { Config.revision; return Config.value("ai.enable") === true }
-        onActivated: window.toggleAgentSidebar()
-    }
-
     AgentsStoppedNotice {}
+    CrashRestoreNotice { id: crashRestore }
     AgentActivity { id: agentActivity }
     AgentTools { views: views }
 }

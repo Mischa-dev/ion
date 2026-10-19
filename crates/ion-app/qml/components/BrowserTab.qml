@@ -12,6 +12,7 @@ WebEngineView {
 
     // Reader mode for this tab: `reader.toggle()`, `reader.active`.
     readonly property alias reader: readerMode
+    readonly property alias findBar: findBar
 
     // Emitted when the page asks for a new tab or window (target=_blank, window.open).
     signal newTabRequested(var request)
@@ -69,7 +70,12 @@ WebEngineView {
             runInFrames(child, script)
     }
 
-    Component.onCompleted: applyPageTheme()
+    Component.onCompleted: {
+        applyPageTheme()
+        // The default policy until the first navigation; a page a script
+        // opens and fills itself (window.open("")) never has one.
+        applyAutoplay("about:blank")
+    }
 
     // A site of its own may darken differently.
     onUrlChanged: {
@@ -120,9 +126,21 @@ WebEngineView {
     }
     onNewWindowRequested: request => view.newTabRequested(request)
 
+    // A crashed (or killed) page shows Ion's page instead of a blank tab;
+    // Try again or Reload starts a fresh page process.
+    onRenderProcessTerminated: (terminationStatus, exitCode) => {
+        if (terminationStatus !== WebEngineView.NormalTerminationStatus)
+            loadError.showCrash(terminationStatus, view.url)
+    }
+
     // Both are off by default; Ion asks before a page uses them.
     settings.fullScreenSupportEnabled: true
     settings.screenCaptureEnabled: true
+    // Copy buttons and editors (Google Docs, Notion, GitHub) use the async
+    // clipboard. Writing needs nothing more; reading asks first (Safety's
+    // clipboard permission).
+    settings.javascriptCanAccessClipboard: true
+    settings.javascriptCanPaste: true
 
     // Zoom, remembered per site by the `Zoom` singleton.
     function setZoom(factor) {
@@ -139,10 +157,12 @@ WebEngineView {
 
     NewTabPage { view: view }
     AdblockCosmetics { view: view }
-    FindBar { view: view }
+    FindBar { id: findBar; view: view }
     PermissionPrompt { view: view; tabId: view.tabId }
+    ExternalAppPrompt { id: externalApp; view: view }
     ScreenSharePicker { view: view }
     PageDialog { view: view }
+    WebAuthDialog { view: view }
     ScreenshotTool {
         id: screenshotTool
         view: view
@@ -189,6 +209,12 @@ WebEngineView {
     }
 
     onNavigationRequested: request => {
+        // Links to other apps (mailto:, zoommtg:…) ask first, from frames too.
+        if (Protocols.isExternal(request.url.toString())) {
+            request.reject()
+            externalApp.ask(request.url.toString(), view.url.toString())
+            return
+        }
         if (!request.isMainFrame)
             return
         const target = request.url.toString()
