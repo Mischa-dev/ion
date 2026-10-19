@@ -84,7 +84,8 @@ ApplicationWindow {
         }
         // A workspace's last tab makes way for a blank one, so closing it
         // doesn't jump to another workspace.
-        if (index === Tabs.currentIndex && Tabs.workspaceTabCount(Tabs.workspace) === 1)
+        if (index === Tabs.currentIndex && Tabs.pinnedAt(index) !== 2
+                && Tabs.workspaceTabCount(Tabs.workspace) === 1)
             Tabs.openTabAt(index + 1, "", true)
         Tabs.closeTab(index)
     }
@@ -93,22 +94,94 @@ ApplicationWindow {
         return index >= 0 && index < views.count ? views.itemAt(index) : null
     }
 
-    // For the tab menu, within the tab's workspace. Closing from the end keeps
-    // the lower indexes valid.
+    // For the tab menu, within the tab's strip. Pinned tabs and Essentials
+    // stay. Closing from the end keeps the lower indexes valid.
     function closeTabsAfter(index) {
-        const workspace = Tabs.workspaceAt(index)
-        for (let i = Tabs.count - 1; i > index; i--) {
-            if (Tabs.workspaceAt(i) === workspace)
-                Tabs.closeTab(i)
+        const rows = []
+        for (let i = Tabs.neighbour(index, 1); i >= 0; i = Tabs.neighbour(i, 1)) {
+            if (Tabs.pinnedAt(i) === 0)
+                rows.push(i)
         }
+        rows.reverse().forEach(i => Tabs.closeTab(i))
     }
 
     function closeOtherTabs(index) {
-        const workspace = Tabs.workspaceAt(index)
         closeTabsAfter(index)
-        for (let i = index - 1; i >= 0; i--) {
-            if (Tabs.workspaceAt(i) === workspace)
-                Tabs.closeTab(i)
+        const rows = []
+        for (let i = Tabs.neighbour(index, -1); i >= 0; i = Tabs.neighbour(i, -1)) {
+            if (Tabs.pinnedAt(i) === 0)
+                rows.push(i)
+        }
+        rows.forEach(i => Tabs.closeTab(i))
+    }
+
+    // The tab used before the current one in this workspace (or an
+    // Essential), or -1. Never one from another workspace: showing it would
+    // switch workspace, and mid-drag that drops the dragged tab's row.
+    function previousTab() {
+        return Tabs.previousTab()
+    }
+
+    // A tab dragged off a strip (`index` -1 once it is back or let go). Pressing
+    // it made it current, so the page goes back to the tab shown before, and
+    // the drop hint says which side the dragged tab would open on.
+    property int draggedOutRow: -1
+    function dragTabOverPage(index, scenePos) {
+        if (index < 0) {
+            panes.showDrop(null)
+            if (draggedOutRow >= 0)
+                Tabs.activate(draggedOutRow)
+            draggedOutRow = -1
+            return
+        }
+        if (draggedOutRow < 0) {
+            draggedOutRow = index
+            const previous = previousTab()
+            if (previous >= 0)
+                Tabs.activate(previous)
+        }
+        const split = JSON.parse(Tabs.currentSplit())
+        panes.showDrop(split && split.tabs.length >= 4 ? null : panes.mapFromItem(null, scenePos))
+    }
+
+    // Let go over the page, the dragged tab opens beside the page shown, on
+    // the side it was dropped.
+    function dropTabOnPage(index, scenePos) {
+        panes.showDrop(panes.mapFromItem(null, scenePos))
+        const side = panes.dropSide
+        panes.showDrop(null)
+        draggedOutRow = -1
+        if (side.length === 0 || index < 0 || index === Tabs.currentIndex) {
+            if (index >= 0)
+                Tabs.activate(index)
+            return
+        }
+        // A full split view (four panes) takes no more; the page stays put.
+        if (Tabs.splitTabs(Tabs.currentIndex, index) < 0)
+            return
+        // It joins after the current pane; the first half puts it before.
+        if (side === "left" || side === "top")
+            Tabs.movePane(index, -1)
+        Tabs.activate(index)
+    }
+
+    // Ctrl/Cmd+Alt+S: put the current tab side by side with the tab used
+    // before it (a new tab if there is none), or end its split view.
+    function toggleSplit() {
+        const split = JSON.parse(Tabs.currentSplit())
+        if (split) {
+            Tabs.endSplit(split.id)
+            return
+        }
+        const current = Tabs.currentIndex
+        const previous = previousTab()
+        if (previous >= 0) {
+            Tabs.splitTabs(current, previous)
+        } else {
+            const index = Tabs.openTabNextToCurrent("", false)
+            Tabs.splitTabs(Tabs.currentIndex, index)
+            Tabs.activate(index)
+            window.focusUrlBar()
         }
     }
 
@@ -194,7 +267,7 @@ ApplicationWindow {
     // right after switching tabs), unless the person is typing in the URL bar.
     onCurrentViewChanged: Qt.callLater(focusPage)
     function focusPage() {
-        if (currentView && !navBar.urlBar.activeFocus && !palette.opened)
+        if (currentView && !navBar.urlBar.activeFocus && !palette.opened && !tabSearch.opened)
             currentView.forceActiveFocus()
     }
 
@@ -267,6 +340,7 @@ ApplicationWindow {
         sessionSaveTimer.restart()
     }
 
+    function searchTabs() { tabSearch.show() }
     function focusUrlBar() {
         navBar.urlBar.forceActiveFocus()
         navBar.urlBar.selectAll()
@@ -304,21 +378,25 @@ ApplicationWindow {
         interval: 1000
         onTriggered: Tabs.saveSession()
     }
-    // Unload background tabs nobody has looked at for `general.suspendTabsAfter`
-    // minutes. Tabs playing sound are left alone.
+    // Unload background tabs nobody has looked at for `seconds` (0: every
+    // background tab). Tabs on screen, playing sound or waiting with a dialog
+    // are left alone.
+    function sleepIdleTabs(seconds) {
+        for (const index of Tabs.idleTabs(seconds)) {
+            const view = views.itemAt(index)
+            if (view && !view.recentlyAudible && !view.needsAttention)
+                Tabs.setSuspended(index, true)
+        }
+    }
+    // Every minute, for tabs idle for `general.suspendTabsAfter` minutes.
     Timer {
         interval: 60 * 1000
         repeat: true
         running: true
         onTriggered: {
             const minutes = Config.value("general.suspendTabsAfter")
-            if (!(minutes > 0))
-                return
-            for (const index of Tabs.idleTabs(minutes * 60)) {
-                const view = views.itemAt(index)
-                if (view && !view.recentlyAudible)
-                    Tabs.setSuspended(index, true)
-            }
+            if (minutes > 0)
+                window.sleepIdleTabs(minutes * 60)
         }
     }
     Timer {
@@ -461,6 +539,8 @@ ApplicationWindow {
 
     // Command palette (Ctrl/Cmd+K).
     CommandPalette { id: palette; browser: window }
+    // Tab search (Ctrl/Cmd+Shift+A).
+    TabSearch { id: tabSearch; browser: window }
 
     ImportDialog { id: importDialog }
     PasswordManager { id: passwordManager }
@@ -484,12 +564,17 @@ ApplicationWindow {
             onActivated: index => Tabs.activate(index)
             onCloseRequested: index => window.closeTab(index)
             onMoveRequested: (from, to) => Tabs.moveTab(from, to)
+            onTabDraggedOut: (index, pos) => window.dragTabOverPage(index, pos)
+            onTabDroppedOut: (index, pos) => window.dropTabOnPage(index, pos)
             onNewTabRequested: window.newTab()
+            onSearchRequested: tabSearch.show()
             onMenuRequested: anchor => sessionMenu.open(anchor)
             onTabMenuRequested: index => tabMenu.openFor(index)
+            onGroupMenuRequested: (group, anchor) => groupMenu.openFor(group, anchor)
             onWorkspaceMenuRequested: anchor => workspaceMenu.open(anchor)
             views: views
             viewsRevision: window.viewsRevision
+            currentSplit: panes.split ? panes.split.id : -1
         }
 
         NavigationBar {
@@ -504,8 +589,13 @@ ApplicationWindow {
         }
     }
 
-    SessionMenu { id: sessionMenu }
-    TabMenu { id: tabMenu; browser: window; workspaceMenu: workspaceMenu }
+    SessionMenu {
+        id: sessionMenu
+        onSearchRequested: tabSearch.show()
+        onSleepRequested: window.sleepIdleTabs(0)
+    }
+    TabMenu { id: tabMenu; browser: window; workspaceMenu: workspaceMenu; groupMenu: groupMenu }
+    GroupMenu { id: groupMenu }
     WorkspaceMenu { id: workspaceMenu }
 
     RowLayout {
@@ -527,19 +617,29 @@ ApplicationWindow {
             onActivated: index => Tabs.activate(index)
             onCloseRequested: index => window.closeTab(index)
             onMoveRequested: (from, to) => Tabs.moveTab(from, to)
+            onTabDraggedOut: (index, pos) => window.dragTabOverPage(index, pos)
+            onTabDroppedOut: (index, pos) => window.dropTabOnPage(index, pos)
             onNewTabRequested: window.newTab()
+            onSearchRequested: tabSearch.show()
             onMenuRequested: anchor => sessionMenu.open(anchor)
             onTabMenuRequested: index => tabMenu.openFor(index)
+            onGroupMenuRequested: (group, anchor) => groupMenu.openFor(group, anchor)
             onWorkspaceMenuRequested: anchor => workspaceMenu.open(anchor)
             views: views
             viewsRevision: window.viewsRevision
+            currentSplit: panes.split ? panes.split.id : -1
         }
 
-        // One web view per tab, stacked; only the current one is visible.
+        // One web view per tab, stacked; only the current one is visible, or
+        // the panes of its split view.
         Item {
             id: pageArea
             Layout.fillWidth: true
             Layout.fillHeight: true
+
+            // Above the views: the current pane's outline, resize handles and
+            // the drop hint for tabs dragged onto the page.
+            SplitPanes { id: panes; anchors.fill: parent; z: 1 }
 
             Repeater {
                 id: views
@@ -556,6 +656,8 @@ ApplicationWindow {
                     required property int index
                     required property bool suspended
                     readonly property bool current: index === Tabs.currentIndex
+                    readonly property bool inSplit: panes.paneOf(index) >= 0
+                    readonly property rect pane: panes.rectFor(index, panes.width, panes.height, panes.sizes)
                     // Background tabs restored from a session load when first shown.
                     property bool deferred: false
 
@@ -565,20 +667,38 @@ ApplicationWindow {
                             url = target
                     }
 
-                    anchors.fill: parent
-                    visible: current
+                    x: pane.x
+                    y: pane.y
+                    width: pane.width
+                    height: pane.height
+                    visible: current || inSplit
                     profile: window.profile
+                    // Clicking into a pane of a split view makes its tab current;
+                    // the click still reaches the page.
+                    MouseArea {
+                        anchors.fill: parent
+                        z: 1
+                        enabled: view.inSplit && !view.current
+                        acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
+                        onPressed: mouse => {
+                            Tabs.activate(view.index)
+                            mouse.accepted = false
+                        }
+                    }
                     // A suspended tab's page is unloaded; it reloads when shown.
                     lifecycleState: suspended ? WebEngineView.LifecycleState.Discarded
                                               : WebEngineView.LifecycleState.Active
 
+                    // The current tab, or a pane of the split view showing.
+                    readonly property bool onScreen: current || inSplit
+
                     Component.onCompleted: {
-                        deferred = Tabs.restoring && !current
+                        deferred = Tabs.restoring && !onScreen
                         if (!deferred)
                             loadSavedUrl()
                     }
-                    onCurrentChanged: {
-                        if (current && deferred) {
+                    onOnScreenChanged: {
+                        if (onScreen && deferred) {
                             deferred = false
                             loadSavedUrl()
                         }
