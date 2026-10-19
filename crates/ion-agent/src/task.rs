@@ -18,14 +18,25 @@ use crate::tool::{Tool, untrusted};
 /// Selected text longer than this is cut.
 const MAX_SELECTION_CHARS: usize = 4000;
 
+/// Tool results longer than this are left out once two questions have
+/// passed since they were read: the pages may have changed, and they fill
+/// the model's room.
+const KEEP_OLD_RESULT_CHARS: usize = 1500;
+
+const LEFT_OUT: &str =
+    "(Left out: read for an earlier question. Read it again if you need it now.)";
+
 /// Model turns before a task gives up, so a confused model can't loop.
 pub const MAX_TURNS: u32 = 20;
 
 const SYSTEM_PROMPT: &str = "You are Ion Agent, the assistant built into the Ion web browser. \
 You help the person with the page they are on and their open tabs.\n\
 \n\
-Use read_page to read the page the person asked from before answering anything about it, \
-and list_tabs to see their open tabs.\n\
+Use read_page to read the page the person asked from before answering anything about it. \
+When they ask about their tabs (comparing them, summing several up, finding one), use \
+list_tabs to see them with their numbers, then read_tabs to read the ones that matter in one \
+call rather than opening them one by one. When answering from several pages, say which page \
+each point comes from.\n\
 \n\
 When the person asks you to do something on the page, read it first, then use click and fill \
 with the element numbers from read_page, and go_to to open an address. For work on other \
@@ -264,6 +275,7 @@ impl Task {
             error: std::mem::take(&mut self.error),
             status: self.status,
         });
+        self.leave_out_old_results();
         self.messages.push(Message::User(asking(question, context)));
         self.pending.clear();
         self.running = None;
@@ -271,6 +283,37 @@ impl Task {
         self.turns = 0;
         self.status = Status::Thinking;
         true
+    }
+
+    /// Shorten long tool results from before the last question, so a long
+    /// conversation stays within the model's room; the last question's are
+    /// kept for follow-ups about the same page.
+    fn leave_out_old_results(&mut self) {
+        let Some(last_question) = self
+            .messages
+            .iter()
+            .rposition(|m| matches!(m, Message::User(_)))
+        else {
+            return;
+        };
+        let mut changed = false;
+        for message in &mut self.messages[..last_question] {
+            if let Message::Tool { content, .. } = message
+                && content.chars().count() > KEEP_OLD_RESULT_CHARS
+            {
+                *content = LEFT_OUT.to_owned();
+                changed = true;
+            }
+        }
+        // A service's record of a turn (Anthropic's thinking) only holds
+        // for the conversation exactly as it was; send the turns plainly.
+        if changed {
+            for message in &mut self.messages {
+                if let Message::Assistant { raw, .. } = message {
+                    raw.clear();
+                }
+            }
+        }
     }
 
     /// Carry on a saved conversation (see [`crate::history`]) as task `id`
@@ -831,6 +874,78 @@ mod tests {
         let json = task.to_json();
         assert_eq!(json["earlier"][0]["question"], "what is this?");
         assert_eq!(json["question"], "who made it?");
+    }
+
+    #[test]
+    fn long_results_are_left_out_two_questions_on() {
+        let mut task = task();
+        // One question that reads a long page, then answers.
+        let ask_and_read = |task: &mut Task, n: u32| {
+            task.advance();
+            task.model_replied(Reply {
+                text: String::new(),
+                calls: vec![call(&format!("c{n}"), "read_page")],
+                raw: format!("[{{\"type\":\"thinking\",\"signature\":\"s{n}\"}}]"),
+            });
+            task.advance();
+            task.step_started("Reading".into());
+            task.tool_finished(
+                &format!("c{n}"),
+                ToolOutcome::Done {
+                    content: format!("page {n} ").repeat(500),
+                    step: "Read".into(),
+                },
+            );
+            task.advance();
+            task.model_replied(Reply {
+                text: format!("Answer {n}."),
+                calls: vec![],
+                raw: String::new(),
+            });
+        };
+        ask_and_read(&mut task, 1);
+        assert!(task.follow_up("and this?", &Context::default()));
+        // The last question's page stays for follow-ups about it.
+        let Next::Model(messages) = task.advance() else {
+            panic!("expected a model call");
+        };
+        assert!(
+            messages.iter().any(
+                |m| matches!(m, Message::Tool { content, .. } if content.starts_with("page 1"))
+            )
+        );
+        task.model_replied(Reply {
+            text: "Same page.".into(),
+            calls: vec![],
+            raw: String::new(),
+        });
+        assert!(task.follow_up("and that tab?", &Context::default()));
+        ask_and_read(&mut task, 2);
+        assert!(task.follow_up("and now?", &Context::default()));
+        let Next::Model(messages) = task.advance() else {
+            panic!("expected a model call");
+        };
+        let results: Vec<&str> = messages
+            .iter()
+            .filter_map(|m| match m {
+                Message::Tool { content, .. } => Some(content.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(results[0], LEFT_OUT);
+        assert!(results[1].starts_with("page 2"));
+        // Thinking only holds for the conversation as it was: the turn
+        // before the first page was left out is sent plainly, the one made
+        // after it is kept.
+        let raws: Vec<&str> = messages
+            .iter()
+            .filter_map(|m| match m {
+                Message::Assistant { raw, .. } if !raw.is_empty() => Some(raw.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(raws.len(), 1);
+        assert!(raws[0].contains("s2"));
     }
 
     #[test]

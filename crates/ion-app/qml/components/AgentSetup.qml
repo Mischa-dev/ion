@@ -243,7 +243,9 @@ Popup {
         // The service's address: only asked for when it isn't known.
         ColumnLayout {
             Layout.fillWidth: true
-            visible: root.preset !== null && (root.preset.id === "custom" || root.preset.local)
+            // Also when it isn't the service's usual one (a gateway).
+            visible: root.preset !== null && (root.preset.id === "custom" || root.preset.local
+                || baseField.text.replace(/\/+$/, "") !== root.preset.baseUrl)
             spacing: Theme.spacing / 2
             Label { text: qsTr("Address, up to and including /v1") }
             IonTextField {
@@ -268,6 +270,17 @@ Popup {
                         : root.editingSaved && root.keySource === "environment" ? qsTr("API key: from %1. Paste one to keep it %2 instead.").arg(root.setup.keyEnv).arg(root.savedIn)
                         : root.preset.id === "custom" ? qsTr("API key, if the service needs one")
                         : qsTr("API key, %1").arg(root.savedIn)
+                }
+                Text {
+                    visible: root.editingSaved && root.keySource === "keyring"
+                    text: qsTr("Forget it")
+                    color: Theme.accent
+                    font.pixelSize: Theme.fontSize - 1
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Agent.forgetKey()
+                    }
                 }
                 Text {
                     visible: root.preset !== null && root.preset.keyPage.length > 0 && root.preset.needsKey

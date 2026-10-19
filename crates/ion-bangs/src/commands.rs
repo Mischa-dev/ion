@@ -331,6 +331,12 @@ pub const COMMANDS: &[Command] = &[
         &[],
     ),
     command(
+        "compare-tabs",
+        "Compare open tabs with Ion Agent",
+        "ai assistant tabs difference versus summary",
+        &[],
+    ),
+    command(
         "set-up-agent",
         "Set up Ion Agent",
         "ai assistant model api key claude openai ollama provider",

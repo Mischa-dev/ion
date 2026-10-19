@@ -24,7 +24,7 @@ pub fn section(_: &Context) -> Section {
                             button: "Set up Ion Agent".into(),
                         },
                     )
-                    .help("Pick Claude, OpenAI, OpenRouter, Ollama or another service, paste a key and choose a model.")
+                    .help("Pick Claude, OpenAI, OpenRouter, Ollama or another service, paste a key and choose a model. A saved key can be forgotten there too.")
                     .keywords("api key claude openai ollama provider keyring"),
                 ],
             ),
