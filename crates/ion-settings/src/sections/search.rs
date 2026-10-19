@@ -22,7 +22,10 @@ pub fn section(_: &Context) -> Section {
                 ("search.engine".into(), Value::String(name.into())),
                 ("search.template".into(), Value::String(template.into())),
                 // A built-in engine brings its own suggestions.
-                ("search.suggestTemplate".into(), Value::String(String::new())),
+                (
+                    "search.suggestTemplate".into(),
+                    Value::String(String::new()),
+                ),
             ],
         })
         .collect();
