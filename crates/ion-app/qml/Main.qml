@@ -134,6 +134,9 @@ ApplicationWindow {
             draggedOutRow = -1
             return
         }
+        // Essentials never join a split, so they get no drop hint either.
+        if (Tabs.pinnedAt(index) === 2)
+            return
         if (draggedOutRow < 0) {
             draggedOutRow = index
             const previous = previousTab()
@@ -156,9 +159,12 @@ ApplicationWindow {
                 Tabs.activate(index)
             return
         }
-        // A full split view (four panes) takes no more; the page stays put.
-        if (Tabs.splitTabs(Tabs.currentIndex, index) < 0)
+        // A full split view (four panes) takes no more, and an Essential joins
+        // none; the dragged tab stays current as it was before the drag.
+        if (Tabs.splitTabs(Tabs.currentIndex, index) < 0) {
+            Tabs.activate(index)
             return
+        }
         // Next to the current pane, on the side the hint showed; a tab already
         // in the split moves there too.
         Tabs.placePane(index, Tabs.currentIndex, side === "right" || side === "bottom")
