@@ -207,7 +207,7 @@ WebEngineView {
     readonly property bool snapshots: { Config.revision; return Config.value("ui.tabPreviews") !== false }
     onSnapshotsChanged: if (!snapshots) { snapshot = ""; snapshotResult = null }
     function takeSnapshot() {
-        if (!snapshots || !visible || width <= 0 || height <= 0 || loadError.visible)
+        if (!snapshots || !visible || width <= 0 || height <= 0 || loadError.item?.visible)
             return
         grabToImage(result => {
             snapshotResult = result
