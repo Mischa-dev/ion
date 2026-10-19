@@ -127,10 +127,13 @@ pub fn suggest(palette: &Palette, input: &str, sources: &Sources) -> Vec<Item> {
 
     let mut pages = pages(query, sources);
     // The address Enter opens, when it's a known page, reads as that page.
+    // An open tab keeps its own row, so it can still be switched to.
     if let Some(heading) = rows.iter_mut().find(|row| row.kind == Kind::Open)
         && let Action::Open(url) = &heading.action
         && let Some(at) = pages.iter().position(|page| {
-            normalize(&page.subtitle) == normalize(url) && page.title != page.subtitle
+            page.kind != Kind::Tab
+                && normalize(&page.subtitle) == normalize(url)
+                && page.title != page.subtitle
         })
     {
         let page = pages.remove(at);
@@ -604,6 +607,12 @@ mod tests {
                 .filter(|i| i.title == "Rust Programming Language")
                 .count(),
             1
+        );
+        // Typing an open tab's address still offers to switch to it.
+        assert!(
+            run(&w, "rust-lang.org")
+                .iter()
+                .any(|i| i.action == Action::SwitchTab(1))
         );
         // The current tab isn't suggested.
         assert!(
