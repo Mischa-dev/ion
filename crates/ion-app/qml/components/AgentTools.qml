@@ -214,7 +214,7 @@ QtObject {
         const fail = error => Agent.toolResult(task, call, false, JSON.stringify({ error: error }))
         const ok = payload => Agent.toolResult(task, call, true, JSON.stringify(payload))
         const view = viewForTab(tab)
-        if (!view && tool !== "list_tabs" && tool !== "open_tab") {
+        if (!view && tool !== "list_tabs" && tool !== "open_tab" && tool !== "read_tabs") {
             fail(qsTr("the tab was closed"))
             return
         }
@@ -257,9 +257,45 @@ QtObject {
         }
         case "list_tabs": {
             const list = []
-            for (let i = 0; i < Tabs.count; ++i)
-                list.push({ title: Tabs.titleAt(i), url: Tabs.urlAt(i) })
+            for (let i = 0; i < Tabs.count; ++i) {
+                const tabView = views.itemAt(i)
+                if (tabView)
+                    list.push({ tabId: tabView.tabId, title: Tabs.titleAt(i), url: Tabs.urlAt(i), current: i === Tabs.currentIndex })
+            }
             ok({ tabs: list })
+            break
+        }
+        case "read_tabs": {
+            // Every allowed tab at once; the answer goes when all are in.
+            const wanted = details.tabs || []
+            const pages = [], failed = []
+            let left = wanted.length
+            const done = () => {
+                if (--left === 0)
+                    ok({ pages: pages, failed: failed })
+            }
+            if (left === 0) {
+                fail(qsTr("no tab was allowed"))
+                break
+            }
+            for (const id of wanted) {
+                const tabView = viewForTab(id)
+                if (!tabView) {
+                    failed.push({ tab: id, error: qsTr("the tab was closed") })
+                    done()
+                    continue
+                }
+                const url = tabView.url.toString()
+                tabView.runJavaScript(readPageScript, WebEngineScript.ApplicationWorld, result => {
+                    let page = null
+                    try { page = JSON.parse(result) } catch (e) {}
+                    if (page)
+                        pages.push({ tab: id, url: url, title: page.title, text: page.text })
+                    else
+                        failed.push({ tab: id, error: qsTr("the page couldn't be read") })
+                    done()
+                })
+            }
             break
         }
         case "click":
@@ -301,7 +337,20 @@ QtObject {
                 const url = view ? view.url.toString() : ""
                 // Remember what to run once the person allows it.
                 tools.waiting[task + ":" + call] = { tool: tool, tab: tab }
-                if (Agent.authorize(task, call, url) === "allow")
+                let verdict
+                if (tool === "read_tabs") {
+                    // Each tab it names is checked on its own.
+                    const open = []
+                    for (let i = 0; i < tools.views.count; ++i) {
+                        const tabView = tools.views.itemAt(i)
+                        if (tabView)
+                            open.push({ tab: tabView.tabId, url: tabView.url.toString() })
+                    }
+                    verdict = Agent.authorizeTabs(task, call, JSON.stringify(open))
+                } else {
+                    verdict = Agent.authorize(task, call, url)
+                }
+                if (verdict === "allow")
                     tools.start(task, call)
             }
             function onToolApproved(task, call) {

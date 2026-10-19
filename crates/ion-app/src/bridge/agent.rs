@@ -92,9 +92,22 @@ pub mod qobject {
         #[qinvokable]
         fn authorize(self: Pin<&mut Agent>, task: i32, call: &QString, url: &QString) -> QString;
 
+        /// Like `authorize`, for a read_tabs call: `tabs` is JSON, `[{tab,
+        /// url}]` for every open tab, and each tab it names is checked on
+        /// its own, with one question for all the ones that ask.
+        #[qinvokable]
+        #[cxx_name = "authorizeTabs"]
+        fn authorize_tabs(
+            self: Pin<&mut Agent>,
+            task: i32,
+            call: &QString,
+            tabs: &QString,
+        ) -> QString;
+
         /// What an allowed call does, for the code that runs it: `{tool,
-        /// element, text, url, after, allowSubmit}`, where `after` is the
-        /// tab a new background tab goes after.
+        /// element, text, url, after, allowSubmit, tabs}`, where `after` is
+        /// the tab a new background tab goes after and `tabs` the ones
+        /// read_tabs may read.
         #[qinvokable]
         #[cxx_name = "callJson"]
         fn call_json(self: &Agent, task: i32, call: &QString) -> QString;
@@ -122,8 +135,9 @@ pub mod qobject {
         fn answer(self: Pin<&mut Agent>, task: i32, choice: &QString);
 
         /// A tool finished. `payload` is JSON: `{url, title, text,
-        /// elements}` for read_page, `{tabs: [{title, url}]}` for
-        /// list_tabs, `{url, title}` for go_to, `{tabId, url, title}` for
+        /// elements}` for read_page, `{tabs: [{tabId, title, url,
+        /// current}]}` for list_tabs, `{pages: [{tab, url, title, text}],
+        /// failed: [{tab, error}]}` for read_tabs, `{url, title}` for go_to, `{tabId, url, title}` for
         /// open_tab, `{}` for click and fill, or
         /// `{error}` when `ok` is false.
         #[qinvokable]
@@ -280,16 +294,27 @@ use ion_agent::model::Model;
 use ion_agent::provider::{self, Kind};
 use ion_agent::task::Context;
 use ion_agent::tool::{
-    Element, Plan, PlanError, Use, page_result, plan, tab_argument, tabs_result,
+    Element, Plan, PlanError, TabInfo, TabPage, Use, batch_prompt, page_result, plan, tab_argument,
+    tab_pages_result, tabs_result,
 };
 use ion_agent::{Next, Reply, Status, Task, Tool, ToolCall, ToolOutcome, invoke, keys};
 use ion_safety::{Choice, Prompt, Verdict};
 use serde_json::{Value, json};
 
-/// A tool call waiting for the person's answer.
+/// A tool call waiting for the person's answer: one prompt, or one per
+/// site for read_tabs, asked as one question.
 struct Pending {
     call: String,
-    prompt: Prompt,
+    /// The prompts, with the tabs they are about.
+    prompts: Vec<(u64, Prompt)>,
+}
+
+/// What a read_tabs call may read, as its tabs are checked.
+#[derive(Default)]
+struct Reading {
+    allowed: Vec<u64>,
+    /// Tabs it may not read, and why: "you said no".
+    skipped: Vec<(u64, String)>,
 }
 
 struct Running {
@@ -302,6 +327,7 @@ struct Running {
     /// The checked call, once `authorize` has read it.
     plan: Option<Plan>,
     pending: Option<Pending>,
+    reading: Option<Reading>,
     /// The call waiting for the person to hand the tab back.
     paused: Option<String>,
     /// What the last read of each tab's page numbered.
@@ -329,6 +355,7 @@ impl Running {
             call: None,
             plan: None,
             pending: None,
+            reading: None,
             paused: None,
             elements: BTreeMap::new(),
             opened: Vec::new(),
@@ -548,16 +575,37 @@ impl qobject::Agent {
             };
             return QString::from(Value::from(rows).to_string().as_str());
         }
+        let quick = |agent: &str, typed: &str, name: &str| -> Vec<Value> {
+            invoke::quick_asks(typed)
+                .into_iter()
+                .map(|q| {
+                    json!({
+                        "kind": "agent",
+                        "title": q.title,
+                        "subtitle": format!("@{agent} · {name}"),
+                        "hint": "Enter",
+                        "action": "agent",
+                        "value": format!("@{agent} {}", q.question),
+                    })
+                })
+                .collect()
+        };
         let rows = if let Some(ask) = invoke::parse(&input) {
             let name = ion_safety::global().policy().display_name(&ask.agent);
-            vec![json!({
+            let mut rows = vec![json!({
                 "kind": "agent",
                 "title": format!("Ask {name}"),
                 "subtitle": ask.question,
                 "hint": "Enter",
                 "action": "agent",
                 "value": input,
-            })]
+            })];
+            rows.extend(quick(&ask.agent, &ask.question, &name));
+            rows
+        } else if let Some((agent, "")) = invoke::addressed(&input) {
+            // Nothing asked yet: the common asks, a keypress away.
+            let name = ion_safety::global().policy().display_name(agent);
+            quick(agent, "", &name)
         } else if let Some(prefix) = invoke::agent_prefix(&input) {
             askable()
                 .into_iter()
@@ -806,14 +854,20 @@ impl qobject::Agent {
         );
         value["prompt"] = match &running.pending {
             Some(pending) => {
-                let choices: Vec<Value> = pending
-                    .prompt
-                    .choices
+                let name = ion_safety::global()
+                    .policy()
+                    .display_name(&running.task.agent);
+                let prompts: Vec<&Prompt> = pending.prompts.iter().map(|p| &p.1).collect();
+                let (text, choices) = batch_prompt(&name, &prompts);
+                let choices: Vec<Value> = choices
                     .iter()
                     .map(|(choice, label)| json!({ "id": choice.id(), "label": label }))
                     .collect();
-                let detail = running.plan.as_ref().map_or("", |p| p.detail.as_str());
-                json!({ "text": pending.prompt.text, "detail": detail, "choices": choices })
+                let detail = match running.plan.as_ref() {
+                    Some(plan) if pending.prompts.len() == 1 => plan.detail.clone(),
+                    _ => format!("Read {} tabs, without changing them", pending.prompts.len()),
+                };
+                json!({ "text": text, "detail": detail, "choices": choices })
             }
             None => Value::Null,
         };
@@ -918,7 +972,10 @@ impl qobject::Agent {
                     self.as_mut().rust_mut().tasks.get_mut(&task),
                 ) {
                     running.task.step_started(step);
-                    running.pending = Some(Pending { call, prompt });
+                    running.pending = Some(Pending {
+                        call,
+                        prompts: vec![(tab, prompt)],
+                    });
                 }
                 self.bump(task);
                 QString::from("ask")
@@ -928,6 +985,145 @@ impl qobject::Agent {
                 self.finish_call(task, &call, ToolOutcome::Denied { why });
                 QString::from("deny")
             }
+        }
+    }
+
+    fn authorize_tabs(
+        mut self: Pin<&mut Self>,
+        task: i32,
+        call: &QString,
+        tabs: &QString,
+    ) -> QString {
+        let call = call.to_string();
+        let Some((c, tool, _, agent)) = self.current_call(task, &call) else {
+            return QString::from("deny");
+        };
+        let wanted = match Use::parse(tool, &c.arguments) {
+            Ok(Use::ReadTabs { tabs }) => tabs,
+            Ok(_) => return QString::from("deny"),
+            Err(error) => {
+                self.finish_call(task, &call, ToolOutcome::Failed { error });
+                return QString::from("deny");
+            }
+        };
+        let open: Value = serde_json::from_str(&tabs.to_string()).unwrap_or(Value::Null);
+        let url_of = |tab: u64| {
+            open.as_array()?
+                .iter()
+                .find(|t| t["tab"].as_u64() == Some(tab))?["url"]
+                .as_str()
+                .map(str::to_owned)
+        };
+        // Each tab is its own request: the sites already allowed are read,
+        // the ones that ask are asked about together.
+        let mut reading = Reading::default();
+        let mut prompts = Vec::new();
+        for &tab in &wanted {
+            let Some(url) = url_of(tab) else {
+                let why = "there is no such tab; list_tabs gives their numbers".to_owned();
+                reading.skipped.push((tab, why));
+                continue;
+            };
+            let request = match plan(&agent, Use::ReadPage, tab, &url, &[]) {
+                Ok(planned) => planned.request,
+                Err(PlanError::Mistake(why)) => {
+                    reading.skipped.push((tab, why));
+                    continue;
+                }
+                Err(PlanError::NoAddress) => {
+                    let why = "its page has no address an agent can use".to_owned();
+                    reading.skipped.push((tab, why));
+                    continue;
+                }
+            };
+            let outcome = ion_safety::global().request_agent(request);
+            match (outcome.verdict(), outcome.prompt) {
+                (Verdict::Allow, _) => reading.allowed.push(tab),
+                (Verdict::Ask, Some(prompt)) => prompts.push((tab, prompt)),
+                (Verdict::Ask, None) => reading.skipped.push((tab, "it wasn't allowed".to_owned())),
+                (Verdict::Deny, _) => reading
+                    .skipped
+                    .push((tab, lowercase_first(&outcome.decision.reason.to_string()))),
+            }
+        }
+        let count = wanted.len();
+        let step = if count == 1 {
+            "Reading a tab".to_owned()
+        } else {
+            format!("Reading {count} tabs")
+        };
+        let planned = Plan {
+            call: Use::ReadTabs { tabs: wanted },
+            request: ion_safety::AgentRequest {
+                agent,
+                action: ion_safety::Action::ReadPage,
+                site: None,
+                tab: None,
+            },
+            element: None,
+            step: step.clone(),
+            detail: format!("Read {count} of your tabs, without changing them"),
+            sensitive: false,
+        };
+        if prompts.is_empty() && reading.allowed.is_empty() {
+            let why = format!(
+                "none of them can be read: {}",
+                skipped_list(&reading.skipped)
+            );
+            self.finish_call(task, &call, ToolOutcome::Denied { why });
+            return QString::from("deny");
+        }
+        let asks = !prompts.is_empty();
+        if let Some(running) = self.as_mut().rust_mut().tasks.get_mut(&task) {
+            running.task.step_started(step);
+            running.plan = Some(planned);
+            running.reading = Some(reading);
+            if asks {
+                running.pending = Some(Pending { call, prompts });
+            }
+        }
+        self.bump(task);
+        QString::from(if asks { "ask" } else { "allow" })
+    }
+
+    /// The person answered the one question for a read_tabs call's sites.
+    fn answer_tabs(mut self: Pin<&mut Self>, task: i32, pending: Pending, choice: Choice) {
+        let mut allowed = Vec::new();
+        let mut skipped = Vec::new();
+        for (tab, prompt) in &pending.prompts {
+            let verdict = ion_safety::global()
+                .answer(prompt, choice)
+                .unwrap_or(Verdict::Deny);
+            if verdict == Verdict::Allow {
+                allowed.push(*tab);
+            } else if choice == Choice::Deny {
+                skipped.push((*tab, "you said no".to_owned()));
+            } else {
+                skipped.push((*tab, "agents were stopped or the tab changed".to_owned()));
+            }
+        }
+        let mut any = false;
+        if let Some(reading) = self
+            .as_mut()
+            .rust_mut()
+            .tasks
+            .get_mut(&task)
+            .and_then(|r| r.reading.as_mut())
+        {
+            reading.allowed.extend(allowed);
+            reading.skipped.extend(skipped);
+            any = !reading.allowed.is_empty();
+        }
+        if any {
+            self.as_mut().bump(task);
+            self.tool_approved(task, &QString::from(pending.call.as_str()));
+        } else {
+            let why = if choice == Choice::Deny {
+                "you said no".to_owned()
+            } else {
+                "agents were stopped or the tabs changed".to_owned()
+            };
+            self.finish_call(task, &pending.call, ToolOutcome::Denied { why });
         }
     }
 
@@ -946,8 +1142,9 @@ impl qobject::Agent {
             Use::Click { element } => (Some(*element), None, None),
             Use::Fill { element, text } => (Some(*element), Some(text.as_str()), None),
             Use::GoTo { url } | Use::OpenTab { url } => (None, None, Some(url.as_str())),
-            Use::ReadPage | Use::ListTabs => (None, None, None),
+            Use::ReadPage | Use::ListTabs | Use::ReadTabs { .. } => (None, None, None),
         };
+        let tabs = running.reading.as_ref().map(|r| r.allowed.clone());
         let value = json!({
             "tool": tool.name(),
             "element": element,
@@ -959,6 +1156,7 @@ impl qobject::Agent {
             // A click was approved as a click or as sending the form; the
             // page script refuses one that would do more than that.
             "allowSubmit": plan.request.action == ion_safety::Action::Submit,
+            "tabs": tabs,
         });
         QString::from(value.to_string().as_str())
     }
@@ -976,8 +1174,15 @@ impl qobject::Agent {
         else {
             return;
         };
+        if self.tasks.get(&task).is_some_and(|r| r.reading.is_some()) {
+            self.answer_tabs(task, pending, choice);
+            return;
+        }
+        let Some((_, prompt)) = pending.prompts.first() else {
+            return;
+        };
         let verdict = ion_safety::global()
-            .answer(&pending.prompt, choice)
+            .answer(prompt, choice)
             .unwrap_or(Verdict::Deny);
         if verdict == Verdict::Allow {
             self.as_mut().bump(task);
@@ -1011,6 +1216,8 @@ impl qobject::Agent {
         let mut new_elements = None;
         let mut opened_tab = None;
         let mut logged_url = (planned.request.site.is_some()).then(|| text("url"));
+        // Tabs read by read_tabs, each logged as its own read.
+        let mut read_tabs: Option<Vec<(u64, String)>> = None;
         let outcome = if !ok {
             ToolOutcome::Failed {
                 error: text("error"),
@@ -1034,15 +1241,17 @@ impl qobject::Agent {
                     }
                 }
                 Use::ListTabs => {
-                    let tabs: Vec<(String, String)> = payload["tabs"]
+                    let tabs: Vec<TabInfo> = payload["tabs"]
                         .as_array()
                         .map(|tabs| {
                             tabs.iter()
-                                .map(|t| {
-                                    (
-                                        t["title"].as_str().unwrap_or_default().to_owned(),
-                                        t["url"].as_str().unwrap_or_default().to_owned(),
-                                    )
+                                .filter_map(|t| {
+                                    Some(TabInfo {
+                                        id: t["tabId"].as_u64()?,
+                                        title: t["title"].as_str().unwrap_or_default().to_owned(),
+                                        url: t["url"].as_str().unwrap_or_default().to_owned(),
+                                        current: t["current"].as_bool().unwrap_or(false),
+                                    })
                                 })
                                 .collect()
                         })
@@ -1050,6 +1259,57 @@ impl qobject::Agent {
                     ToolOutcome::Done {
                         content: tabs_result(&tabs),
                         step: planned.done_step(None),
+                    }
+                }
+                Use::ReadTabs { .. } => {
+                    let reading = self.tasks.get(&task).and_then(|r| r.reading.as_ref());
+                    let allowed = reading.map(|r| r.allowed.clone()).unwrap_or_default();
+                    let mut skipped = reading.map(|r| r.skipped.clone()).unwrap_or_default();
+                    // Only the tabs that were allowed, whatever came back.
+                    let mut pages: Vec<TabPage> = payload["pages"]
+                        .as_array()
+                        .map(|pages| {
+                            pages
+                                .iter()
+                                .filter_map(|p| {
+                                    let tab = p["tab"].as_u64()?;
+                                    allowed.contains(&tab).then(|| TabPage {
+                                        tab,
+                                        url: p["url"].as_str().unwrap_or_default().to_owned(),
+                                        title: p["title"].as_str().unwrap_or_default().to_owned(),
+                                        text: p["text"].as_str().unwrap_or_default().to_owned(),
+                                    })
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    // In the order asked for, not the order they answered.
+                    if let Use::ReadTabs { tabs } = &planned.call {
+                        pages.sort_by_key(|p| tabs.iter().position(|t| *t == p.tab));
+                    }
+                    for failed in payload["failed"].as_array().into_iter().flatten() {
+                        if let Some(tab) = failed["tab"].as_u64() {
+                            let why = failed["error"].as_str().unwrap_or("it couldn't be read");
+                            skipped.push((tab, why.to_owned()));
+                        }
+                    }
+                    read_tabs = Some(pages.iter().map(|p| (p.tab, p.url.clone())).collect());
+                    let step = match pages.as_slice() {
+                        [one] => format!(
+                            "Read {}",
+                            host_of(&one.url).unwrap_or_else(|| "a tab".to_owned())
+                        ),
+                        _ => format!("Read {} tabs", pages.len()),
+                    };
+                    if pages.is_empty() {
+                        ToolOutcome::Failed {
+                            error: format!("no tab could be read: {}", skipped_list(&skipped)),
+                        }
+                    } else {
+                        ToolOutcome::Done {
+                            content: tab_pages_result(&pages, &skipped),
+                            step,
+                        }
                     }
                 }
                 Use::Click { element } => ToolOutcome::Done {
@@ -1094,16 +1354,32 @@ impl qobject::Agent {
                 }
             }
         };
-        ion_safety::global().log_action(ion_safety::ActionRecord {
-            agent,
-            action: planned.request.action.clone(),
-            url: logged_url,
-            tab: Some(tab),
-            task: Some(task.to_string()),
-            ok,
-            detail: planned.detail.clone(),
-            sensitive: planned.sensitive,
-        });
+        match read_tabs {
+            Some(pages) => {
+                for (read, url) in pages {
+                    ion_safety::global().log_action(ion_safety::ActionRecord {
+                        agent: agent.clone(),
+                        action: ion_safety::Action::ReadPage,
+                        url: Some(url),
+                        tab: Some(read),
+                        task: Some(task.to_string()),
+                        ok,
+                        detail: "Read the page".to_owned(),
+                        sensitive: false,
+                    });
+                }
+            }
+            None => ion_safety::global().log_action(ion_safety::ActionRecord {
+                agent,
+                action: planned.request.action.clone(),
+                url: logged_url,
+                tab: Some(tab),
+                task: Some(task.to_string()),
+                ok,
+                detail: planned.detail.clone(),
+                sensitive: planned.sensitive,
+            }),
+        }
         if let Some(running) = self.as_mut().rust_mut().tasks.get_mut(&task) {
             if let Some(elements) = new_elements {
                 running.elements.insert(tab, elements);
@@ -1120,6 +1396,7 @@ impl qobject::Agent {
             running.call = None;
             running.plan = None;
             running.pending = None;
+            running.reading = None;
             running.paused = None;
             running.task.tool_finished(call, outcome);
         }
@@ -1183,6 +1460,7 @@ impl qobject::Agent {
             running.call = None;
             running.plan = None;
             running.pending = None;
+            running.reading = None;
             running.paused = None;
         }
         self.bump(task);
@@ -1511,4 +1789,13 @@ fn lowercase_first(text: &str) -> String {
         Some(first) => first.to_lowercase().chain(chars).collect(),
         None => String::new(),
     }
+}
+
+/// "tab 3: you said no; tab 5: …", for saying why tabs weren't read.
+fn skipped_list(skipped: &[(u64, String)]) -> String {
+    skipped
+        .iter()
+        .map(|(tab, why)| format!("tab {tab}: {why}"))
+        .collect::<Vec<_>>()
+        .join("; ")
 }

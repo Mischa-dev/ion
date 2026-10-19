@@ -19,7 +19,7 @@ Item {
     required property var shortcutEditor
     required property var downloads
 
-    readonly property var agentCommands: ["ask-agent", "summarize-page", "agent-sidebar", "agent-activity"]
+    readonly property var agentCommands: ["ask-agent", "summarize-page", "compare-tabs", "agent-sidebar", "agent-activity"]
 
     // Whether `id` can run right now: agent commands need agents turned on.
     function available(id) {
@@ -89,6 +89,7 @@ Item {
         case "resume-agents": Safety.resumeAgents(); break
         case "ask-agent": browser.startAgentQuestion(); break
         case "summarize-page": browser.askAgent("@ion Summarize this page."); break
+        case "compare-tabs": browser.askAgent("@ion Compare my open tabs: what each offers and how they differ."); break
         case "set-up-agent": browser.showAgentSetup(); break
         case "agent-sidebar": browser.toggleAgentSidebar(); break
         case "agent-activity": browser.showAgentActivity(); break
