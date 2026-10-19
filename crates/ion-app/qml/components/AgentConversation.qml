@@ -456,6 +456,15 @@ FocusScope {
                     font.pixelSize: Theme.fontSize + 1
                 }
 
+                // Not set up yet: the way there, right where it failed.
+                DialogButton {
+                    visible: conversation.task !== null && conversation.task.needsSetup === true
+                    text: qsTr("Set up Ion Agent")
+                    primary: true
+                    // The question goes again once it is set up.
+                    onClicked: Agent.setupRequested(conversation.task.agent === "ion" ? "@ion " + conversation.task.question : "")
+                }
+
                 Text {
                     Layout.fillWidth: true
                     visible: text.length > 0

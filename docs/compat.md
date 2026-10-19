@@ -13,6 +13,10 @@ manual.
 | Security keys and passkeys | `crates/ion-basics/src/webauthn.rs`, `bridge/webauthn.rs`, `WebAuthDialog.qml` |
 | Crashed tabs | `ion_core::load_error::crashed`, `LoadErrorPage.qml` |
 | Restore after a crash | `SessionStore::begin_run`/`end_run` in `ion-session`, `CrashRestoreNotice.qml` |
+| Widevine (Netflix, Spotify) | `packages.ion-widevine` in `flake.nix`, `nix/package.nix`, `ion-platform::chromium` |
+| Screen sharing on Wayland | `ion-platform::chromium` (PipeWire capturer), `ScreenSharePicker.qml` |
+| Desktop notifications | `cpp/notifications.{h,cpp}`, `bridge/notifications.rs`, `NotificationToasts.qml` |
+| Portal file pickers | `ion-platform::desktop`, `bridge/platform.rs` |
 
 ## User agent
 
@@ -36,6 +40,15 @@ zoommtg: links". Approvals live in `<data dir>/protocols.json`. Sites that ask
 to handle a scheme (`navigator.registerProtocolHandler`, such as Gmail for
 `mailto:`) get a prompt too; once allowed, those links open in that site.
 
+## Popups and files
+
+Pages a script opened (a "Sign in with Google" or PayPal popup) open as tabs
+next to their opener; when the page closes itself with `window.close()`, the
+tab goes and the opener comes back. Sites that want to keep using a file or
+folder picked for them (the File System Access API: vscode.dev "Open
+Folder", Photopea) ask first: "Let vscode.dev see and change the files in
+~/code?".
+
 ## Crashes
 
 A tab whose page process dies shows Ion's page ("youtube.com stopped working")
@@ -44,6 +57,33 @@ with Try again; other tabs keep going. Ion marks itself running in
 is still there at the next start, the last run crashed: with
 `general.restoreSession` on (the default) the tabs come back as usual; with it
 off Ion offers "Restore tabs" from a copy of that run's session.
+
+## DRM video (Netflix, Spotify, Disney+)
+
+These need Google's Widevine module, which is unfree, so the default `ion`
+package doesn't ship it. `packages.ion-widevine` (Linux) does: its wrapper sets
+`ION_WIDEVINE_PATH`, and Ion passes it to QtWebEngine as `--widevine-path`.
+Install it with `nix profile install github:Mischa-dev/ion#ion-widevine`
+(replacing `ion`), or set `programs.ion.widevine = true;` in home-manager.
+Like every Linux Chromium, Netflix plays at up to 720p in the browser.
+
+## Calls and screen sharing
+
+On Wayland the screen is only reachable through xdg-desktop-portal and
+PipeWire. Ion turns on Chromium's `WebRTCPipeWireCapturer`; sharing opens the
+desktop's own picker (from xdg-desktop-portal-gnome, -kde, -wlr or -hyprland)
+after Ion's prompt. Camera and microphone ask through Ion's permission prompt.
+
+## Notifications and file pickers
+
+Site notifications go to the desktop's notification server
+(org.freedesktop.Notifications, so DMS, mako, dunst, GNOME and KDE all show
+them) with the site's icon, and clicking one brings Ion forward and tells the
+page. Without a server they stay as Ion's toasts.
+
+Ion sets `QT_QPA_PLATFORMTHEME=xdgdesktopportal` on Linux unless a theme is
+already set, so "Upload" and "Save as" use the desktop's file picker through
+the portal. Without a portal Qt's own dialog shows instead.
 
 ## Checklist on a real machine
 
@@ -58,6 +98,18 @@ off Ion offers "Restore tabs" from a copy of that run's session.
    in. The PIN dialog and "Touch your security key" show in Ion's style. If
    the key is never found on NixOS, add `services.udev.packages = [
    pkgs.libfido2 ];` so the logged-in user can open it.
-6. Crash: open `chrome://crash` in a tab; the tab shows the "stopped working"
+6. Netflix and Spotify with `ion-widevine`: `chrome://media-internals`
+   shows a `com.widevine.alpha` CDM, Netflix plays, and Spotify's web player
+   doesn't ask to enable protected content.
+7. Google Meet or Discord call: camera and mic prompts, then share a screen
+   and a single window; the desktop's portal picker shows, and the other side
+   sees the share.
+8. Discord or Gmail notification while Ion is in the background: it shows as
+   a desktop notification, and clicking it brings Ion forward on that chat.
+9. An "Upload" button opens the desktop's file picker (GTK or KDE look).
+   On vscode.dev, Open Folder asks to see and change the files, then works.
+   "Sign in with Google" on a third-party site opens a tab that closes
+   itself after signing in.
+10. Crash: open `chrome://crash` in a tab; the tab shows the "stopped working"
    page and Try again reloads. `pkill -9 ion`, start Ion again: the tabs are
    back (or offered, with `restoreSession = false`).
