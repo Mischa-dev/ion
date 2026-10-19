@@ -21,6 +21,8 @@ nix/
   packaging-check.nix     validates desktop file, AppStream data, Ion.app
 crates/
   ion-core/               shared core: app constants, URL-bar input resolution, search engines
+  ion-keyring/            named secrets in the OS keyring (docs/PRIVACY.md)
+  ion-passwords/          the password manager's logic and page script
   ion-basics/             downloads, per-site zoom, permission prompts and panel, page dialogs, find,
                           screenshots, context menu, new-tab tiles, security key dialog text
   ion-platform/           Chromium switches, one-instance-per-profile hand-off
@@ -33,7 +35,8 @@ crates/
   ion-reader/             reader mode: article extraction and the themed reader page
   ion-safety/             permissions and agent trust: decisions, prompts, activity log
   ion-agent/              Ion Agent's runtime: tasks, browser tools, model access
-  ion-input/              keyboard shortcuts (the keymap and its remaps)
+  ion-input/              keyboard shortcuts (the keymap and its remaps), touchpad
+                          swipe and pinch recognizers
   ion-app/                the binary (`ion`)
     build.rs              auto-discovers bridges, C++ shims and QML files
     src/main.rs           startup: QtWebEngine init, app, QML engine
@@ -134,6 +137,12 @@ from `config.toml` and offer to go back to it.
   `Keymap` singleton serves it to QML and the shortcut editor
   (`ShortcutEditor.qml`, Ctrl+/) writes remaps back to the config. Add new
   shortcuts as commands there, not as `Shortcut` items, so they can be remapped.
+- Touchpad gestures (`[gestures]`): `Gestures` (`bridge/gestures.rs`) installs
+  an event filter on the window (`cpp/gestures.cpp`) that watches touchpad
+  scrolling and pinching. Sideways scrolling past the page's edge becomes a
+  back/forward swipe (`ion_input::swipe`, drawn by `SwipeIndicator.qml`);
+  pinching zooms the page (`ion_input::pinch`) and the result is saved per
+  site like Ctrl+scroll.
   `Palette::suggest` is the URL bar's narrower version (typed entry first,
   then tabs, history and bang completions), and `ion_bangs::autofill` fills
   in addresses inline; both lists draw their rows with

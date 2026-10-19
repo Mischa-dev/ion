@@ -204,6 +204,18 @@ in
           vim = setting types.bool "Vim-style keys and link hints in pages.";
         };
 
+        gestures = {
+          swipe = setting types.bool "Swipe two fingers sideways on a touchpad to go back or forward (default true).";
+          pinch =
+            setting
+              (types.enum [
+                "zoom"
+                "magnify"
+                "off"
+              ])
+              "What a touchpad pinch does: page zoom remembered per site (default), Chromium's magnifier, or nothing.";
+        };
+
         privacy = {
           globalPrivacyControl = setting types.bool "Send the Global Privacy Control signal to sites.";
           blockThirdPartyCookies = setting types.bool "Refuse cookies from sites other than the one in the address bar.";
@@ -214,6 +226,17 @@ in
               "history"
             ]
           )) "Browsing data deleted when Ion quits.";
+          httpsOnly = setting (types.enum [
+            "upgrade"
+            "strict"
+            "off"
+          ]) "Load http pages over https: upgrade (fall back quietly), strict (ask first) or off.";
+          fingerprinting = setting types.bool "Resist fingerprinting: noise on canvas, WebGL and audio readouts, common hardware values.";
+        };
+
+        passwords = {
+          enable = setting types.bool "Offer to save passwords typed into sites.";
+          autofill = setting types.bool "Fill a site's only saved login in when its login page loads.";
         };
 
         sites = mkOption {

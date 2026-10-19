@@ -40,12 +40,16 @@ ApplicationWindow {
         light: Theme.surfaceHover
         placeholderText: Theme.textMuted
     }
-    title: currentView && currentView.title ? currentView.title + " — Ion" : "Ion"
+    // A private window or another profile says so in its title.
+    readonly property bool privateWindow: Privacy.windowKind() === "private"
+    readonly property string appTitle: Privacy.profileName().length > 0 ? "Ion — " + Privacy.profileName() : "Ion"
+    title: currentView && currentView.title ? currentView.title + " — " + appTitle : appTitle
 
     // Persistent profile: cookies, cache and storage survive restarts.
     WebEngineProfilePrototype {
         id: profilePrototype
-        storageName: "Default"
+        // "Default", a profile's own, or "" (off the record) in a private window.
+        storageName: Privacy.storageName()
         // Site permissions are decided and remembered by Ion's safety model
         // (Safety, docs/SAFETY.md), so the engine keeps none of its own.
         persistentPermissionsPolicy: WebEngineProfile.PersistentPermissionsPolicy.AskEveryTime
@@ -129,8 +133,23 @@ ApplicationWindow {
         fullScreen.toggleWindow()
     }
 
+    // A private window (a process of its own), with `target` in it if given.
+    function openPrivateWindow(target) {
+        Privacy.openPrivateWindow(target ? [target.toString()] : [])
+    }
+
+    function showProfiles() {
+        profilesDialog.show()
+    }
+
     function showImport() {
         importDialog.show()
+    }
+
+    // The password manager, its search set to `query` ("" for everything).
+    // `section` is "passwords" (the default) or "addresses".
+    function showPasswords(query, section) {
+        passwordManager.show(query || "", section || "passwords")
     }
 
     function showPalette() {
@@ -223,9 +242,10 @@ ApplicationWindow {
             extensionPaths = Extensions.paths()
             extensionPaths.forEach(path => extensionManager.loadExtension(path))
         }
-        // True when the last run crashed; its tabs are kept aside.
-        const crashed = Tabs.beginRun()
-        if (Config.value("general.restoreSession")) {
+        // True when the last run crashed; its tabs are kept aside. A private
+        // window starts empty, is never saved and leaves the record alone.
+        const crashed = !window.privateWindow && Tabs.beginRun()
+        if (Config.value("general.restoreSession") && !window.privateWindow) {
             // Restoring replaces every tab; keep any opened while waiting
             // (Ctrl+T, a URL handed over by a second launch).
             const early = []
@@ -258,8 +278,8 @@ ApplicationWindow {
         Pages.attach(window.profile)
         Privacy.apply(window.profile)
         // Again at start, in case the last quit was cut short; the rest of
-        // startup waits for it.
-        if (clearOnExit(true))
+        // startup waits for it. A private window has nothing to clear.
+        if (!window.privateWindow && clearOnExit(true))
             waitingForCacheClear = true
         else
             finishStartup()
@@ -311,7 +331,7 @@ ApplicationWindow {
         // Not before startup restores the saved session, or it would be
         // overwritten by tabs opened while waiting.
         function onSessionChanged() {
-            if (window.startupFinished)
+            if (window.startupFinished && !window.privateWindow)
                 sessionSaveTimer.restart()
         }
     }
@@ -329,6 +349,8 @@ ApplicationWindow {
         function onAboutToQuit() {
             // Before startup restores it, the tab list would overwrite the
             // saved session.
+            if (window.privateWindow)
+                return
             if (window.startupFinished)
                 Tabs.saveSession()
             Tabs.endRun()
@@ -345,10 +367,104 @@ ApplicationWindow {
 
     PlatformIntegration { window: window }
 
+    // Two-finger swipes go back and forward; pinching zooms the page.
+    Gestures {
+        id: gestures
+        area: {
+            pageArea.x; pageArea.y; pageArea.width; pageArea.height
+            return pageArea.mapToItem(null, 0, 0, pageArea.width, pageArea.height)
+        }
+        readonly property var view: window.currentView
+        canGoBack: !!view && view.canGoBack && view.scrollPosition.x <= 1
+        // scrollPosition and contentsSize are already zoomed, like width.
+        canGoForward: !!view && view.canGoForward
+            && view.scrollPosition.x + view.width >= view.contentsSize.width - 1
+        zoomFactor: view ? view.zoomFactor : 1
+        onNavigate: direction => direction === "back" ? view?.goBack() : view?.goForward()
+        // A carousel or editor under the fingers that can still scroll
+        // sideways gets the gesture instead.
+        onSwipeStarted: (gesture, x, y) => {
+            if (!view) {
+                block(gesture, false, false)
+                return
+            }
+            // A popup over the page (downloads, menus) keeps the gesture.
+            for (const item of window.Overlay.overlay?.children ?? []) {
+                if (item.visible && item.contains(item.mapFromItem(null, x, y))) {
+                    block(gesture, true, true)
+                    return
+                }
+            }
+            const point = view.mapFromItem(null, x, y)
+            view.runJavaScript(`(function check(doc, x, y) {
+                let back = false, forward = false
+                // Whether a box can still scroll either way. Right-to-left
+                // boxes count scrollLeft from the right edge, going negative.
+                const room = (e, style) => {
+                    const max = e.scrollWidth - e.clientWidth
+                    const left = style.direction === "rtl" ? max + e.scrollLeft : e.scrollLeft
+                    back = back || left > 0
+                    forward = forward || left < max - 1
+                }
+                // The innermost element, inside open shadow roots too.
+                let e = doc.elementFromPoint(x, y)
+                while (e && e.shadowRoot) {
+                    const inner = e.shadowRoot.elementFromPoint(x, y)
+                    if (!inner || inner === e)
+                        break
+                    e = inner
+                }
+                for (; e && e !== doc.body && e !== doc.documentElement;
+                        e = e.parentElement ?? e.getRootNode().host) {
+                    if (e.tagName === "IFRAME" || e.tagName === "FRAME") {
+                        // Look inside a same-origin frame; a cross-origin
+                        // one can't be seen into, so it keeps the gesture.
+                        let inner = null
+                        try { inner = e.contentDocument } catch (error) {}
+                        if (!inner)
+                            return [true, true]
+                        const box = e.getBoundingClientRect()
+                        const found = check(inner, x - box.left - e.clientLeft, y - box.top - e.clientTop)
+                        back = back || found[0]
+                        forward = forward || found[1]
+                        continue
+                    }
+                    if (e.scrollWidth - e.clientWidth <= 1)
+                        continue
+                    const style = doc.defaultView.getComputedStyle(e)
+                    if (style.overflowX === "auto" || style.overflowX === "scroll")
+                        room(e, style)
+                }
+                // A frame's own page scrolls too (the top page's doesn't
+                // count: Ion checks its edges itself).
+                const page = doc !== document && doc.scrollingElement
+                if (page && page.scrollWidth - page.clientWidth > 1)
+                    room(page, doc.defaultView.getComputedStyle(page))
+                return [back, forward]
+            })(document, ${point.x / view.zoomFactor}, ${point.y / view.zoomFactor})`,
+                WebEngineScript.ApplicationWorld, result => {
+                    // Arrives as a list, not a JS Array.
+                    const found = result && result.length === 2 ? [!!result[0], !!result[1]] : [false, false]
+                    block(gesture, found[0], found[1])
+                })
+        }
+        onZoom: (factor, done) => {
+            if (!view)
+                return
+            if (done)
+                view.setZoom(factor)
+            else
+                view.zoomFactor = factor
+        }
+        Component.onCompleted: attach(window)
+    }
+
     // Command palette (Ctrl/Cmd+K).
     CommandPalette { id: palette; browser: window }
 
     ImportDialog { id: importDialog }
+    PasswordManager { id: passwordManager }
+    ProfilesDialog { id: profilesDialog }
     ClearDataDialog { id: clearDataDialog; profile: window.profile }
     ExtensionsDialog { id: extensionsDialog; browser: window }
 
@@ -384,6 +500,8 @@ ApplicationWindow {
             agentSidebar: agentSidebar
             onBookmarkToggled: window.toggleBookmark()
             onRunCommand: id => window.runCommand(id)
+            onPasswordsRequested: query => window.showPasswords(query)
+            onProfilesRequested: window.showProfiles()
         }
     }
 
@@ -420,6 +538,7 @@ ApplicationWindow {
 
         // One web view per tab, stacked; only the current one is visible.
         Item {
+            id: pageArea
             Layout.fillWidth: true
             Layout.fillHeight: true
 
@@ -475,14 +594,15 @@ ApplicationWindow {
                             return
                         // The new-tab page has no title of its own; the strip says "New Tab".
                         Tabs.setTitle(index, showNewTabPage && Basics.isNewTabUrl(url) ? "" : title)
-                        History.updateTitle(url.toString(), title)
+                        if (!window.privateWindow)
+                            History.updateTitle(url.toString(), title)
                     }
                     onIconChanged: {
                         if (!deferred)
                             Tabs.setIcon(index, icon.toString())
                     }
                     onLoadingChanged: info => {
-                        if (info.status === WebEngineView.LoadSucceededStatus)
+                        if (info.status === WebEngineView.LoadSucceededStatus && !window.privateWindow)
                             History.recordVisit(info.url.toString(), title)
                     }
                     onNewTabRequested: request => {
@@ -505,6 +625,7 @@ ApplicationWindow {
                     }
                     onOpenInNewTab: target => window.openTab(target, false)
                     onAskAgent: input => window.askAgent(input)
+                    onManagePasswords: section => window.showPasswords(section === "addresses" ? "" : Passwords.host(url.toString()), section)
                 }
             }
         }
@@ -518,6 +639,12 @@ ApplicationWindow {
             onActivityRequested: agentActivity.show()
             onFinished: window.currentView?.forceActiveFocus()
         }
+    }
+
+    SwipeIndicator {
+        parent: pageArea
+        direction: gestures.swipeDirection
+        progress: gestures.swipeProgress
     }
 
     DownloadsPanel { id: downloads; profile: window.profile; browser: window }

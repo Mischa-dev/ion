@@ -16,6 +16,10 @@ Rectangle {
     signal bookmarkToggled()
     // A quick action picked in the address bar: an `ion_bangs::commands` id.
     signal runCommand(string id)
+    // The password manager, searching for `query`.
+    signal passwordsRequested(string query)
+    // The profiles list, from the private/profile badge.
+    signal profilesRequested()
 
     implicitHeight: Theme.urlBarHeight + Theme.spacing * 2
 
@@ -170,6 +174,11 @@ Rectangle {
             onClicked: bar.view.resetZoom()
         }
 
+        WindowBadge { onProfilesRequested: bar.profilesRequested() }
+        PasswordsButton {
+            view: bar.view
+            onManageRequested: query => bar.passwordsRequested(query)
+        }
         SitePermissions { view: bar.view }
         AdblockButton { view: bar.view }
         DownloadsButton { panel: bar.downloads }
