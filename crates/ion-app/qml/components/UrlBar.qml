@@ -11,6 +11,9 @@ TextField {
 
     // URL of the page in the current tab.
     property url currentUrl
+    // The current address failed to load (Ion's error page is showing), so it
+    // gets no lock even when it is https.
+    property bool loadFailed: false
     // Emitted with the resolved URL when the person presses Enter.
     signal navigate(url target)
     // Emitted after Enter or Escape, so the page can take keyboard focus back.
@@ -82,16 +85,17 @@ TextField {
     }
 
     // What the address is: a lock for encrypted pages, an open lock in the
-    // warning color for plain http, a globe for local and Ion's own pages, a
-    // magnifier while typing.
+    // warning color for plain http, a warning sign for a page that failed to
+    // load, a globe for local and Ion's own pages, a magnifier while typing.
     Icon {
         x: Theme.spacing * 2
         anchors.verticalCenter: parent.verticalCenter
         readonly property bool insecure: field.parts !== null && !field.parts.secure && !field.parts.local
         name: field.activeFocus ? "search"
+            : field.loadFailed ? "warning"
             : field.parts === null || field.parts.local ? "globe"
             : field.parts.secure ? "lock" : "unlock"
-        color: insecure && !field.activeFocus ? Theme.warning : Theme.textMuted
+        color: (insecure || field.loadFailed) && !field.activeFocus ? Theme.warning : Theme.textMuted
         size: Theme.iconSize - 2
     }
 

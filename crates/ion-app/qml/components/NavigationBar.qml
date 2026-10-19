@@ -108,6 +108,7 @@ Rectangle {
             id: urlBar
             Layout.fillWidth: true
             currentUrl: bar.view?.url ?? ""
+            loadFailed: bar.view?.loadFailed ?? false
             onNavigate: target => {
                 if (bar.view)
                     bar.view.url = target

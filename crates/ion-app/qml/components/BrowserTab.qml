@@ -19,6 +19,8 @@ WebEngineView {
     readonly property bool needsAttention: pageDialog.waiting
     // Ion's own page drawn over this tab, if any (`builtinPage.active`).
     readonly property alias builtinPage: builtinPage
+    // Ion's error page is showing: the address didn't load, whatever its scheme.
+    readonly property bool loadFailed: loadError.visible
 
     // Emitted when the page asks for a new tab or window (target=_blank, window.open).
     signal newTabRequested(var request)
