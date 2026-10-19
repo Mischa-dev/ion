@@ -137,6 +137,11 @@ pub struct Search {
     pub engine: String,
     /// Search URL with `{}` where the query goes.
     pub template: String,
+    /// Ask the search engine for suggestions while typing in the address bar.
+    pub suggestions: bool,
+    /// Suggestions URL with `{}` for the query, answering in the OpenSearch
+    /// JSON format. Empty uses the known engine's own.
+    pub suggest_template: String,
 }
 
 impl Default for Search {
@@ -144,6 +149,8 @@ impl Default for Search {
         Self {
             engine: "DuckDuckGo".into(),
             template: "https://duckduckgo.com/?q={}".into(),
+            suggestions: true,
+            suggest_template: String::new(),
         }
     }
 }

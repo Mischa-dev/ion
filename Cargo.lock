@@ -783,6 +783,7 @@ dependencies = [
  "ion-bookmarks",
  "ion-config",
  "ion-core",
+ "ion-omnibox",
  "ion-platform",
  "ion-reader",
  "ion-safety",
@@ -836,6 +837,17 @@ dependencies = [
 name = "ion-core"
 version = "0.1.0"
 dependencies = [
+ "url",
+]
+
+[[package]]
+name = "ion-omnibox"
+version = "0.1.0"
+dependencies = [
+ "ion-bangs",
+ "ion-core",
+ "serde",
+ "serde_json",
  "url",
 ]
 

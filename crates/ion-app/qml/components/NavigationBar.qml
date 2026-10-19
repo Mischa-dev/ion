@@ -14,6 +14,8 @@ Rectangle {
     property alias urlBar: urlBar
 
     signal bookmarkToggled()
+    // A quick action picked in the address bar: an `ion_bangs::commands` id.
+    signal runCommand(string id)
 
     implicitHeight: Theme.urlBarHeight + Theme.spacing * 2
 
@@ -118,6 +120,7 @@ Rectangle {
                     urlBar.focus = false
             }
             onAskAgent: input => bar.askAgent(input)
+            onRunCommand: id => bar.runCommand(id)
 
             AgentCard {
                 id: agentCard
