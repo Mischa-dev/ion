@@ -1119,7 +1119,8 @@ ApplicationWindow {
     }
 
     AgentsStoppedNotice {}
-    CrashRestoreNotice { id: crashRestore }
+    // Over the page, so it never covers the toolbar above it.
+    CrashRestoreNotice { id: crashRestore; parent: pageArea }
     Lazy { id: agentActivity; sourceComponent: AgentActivity {} }
     Lazy {
         id: agentSetup
