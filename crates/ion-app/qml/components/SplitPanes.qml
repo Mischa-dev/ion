@@ -18,8 +18,16 @@ Item {
     // A tab being dragged over the page: which half would get it, or "".
     property string dropSide: ""
 
+    // The JSON `split` came from, so a refresh that changes nothing keeps
+    // live sizes during a handle drag.
+    property string splitJson: ""
+
     function refresh() {
-        const next = JSON.parse(Tabs.currentSplit())
+        const json = Tabs.currentSplit()
+        if (json === splitJson)
+            return
+        splitJson = json
+        const next = JSON.parse(json)
         split = next
         sizes = next ? next.sizes : []
     }
@@ -29,6 +37,8 @@ Item {
         function onSplitsChanged() { root.refresh() }
         function onCurrentIndexChanged() { root.refresh() }
         function onCountChanged() { root.refresh() }
+        // Rows moved: the split's tabs may sit at other rows now.
+        function onSessionChanged() { root.refresh() }
     }
 
     // Position of the tab at `row` among the panes, or -1.
