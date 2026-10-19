@@ -24,6 +24,7 @@ ion-sites.workspace = true
 ion-reader.workspace = true
 ion-safety.workspace = true
 ion-agent.workspace = true
+ion-perf.workspace = true
 ion-media.workspace = true
 ion-print.workspace = true
 ion-translate.workspace = true

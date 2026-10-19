@@ -38,6 +38,7 @@ crates/
   ion-translate/          opt-in page translation through Ion Agent's model
   ion-safety/             permissions and agent trust: decisions, prompts, activity log
   ion-agent/              Ion Agent's runtime: tasks, browser tools, model access
+  ion-perf/               startup marks, memory pressure, per-process memory
   ion-panels/             the side panel: web panels and notes (clippings)
   ion-input/              keyboard shortcuts (the keymap and its remaps), touchpad
                           swipe and pinch, mouse gesture strokes
@@ -51,8 +52,10 @@ crates/
     qml/Theme.qml         design tokens singleton (colors, radius, density, motion)
     qml/components/       UI pieces (TabStrip, NavigationBar, UrlBar, BrowserTab…)
 packaging/                Linux desktop file + AppStream, macOS Info.plist
+bench/                    speed and memory benchmark (docs/performance.md)
 docs/                     this file; platform.md for per-OS behaviour and checks;
-                          compat.md for how Ion makes real sites work
+                          compat.md for how Ion makes real sites work;
+                          performance.md for what keeps Ion fast and how to measure it
 ```
 
 ## Adding a feature module

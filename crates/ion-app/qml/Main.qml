@@ -46,19 +46,25 @@ ApplicationWindow {
     title: currentView && currentView.title ? currentView.title + " — " + appTitle : appTitle
 
     // Persistent profile: cookies, cache and storage survive restarts.
-    WebEngineProfilePrototype {
-        id: profilePrototype
-        // "Default", a profile's own, or "" (off the record) in a private window.
-        storageName: Privacy.storageName()
-        // Site permissions are decided and remembered by Ion's safety model
-        // (Safety, docs/SAFETY.md), so the engine keeps none of its own.
-        persistentPermissionsPolicy: WebEngineProfile.PersistentPermissionsPolicy.AskEveryTime
+    // Opening it starts Chromium's storage and network service, the slowest
+    // step of startup, so it is created in startEngine() once the window has
+    // drawn its first frame rather than while the window is being built.
+    Component {
+        id: profileComponent
+        WebEngineProfilePrototype {
+            // "Default", a profile's own, or "" (off the record) in a private window.
+            storageName: Privacy.storageName()
+            // Site permissions are decided and remembered by Ion's safety model
+            // (Safety, docs/SAFETY.md), so the engine keeps none of its own.
+            persistentPermissionsPolicy: WebEngineProfile.PersistentPermissionsPolicy.AskEveryTime
+        }
     }
+    property WebEngineProfilePrototype profilePrototype: null
+    // Null until startEngine().
+    property WebEngineProfile profile: null
     // The downloads panel's requests, newest first (the Downloads page lists
     // the running ones).
     readonly property var downloadItems: downloads.items
-    // Set in Component.onCompleted: instance() is null until the prototype is complete.
-    property WebEngineProfile profile: null
     // Folders of the Chrome extensions Ion loaded at startup.
     property var extensionPaths: []
 
@@ -322,6 +328,10 @@ ApplicationWindow {
     // only exist once `startupFinished` is set at the end, so a tab opened
     // while waiting loads once, after the session restore.
     property bool startupFinished: false
+    // True while the views of a restored session are created; see finishStartup.
+    property bool restoringViews: false
+    // This launch has marked itself running (Tabs.beginRun).
+    property bool runStarted: false
     property bool startupRunning: false
     function finishStartup() {
         if (startupRunning)
@@ -337,25 +347,34 @@ ApplicationWindow {
         // True when the last run crashed; its tabs are kept aside. A private
         // window starts empty, is never saved and leaves the record alone.
         const crashed = !window.privateWindow && Tabs.beginRun()
+        runStarted = !window.privateWindow
+        // Restoring replaces every tab; tabs opened while waiting (Ctrl+T, a
+        // URL handed over by a second launch) are opened again after it.
+        let early = []
+        let restored = false
         if (Config.value("general.restoreSession") && !window.privateWindow) {
-            // Restoring replaces every tab; keep any opened while waiting
-            // (Ctrl+T, a URL handed over by a second launch).
-            const early = []
             for (let i = 0; i < Tabs.count; i++)
                 early.push(Tabs.urlAt(i))
-            if (Tabs.restoreLastSession())
-                early.forEach((target, i) => openTab(target, i === 0))
+            restored = Tabs.restoreLastSession()
+            if (!restored)
+                early = []
             Tabs.discardCrashedSession()
         } else if (crashed) {
             crashRestore.offer()
         }
+        // The tab views are created now. Restored background tabs wait until
+        // they are first shown, so a big session costs little at startup;
+        // tabs opened below load right away.
+        restoringViews = restored
+        startupFinished = true
+        restoringViews = false
+        early.forEach((target, i) => openTab(target, i === 0))
         // URLs on the command line (`ion %U` from the desktop file) open as new
         // tabs after the restored ones; the first one becomes current.
         const urls = Qt.application.arguments.slice(1).filter(arg => !arg.startsWith("-"))
         urls.forEach((arg, i) => openTab(urlBarResolver.resolve(arg), i === 0))
         if (Tabs.count === 0)
             openTab(Pages.isFirstRun() ? Pages.url("welcome", "") : homeUrl)
-        startupFinished = true
         sessionSaveTimer.restart()
     }
 
@@ -365,7 +384,32 @@ ApplicationWindow {
         navBar.urlBar.selectAll()
     }
 
-    Component.onCompleted: {
+    // Startup marks for bench/bench.py; Performance.mark keeps each once.
+    property bool firstFrameShown: false
+    Connections {
+        target: window
+        enabled: !window.firstFrameShown
+        function onFrameSwapped() {
+            window.firstFrameShown = true
+            Performance.mark("first-frame")
+        }
+    }
+
+    // The window shows first; the engine starts right after its first frame,
+    // or after a moment if the window isn't drawn (started hidden).
+    Timer {
+        id: engineFallback
+        interval: 200
+        running: true
+        onTriggered: window.startEngine()
+    }
+    onFirstFrameShownChanged: Qt.callLater(startEngine)
+
+    function startEngine() {
+        if (profilePrototype)
+            return
+        engineFallback.stop()
+        profilePrototype = profileComponent.createObject(window)
         profile = profilePrototype.instance()
         Adblock.attach(window.profile)
         Pages.attach(window.profile)
@@ -444,7 +488,10 @@ ApplicationWindow {
     // `[privacy]` cookie settings follow config changes live.
     Connections {
         target: Config
-        function onRevisionChanged() { Privacy.apply(window.profile) }
+        function onRevisionChanged() {
+            if (window.profile)
+                Privacy.apply(window.profile)
+        }
     }
     Connections {
         target: Qt.application
@@ -455,7 +502,9 @@ ApplicationWindow {
                 return
             if (window.startupFinished)
                 Tabs.saveSession()
-            Tabs.endRun()
+            // Quitting before beginRun() keeps the last run's crash record.
+            if (window.runStarted)
+                Tabs.endRun()
             History.save()
             window.clearOnExit(false)
         }
@@ -795,7 +844,7 @@ ApplicationWindow {
                     readonly property bool onScreen: current || inSplit
 
                     Component.onCompleted: {
-                        deferred = Tabs.restoring && !onScreen
+                        deferred = (Tabs.restoring || window.restoringViews) && !onScreen
                         if (!deferred)
                             loadSavedUrl()
                     }
@@ -825,8 +874,12 @@ ApplicationWindow {
                             Tabs.setIcon(index, icon.toString())
                     }
                     onLoadingChanged: info => {
-                        if (info.status === WebEngineView.LoadSucceededStatus && !window.privateWindow)
-                            History.recordVisit(info.url.toString(), title)
+                        if (info.status === WebEngineView.LoadSucceededStatus) {
+                            if (!window.privateWindow)
+                                History.recordVisit(info.url.toString(), title)
+                            Performance.mark("first-page")
+                            Performance.event("page-loaded")
+                        }
                     }
                     onNewTabRequested: request => {
                         const background = request.destination === WebEngineNewWindowRequest.InNewBackgroundTab
