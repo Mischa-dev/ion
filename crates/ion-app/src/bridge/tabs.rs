@@ -662,6 +662,7 @@ impl qobject::Tabs {
         if self.splits_revision != revision {
             self.as_mut().rust_mut().splits_revision = revision;
             self.as_mut().rows_shifted(0);
+            self.as_mut().split_roles_changed();
             self.as_mut().splits_changed();
         }
         self.session_changed();
@@ -684,6 +685,20 @@ impl qobject::Tabs {
         for role in SHIFTED_ROLES {
             roles.append(role);
         }
+        self.as_mut().data_changed(&top, &bottom, &roles);
+    }
+
+    /// Every row's split view may have changed.
+    fn split_roles_changed(mut self: Pin<&mut Self>) {
+        let len = self.list.len();
+        if len == 0 {
+            return;
+        }
+        let root = QModelIndex::default();
+        let top = self.index(0, 0, &root);
+        let bottom = self.index(len as i32 - 1, 0, &root);
+        let mut roles = QList::<i32>::default();
+        roles.append(ROLE_SPLIT);
         self.as_mut().data_changed(&top, &bottom, &roles);
     }
 
@@ -1027,7 +1042,13 @@ impl qobject::Tabs {
         let (Some(a), Some(b)) = (to_index(index, len), to_index(other, len)) else {
             return -1;
         };
+        let workspace = self.list.get(b).map(|t| t.workspace);
         let id = self.as_mut().rust_mut().list.split_tabs(a, b);
+        // A tab from another workspace joins the split's; the strips filter
+        // on that, so it is announced on its own.
+        if self.list.get(b).map(|t| t.workspace) != workspace {
+            self.as_mut().notify_row(b as i32, ROLE_WORKSPACE);
+        }
         self.as_mut().rows_shifted(0);
         self.sync();
         id.map_or(-1, |id| id as i32)

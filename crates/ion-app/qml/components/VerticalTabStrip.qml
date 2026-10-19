@@ -78,7 +78,7 @@ Item {
     Connections {
         target: Tabs
         function onGroupsChanged() { strip.refreshGroups() }
-        function onCountChanged() { strip.refreshGroups() }
+        function onSessionChanged() { strip.refreshGroups() }
     }
 
     // Position in the list of the tab at `row` of the model, or -1. Not bound

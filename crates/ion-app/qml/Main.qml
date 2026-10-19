@@ -114,9 +114,12 @@ ApplicationWindow {
         rows.forEach(i => Tabs.closeTab(i))
     }
 
-    // The tab used before the current one, or -1.
+    // The tab used before the current one in this workspace (or an
+    // Essential), or -1. Never one from another workspace: showing it would
+    // switch workspace, and mid-drag that drops the dragged tab's row.
     function previousTab() {
-        const previous = JSON.parse(Tabs.searchTabs("")).find(r => r.kind === "tab" && !r.current)
+        const previous = JSON.parse(Tabs.searchTabs("")).find(r => r.kind === "tab" && !r.current
+            && (Tabs.workspaceAt(r.index) === Tabs.workspace || Tabs.pinnedAt(r.index) === 2))
         return previous ? previous.index : -1
     }
 
