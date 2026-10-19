@@ -149,10 +149,10 @@ ApplicationWindow {
             if (previous >= 0)
                 Tabs.activate(previous)
         }
-        // No hint where the drop can't split: a full split view, or an
-        // Essential shown in place of the dragged tab.
+        // No hint where the drop can't split: a full split view the tab isn't
+        // already in, or an Essential shown in place of the dragged tab.
         const split = JSON.parse(Tabs.currentSplit())
-        const full = split && split.tabs.length >= 4
+        const full = split && split.tabs.length >= 4 && !split.tabs.includes(index)
         panes.showDrop(full || Tabs.pinnedAt(Tabs.currentIndex) === 2 ? null : panes.mapFromItem(null, scenePos))
     }
 
