@@ -38,3 +38,15 @@ right-click it to rename, recolor, add a tab, ungroup or close the group.
 
 Groups, pins and Essentials are saved with the session and with named
 sessions.
+
+## Tab search
+
+Ctrl/Cmd+Shift+A (or the ⌕ button in either strip, or "Search tabs…" in the
+⋯ menu) lists every open tab in every workspace, most recently used first,
+then recently closed tabs. Typing narrows both by title or address. Enter
+switches to the tab, and to its workspace, or reopens the closed tab; the ×
+on a row closes that tab. With an empty search, Enter goes back to the tab
+used before the current one.
+
+The ⋯ menu's "Recently closed" lists the last ten closed tabs; any of them
+can be reopened, not only the latest (Ctrl/Cmd+Shift+T).

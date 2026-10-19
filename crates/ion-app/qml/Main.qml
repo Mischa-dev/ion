@@ -118,7 +118,7 @@ ApplicationWindow {
     // right after switching tabs), unless the person is typing in the URL bar.
     onCurrentViewChanged: Qt.callLater(focusPage)
     function focusPage() {
-        if (currentView && !navBar.urlBar.activeFocus && !palette.opened)
+        if (currentView && !navBar.urlBar.activeFocus && !palette.opened && !tabSearch.opened)
             currentView.forceActiveFocus()
     }
 
@@ -283,6 +283,8 @@ ApplicationWindow {
 
     // Command palette (Ctrl/Cmd+K).
     CommandPalette { id: palette; browser: window }
+    // Tab search (Ctrl/Cmd+Shift+A).
+    TabSearch { id: tabSearch; browser: window }
 
     ImportDialog { id: importDialog }
     ExtensionsDialog { id: extensionsDialog; browser: window }
@@ -305,6 +307,7 @@ ApplicationWindow {
             onMoveRequested: (from, to) => Tabs.dragTab(from, to)
             onDropRequested: index => Tabs.dropTab(index)
             onNewTabRequested: window.newTab()
+            onSearchRequested: tabSearch.show()
             onMenuRequested: anchor => sessionMenu.open(anchor)
             onTabMenuRequested: index => tabMenu.openFor(index)
             onGroupMenuRequested: (group, anchor) => groupMenu.openFor(group, anchor)
@@ -323,7 +326,7 @@ ApplicationWindow {
         }
     }
 
-    SessionMenu { id: sessionMenu }
+    SessionMenu { id: sessionMenu; onSearchRequested: tabSearch.show() }
     TabMenu { id: tabMenu; browser: window; workspaceMenu: workspaceMenu; groupMenu: groupMenu }
     GroupMenu { id: groupMenu }
     WorkspaceMenu { id: workspaceMenu }
@@ -349,6 +352,7 @@ ApplicationWindow {
             onMoveRequested: (from, to) => Tabs.dragTab(from, to)
             onDropRequested: index => Tabs.dropTab(index)
             onNewTabRequested: window.newTab()
+            onSearchRequested: tabSearch.show()
             onMenuRequested: anchor => sessionMenu.open(anchor)
             onTabMenuRequested: index => tabMenu.openFor(index)
             onGroupMenuRequested: (group, anchor) => groupMenu.openFor(group, anchor)
@@ -462,6 +466,7 @@ ApplicationWindow {
     Shortcut { sequences: [StandardKey.AddTab]; onActivated: window.newTab() }
     Shortcut { sequences: [StandardKey.Close]; onActivated: window.closeTab(Tabs.currentIndex) }
     Shortcut { sequence: "Ctrl+Shift+T"; onActivated: Tabs.reopenClosedTab() }
+    Shortcut { sequence: "Ctrl+Shift+A"; onActivated: tabSearch.show() }
     Shortcut { sequences: ["Ctrl+L", "Alt+D", "F6"]; onActivated: window.focusUrlBar() }
     Shortcut { sequences: ["Ctrl+Tab", "Ctrl+PgDown"]; onActivated: Tabs.cycle(1) }
     Shortcut { sequences: ["Ctrl+Shift+Tab", "Ctrl+PgUp"]; onActivated: Tabs.cycle(-1) }

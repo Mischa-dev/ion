@@ -191,6 +191,15 @@ pub mod qobject {
         #[cxx_name = "stripLayout"]
         fn strip_layout(self: &Tabs, workspace: i32) -> QString;
 
+        /// Open tabs in every workspace and recently closed tabs matching
+        /// `query` (fuzzy, by title or address), best first, as a JSON array
+        /// of `{kind, index, title, url, icon, workspace, current, suspended,
+        /// pinned}`. `kind` is `tab` (`index` is its row) or `closed`
+        /// (`index` is its place for `reopenClosedTabAt`).
+        #[qinvokable]
+        #[cxx_name = "searchTabs"]
+        fn search_tabs(self: &Tabs, query: &QString) -> QString;
+
         /// Id of the group of the tab at `index`, or -1.
         #[qinvokable]
         #[cxx_name = "groupAt"]
@@ -403,6 +412,9 @@ use cxx_qt_lib::{
 use ion_session::history::now;
 use ion_session::tabs::Pin as PinKind;
 use ion_session::{GroupId, Session, SessionStore, TabList, WorkspaceId};
+
+/// How many recently closed tabs a tab search lists at most.
+const CLOSED_SEARCH_RESULTS: usize = 10;
 
 const ROLE_ID: i32 = 0x0100; // Qt::UserRole
 const ROLE_URL: i32 = ROLE_ID + 1;
@@ -888,6 +900,55 @@ impl qobject::Tabs {
                 .to_string()
                 .as_str(),
         )
+    }
+
+    fn search_tabs(&self, query: &QString) -> QString {
+        let matcher = ion_bangs::fuzzy::Matcher::new(&query.to_string());
+        let score = |text: &str| matcher.score(text);
+        let workspace_name =
+            |id: WorkspaceId| self.list.workspace(id).map_or("", |w| w.name.as_str());
+        let current = self.list.current();
+        let mut rows: Vec<serde_json::Value> = self
+            .list
+            .search(score)
+            .into_iter()
+            .filter_map(|i| Some((i, self.list.get(i)?)))
+            .map(|(i, t)| {
+                serde_json::json!({
+                    "kind": "tab",
+                    "index": i,
+                    "title": t.title,
+                    "url": t.url,
+                    "icon": t.icon,
+                    "workspace": if t.essential { "" } else { workspace_name(t.workspace) },
+                    "current": Some(i) == current,
+                    "suspended": t.suspended,
+                    "pinned": t.pinned,
+                })
+            })
+            .collect();
+        let closed: Vec<_> = self.list.closed_tabs().collect();
+        rows.extend(
+            self.list
+                .search_closed(score)
+                .into_iter()
+                .take(CLOSED_SEARCH_RESULTS)
+                .filter_map(|n| Some((n, closed.get(n)?)))
+                .map(|(n, c)| {
+                    serde_json::json!({
+                        "kind": "closed",
+                        "index": n,
+                        "title": c.tab.title,
+                        "url": c.tab.url,
+                        "icon": c.tab.icon,
+                        "workspace": workspace_name(c.tab.workspace),
+                        "current": false,
+                        "suspended": false,
+                        "pinned": c.tab.pinned,
+                    })
+                }),
+        );
+        QString::from(serde_json::Value::Array(rows).to_string().as_str())
     }
 
     fn group_at(&self, index: i32) -> i32 {

@@ -32,6 +32,7 @@ Rectangle {
     signal moveRequested(int from, int to)
     signal dropRequested(int index)
     signal newTabRequested()
+    signal searchRequested()
     signal menuRequested(Item anchor)
     signal tabMenuRequested(int index)
     signal groupMenuRequested(int group, Item anchor)
@@ -253,6 +254,13 @@ Rectangle {
             glyph: "+"
             tip: qsTr("New tab")
             onClicked: strip.newTabRequested()
+        }
+
+        IconButton {
+            Layout.alignment: Qt.AlignVCenter
+            glyph: "⌕"
+            tip: qsTr("Search tabs")
+            onClicked: strip.searchRequested()
         }
 
         IconButton {

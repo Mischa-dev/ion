@@ -187,6 +187,17 @@ fn next_free_id(ids: impl Iterator<Item = u32> + Clone) -> u32 {
         })
 }
 
+/// The better of a tab's title and address scores; the address is matched
+/// without its scheme and counts one point less.
+fn best_score(score: &impl Fn(&str) -> Option<i32>, title: &str, url: &str) -> Option<i32> {
+    let address = url.split_once("://").map_or(url, |(_, rest)| rest);
+    let address = address.strip_prefix("www.").unwrap_or(address);
+    match (score(title), score(address).map(|s| s - 1)) {
+        (Some(a), Some(b)) => Some(a.max(b)),
+        (a, b) => a.or(b),
+    }
+}
+
 impl TabList {
     pub fn new() -> Self {
         Self::default()
@@ -829,6 +840,41 @@ impl TabList {
         self.prune_groups();
         self.track_current();
         Some(to)
+    }
+
+    /// Open tabs in every workspace that `score` accepts by title or
+    /// address, best first: higher scores, then the most recently used. The
+    /// address counts a little less than the title, and without its scheme.
+    pub fn search(&self, score: impl Fn(&str) -> Option<i32>) -> Vec<usize> {
+        let mut hits: Vec<(i32, u64, usize)> = self
+            .tabs
+            .iter()
+            .enumerate()
+            .filter_map(|(i, t)| {
+                let s = best_score(&score, &t.title, &t.url)?;
+                let recency = if Some(i) == self.current() {
+                    u64::MAX
+                } else {
+                    t.last_active
+                };
+                Some((s, recency, i))
+            })
+            .collect();
+        hits.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.cmp(&a.1)).then(a.2.cmp(&b.2)));
+        hits.into_iter().map(|(_, _, i)| i).collect()
+    }
+
+    /// Recently closed tabs `score` accepts, as positions for
+    /// [`reopen_closed_at`](Self::reopen_closed_at), best first and then the
+    /// most recently closed.
+    pub fn search_closed(&self, score: impl Fn(&str) -> Option<i32>) -> Vec<usize> {
+        let mut hits: Vec<(i32, usize)> = self
+            .closed_tabs()
+            .enumerate()
+            .filter_map(|(n, c)| Some((best_score(&score, &c.tab.title, &c.tab.url)?, n)))
+            .collect();
+        hits.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+        hits.into_iter().map(|(_, n)| n).collect()
     }
 
     pub fn workspaces(&self) -> &[Workspace] {
@@ -1749,5 +1795,48 @@ mod tests {
         assert_eq!(urls(&l), ["b", "c", "a"]);
         assert_eq!(l.get(2).unwrap().group, None);
         assert_eq!(l.rows_in(work), [2]);
+    }
+
+    /// A stand-in for the palette's fuzzy matcher: substring, longer is better.
+    fn contains(query: &'static str) -> impl Fn(&str) -> Option<i32> {
+        move |text: &str| {
+            text.to_lowercase()
+                .contains(query)
+                .then_some(query.len() as i32 * 2)
+        }
+    }
+
+    #[test]
+    fn search_finds_tabs_in_every_workspace_most_recent_first() {
+        let mut l = list(&[
+            "https://news.example/",
+            "https://mail.example/",
+            "https://docs.example/",
+        ]);
+        l.set_title(2, "Mail drafts");
+        let work = l.add_workspace("Work", "");
+        l.open_in(work, 9, "https://mail.work.example/", "", false);
+        l.note_current(10);
+        l.activate(1);
+        l.note_current(20);
+        l.activate(2);
+        l.note_current(30);
+        // Title beats address; then most recent.
+        assert_eq!(l.search(contains("mail")), [2, 1, 3]);
+        // Blank query: everything, current first.
+        assert_eq!(l.search(|_| Some(0))[0], 2);
+        assert_eq!(l.search(|_| Some(0)).len(), 4);
+        assert!(l.search(contains("zzz")).is_empty());
+        // The scheme and www. are not matched.
+        assert!(l.search(contains("https")).is_empty());
+    }
+
+    #[test]
+    fn closed_tabs_can_be_searched() {
+        let mut l = list(&["a.example/x", "b.example/y", "c"]);
+        l.close(0);
+        l.close(0);
+        assert_eq!(l.search_closed(contains("example")), [0, 1]);
+        assert_eq!(l.search_closed(contains("a.ex")), [1]);
     }
 }
