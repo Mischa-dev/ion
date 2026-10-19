@@ -7,6 +7,8 @@
 //! `pause` and `pinch`. QML keeps `area`, `canGoBack`, `canGoForward` and
 //! `zoomFactor` in step with the current page, draws the arrow from
 //! `swipeDirection` / `swipeProgress`, and acts on `navigate` and `zoom`.
+//! On `swipeStarted` it checks what is under the fingers and calls `block`
+//! for a direction something there can still scroll.
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -45,6 +47,18 @@ pub mod qobject {
         /// filter. Returns whether to swallow it.
         #[qinvokable]
         fn pinch(self: Pin<&mut Gestures>, stage: i32, delta: f64, x: f64, y: f64) -> bool;
+
+        /// Something under the fingers can still scroll back (left) or
+        /// forward (right): gesture `gesture` won't navigate that way.
+        #[qinvokable]
+        fn block(self: Pin<&mut Gestures>, gesture: i32, back: bool, forward: bool);
+
+        /// A touchpad gesture began at (`x`, `y`) in the window. Answer
+        /// with `block` (all false if nothing there scrolls sideways): the
+        /// gesture doesn't navigate until it does.
+        #[qsignal]
+        #[cxx_name = "swipeStarted"]
+        fn swipe_started(self: Pin<&mut Gestures>, gesture: i32, x: f64, y: f64);
 
         /// A swipe went far enough: go "back" or "forward".
         #[qsignal]
@@ -161,9 +175,25 @@ impl qobject::Gestures {
             can_go_back: enabled && self.can_go_back,
             can_go_forward: enabled && self.can_go_forward,
         };
+        let before = self.swipe.gesture();
         let outcome = self.as_mut().rust_mut().swipe.scroll(event);
+        let gesture = self.swipe.gesture();
+        if gesture != before && (event.can_go_back || event.can_go_forward) {
+            // Wraps after 2^31 gestures, which only skips one check.
+            self.as_mut().rust_mut().swipe.check();
+            self.as_mut().swipe_started(gesture as i32, x, y);
+        }
         self.outcome(outcome);
         false
+    }
+
+    fn block(mut self: Pin<&mut Self>, gesture: i32, back: bool, forward: bool) {
+        let current = self.swipe.gesture();
+        if current as i32 != gesture {
+            return;
+        }
+        let outcome = self.as_mut().rust_mut().swipe.block(current, back, forward);
+        self.outcome(outcome);
     }
 
     fn pause(mut self: Pin<&mut Self>) {

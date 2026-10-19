@@ -3,9 +3,10 @@
 //! Touchpads report a swipe as a run of scroll events. Like Chrome and
 //! Safari, Ion treats horizontal scrolling past the page's edge as a swipe:
 //! scrolling left from a page already at its left edge goes back, scrolling
-//! right from its right edge goes forward. The page still gets every event,
-//! so swiping inside a scrollable carousel scrolls it as usual unless the
-//! page itself is at that edge.
+//! right from its right edge goes forward. The page still gets every event.
+//! A carousel or editor under the fingers that can still scroll that way
+//! scrolls instead: the app checks once a gesture starts and calls
+//! [`Swipe::block`].
 //!
 //! The recognizer only reads events; `ion-app` draws the arrow from
 //! [`Swipe::progress`] and navigates on [`Outcome::Navigate`].
@@ -91,6 +92,11 @@ enum State {
     },
     /// The rest of this gesture is ordinary scrolling.
     Ignoring,
+    /// Let go far enough to navigate, but the check of what was under the
+    /// fingers hasn't answered yet.
+    Waiting {
+        direction: Direction,
+    },
 }
 
 /// Turns scroll events into back/forward swipes.
@@ -100,6 +106,9 @@ pub struct Swipe {
     state: State,
     can_go_back: bool,
     can_go_forward: bool,
+    gesture: u64,
+    /// This gesture waits for [`Swipe::block`] before it navigates.
+    checking: bool,
 }
 
 impl Default for Swipe {
@@ -115,6 +124,54 @@ impl Swipe {
             state: State::Idle,
             can_go_back: false,
             can_go_forward: false,
+            gesture: 0,
+            checking: false,
+        }
+    }
+
+    /// Hold back navigating in the current gesture until [`Swipe::block`]
+    /// answers for it.
+    pub fn check(&mut self) {
+        self.checking = true;
+    }
+
+    /// Counts gestures: changes each time one starts, so a check started
+    /// for one gesture can tell whether it still applies.
+    pub fn gesture(&self) -> u64 {
+        self.gesture
+    }
+
+    /// Something under the fingers can still scroll back (left) or forward
+    /// (right), so gesture `gesture` must not navigate that way. Returns
+    /// [`Outcome::Cancelled`] when that stops a swipe already showing.
+    pub fn block(&mut self, gesture: u64, back: bool, forward: bool) -> Outcome {
+        if gesture != self.gesture {
+            return Outcome::None;
+        }
+        self.can_go_back &= !back;
+        self.can_go_forward &= !forward;
+        self.checking = false;
+        match self.state {
+            State::Waiting { direction } => {
+                self.state = State::Idle;
+                let blocked = match direction {
+                    Direction::Back => back,
+                    Direction::Forward => forward,
+                };
+                if blocked {
+                    Outcome::Cancelled
+                } else {
+                    Outcome::Navigate(direction)
+                }
+            }
+            State::Swiping { direction, .. }
+                if (direction == Direction::Back && back)
+                    || (direction == Direction::Forward && forward) =>
+            {
+                self.state = State::Ignoring;
+                Outcome::Cancelled
+            }
+            _ => Outcome::None,
         }
     }
 
@@ -129,6 +186,7 @@ impl Swipe {
                 };
                 Some((direction, (signed / self.settings.distance).clamp(0.0, 1.0)))
             }
+            State::Waiting { direction } => Some((direction, 1.0)),
             _ => None,
         }
     }
@@ -139,13 +197,20 @@ impl Swipe {
             Phase::Momentum => return Outcome::None,
             Phase::End => return self.finish(),
             Phase::Begin => {
-                let was_swiping = matches!(self.state, State::Swiping { .. });
+                let was_swiping =
+                    matches!(self.state, State::Swiping { .. } | State::Waiting { .. });
                 self.start(event);
                 if was_swiping {
                     return Outcome::Cancelled;
                 }
             }
             Phase::Update | Phase::Unknown => {
+                if let State::Waiting { .. } = self.state {
+                    // The check never answered; a new gesture takes over.
+                    self.start(event);
+                    self.travel(event.dx, event.dy);
+                    return Outcome::Cancelled;
+                }
                 if self.state == State::Idle {
                     self.start(event);
                 }
@@ -162,6 +227,8 @@ impl Swipe {
 
     fn start(&mut self, event: Scroll) {
         self.state = State::Deciding { dx: 0.0, dy: 0.0 };
+        self.gesture += 1;
+        self.checking = false;
         // Edges as the gesture starts; scrolling during it moves the page.
         self.can_go_back = event.can_go_back;
         self.can_go_forward = event.can_go_forward;
@@ -169,7 +236,7 @@ impl Swipe {
 
     fn travel(&mut self, ddx: f64, ddy: f64) -> Outcome {
         match self.state {
-            State::Idle | State::Ignoring => Outcome::None,
+            State::Idle | State::Ignoring | State::Waiting { .. } => Outcome::None,
             State::Deciding { dx, dy } => {
                 let (dx, dy) = (dx + ddx, dy + ddy);
                 if dx.hypot(dy) < self.settings.slop {
@@ -206,9 +273,16 @@ impl Swipe {
     }
 
     fn finish(&mut self) -> Outcome {
+        if matches!(self.state, State::Waiting { .. }) {
+            return Outcome::None;
+        }
         let progress = self.progress();
         self.state = State::Idle;
         match progress {
+            Some((direction, amount)) if amount >= 1.0 && self.checking => {
+                self.state = State::Waiting { direction };
+                Outcome::Moved
+            }
             Some((direction, amount)) if amount >= 1.0 => Outcome::Navigate(direction),
             Some(_) => Outcome::Cancelled,
             None => Outcome::None,
@@ -303,6 +377,64 @@ mod tests {
             swipe.scroll(scroll(10.0, 0.0, Phase::Update));
         }
         assert_eq!(swipe.progress(), None);
+    }
+
+    #[test]
+    fn a_scrollable_element_under_the_fingers_blocks_its_direction() {
+        let mut swipe = Swipe::default();
+        swipe.scroll(scroll(0.0, 0.0, Phase::Begin));
+        let gesture = swipe.gesture();
+        // The check answers late, mid-swipe: the arrow goes away.
+        run_on(&mut swipe, 5, 10.0);
+        assert_eq!(swipe.block(gesture, true, false), Outcome::Cancelled);
+        run_on(&mut swipe, 20, 10.0);
+        assert_eq!(swipe.progress(), None);
+        assert_eq!(swipe.scroll(scroll(0.0, 0.0, Phase::End)), Outcome::None);
+
+        // A swipe that ends before the check answers waits for it.
+        swipe.scroll(scroll(0.0, 0.0, Phase::Begin));
+        swipe.check();
+        run_on(&mut swipe, 20, 10.0);
+        assert_eq!(swipe.scroll(scroll(0.0, 0.0, Phase::End)), Outcome::Moved);
+        assert_eq!(swipe.progress(), Some((Direction::Back, 1.0)));
+        assert_eq!(
+            swipe.block(swipe.gesture(), false, true),
+            Outcome::Navigate(Direction::Back)
+        );
+        swipe.scroll(scroll(0.0, 0.0, Phase::Begin));
+        swipe.check();
+        run_on(&mut swipe, 20, 10.0);
+        assert_eq!(swipe.pause(), Outcome::Moved);
+        assert_eq!(
+            swipe.block(swipe.gesture(), true, false),
+            Outcome::Cancelled
+        );
+        assert_eq!(swipe.progress(), None);
+
+        // A check that never answers doesn't stop the next gesture.
+        swipe.scroll(scroll(0.0, 0.0, Phase::Begin));
+        swipe.check();
+        run_on(&mut swipe, 20, 10.0);
+        assert_eq!(swipe.pause(), Outcome::Moved);
+        assert_eq!(
+            swipe.scroll(scroll(10.0, 0.0, Phase::Unknown)),
+            Outcome::Cancelled
+        );
+        swipe.pause();
+
+        // Only the blocked way is off, and only for that gesture.
+        swipe.scroll(scroll(0.0, 0.0, Phase::Begin));
+        assert_eq!(swipe.block(swipe.gesture(), true, false), Outcome::None);
+        run_on(&mut swipe, 20, -10.0);
+        assert_eq!(swipe.pause(), Outcome::Navigate(Direction::Forward));
+        assert_eq!(swipe.block(gesture, false, true), Outcome::None);
+        assert_eq!(run(&mut swipe, 20, 10.0, 0.0), Outcome::Moved);
+    }
+
+    fn run_on(swipe: &mut Swipe, steps: usize, dx: f64) {
+        for _ in 0..steps {
+            swipe.scroll(scroll(dx, 0.0, Phase::Update));
+        }
     }
 
     #[test]

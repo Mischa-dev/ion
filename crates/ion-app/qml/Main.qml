@@ -376,10 +376,39 @@ ApplicationWindow {
         }
         readonly property var view: window.currentView
         canGoBack: !!view && view.canGoBack && view.scrollPosition.x <= 1
+        // scrollPosition and contentsSize are already zoomed, like width.
         canGoForward: !!view && view.canGoForward
-            && view.scrollPosition.x + view.width / view.zoomFactor >= view.contentsSize.width / view.zoomFactor - 1
+            && view.scrollPosition.x + view.width >= view.contentsSize.width - 1
         zoomFactor: view ? view.zoomFactor : 1
         onNavigate: direction => direction === "back" ? view?.goBack() : view?.goForward()
+        // A carousel or editor under the fingers that can still scroll
+        // sideways gets the gesture instead.
+        onSwipeStarted: (gesture, x, y) => {
+            if (!view) {
+                block(gesture, false, false)
+                return
+            }
+            const point = view.mapFromItem(null, x, y)
+            view.runJavaScript(`(function (x, y) {
+                let back = false, forward = false
+                for (let e = document.elementFromPoint(x, y); e && e !== document.body
+                        && e !== document.documentElement; e = e.parentElement) {
+                    if (e.scrollWidth <= e.clientWidth + 1)
+                        continue
+                    const overflow = getComputedStyle(e).overflowX
+                    if (overflow !== "auto" && overflow !== "scroll")
+                        continue
+                    back = back || e.scrollLeft > 0
+                    forward = forward || e.scrollLeft + e.clientWidth < e.scrollWidth - 1
+                }
+                return [back, forward]
+            })(${point.x / view.zoomFactor}, ${point.y / view.zoomFactor})`,
+                WebEngineScript.ApplicationWorld, result => {
+                    // Arrives as a list, not a JS Array.
+                    const found = result && result.length === 2 ? [!!result[0], !!result[1]] : [false, false]
+                    block(gesture, found[0], found[1])
+                })
+        }
         onZoom: (factor, done) => {
             if (!view)
                 return
