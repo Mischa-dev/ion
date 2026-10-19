@@ -425,13 +425,14 @@ Rectangle {
                     columnSpacing: Theme.spacing * 4
                     rowSpacing: Theme.spacing * 1.5
                     Repeater {
+                        // Command ids, shown with the keys Keymap has for them now.
                         model: [
-                            ["Ctrl+K", qsTr("Command palette: tabs, history, bookmarks, settings")],
-                            ["Ctrl+L", qsTr("Address bar; try !gh, !w or !yt before a search")],
-                            ["Ctrl+D", qsTr("Bookmark this page")],
-                            ["Ctrl+H", qsTr("History")],
-                            ["Ctrl+,", qsTr("Settings")],
-                            ["Ctrl+Shift+T", qsTr("Reopen the tab you just closed")]
+                            ["palette", qsTr("Command palette: tabs, history, bookmarks, settings")],
+                            ["focus-url", qsTr("Address bar; try !gh, !w or !yt before a search")],
+                            ["bookmark-page", qsTr("Bookmark this page")],
+                            ["history", qsTr("History")],
+                            ["settings", qsTr("Settings")],
+                            ["reopen-tab", qsTr("Reopen the tab you just closed")]
                         ]
                         delegate: RowLayout {
                             required property var modelData
@@ -445,7 +446,11 @@ Rectangle {
                                 Text {
                                     id: keyText
                                     anchors.centerIn: parent
-                                    text: Qt.platform.os === "osx" ? modelData[0].replace("Ctrl", "⌘") : modelData[0]
+                                    text: {
+                                        Config.revision
+                                        const keys = Keymap.keys(modelData[0])
+                                        return keys.length > 0 ? Keymap.display(keys[0]) : "—"
+                                    }
                                     color: Theme.text
                                     font.pixelSize: Theme.fontSize - 1
                                     font.family: "monospace"

@@ -31,6 +31,7 @@ crates/
   ion-reader/             reader mode: article extraction and the themed reader page
   ion-safety/             permissions and agent trust: decisions, prompts, activity log
   ion-agent/              Ion Agent's runtime: tasks, browser tools, model access
+  ion-input/              keyboard shortcuts (the keymap and its remaps)
   ion-app/                the binary (`ion`)
     build.rs              auto-discovers bridges, C++ shims and QML files
     src/main.rs           startup: QtWebEngine init, app, QML engine
@@ -124,8 +125,12 @@ from `config.toml` and offer to go back to it.
   stages implement `InputStep` and run first; `ion_bangs::BangTable` is one.
   Config feeds user bangs through `BangTable::apply`.
 - The Ctrl/Cmd+K palette ranks tabs, history, sessions, commands and bangs in
-  `ion_bangs::palette`; commands are
-  listed in `ion_bangs::commands` and carried out in `CommandPalette.qml`.
+  `ion_bangs::palette`; commands are listed (with their default keys) in
+  `ion_bangs::commands` and carried out in `Commands.qml`, which also binds
+  every command's keys. `ion_input::Keymap` applies `[shortcuts]` remaps; the
+  `Keymap` singleton serves it to QML and the shortcut editor
+  (`ShortcutEditor.qml`, Ctrl+/) writes remaps back to the config. Add new
+  shortcuts as commands there, not as `Shortcut` items, so they can be remapped.
   `Palette::suggest` is the URL bar's narrower version (typed entry first,
   then tabs, history and bang completions), and `ion_bangs::autofill` fills
   in addresses inline; both lists draw their rows with

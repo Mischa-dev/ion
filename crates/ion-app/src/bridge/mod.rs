@@ -12,6 +12,7 @@ pub mod download_log;
 pub mod downloads;
 pub mod extensions;
 pub mod history;
+pub mod keymap;
 pub mod load_error;
 pub mod omnibox;
 pub mod pages;

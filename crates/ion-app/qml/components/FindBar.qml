@@ -5,8 +5,8 @@ import QtWebEngine
 import Ion
 
 // Find in page. Lives inside a BrowserTab, floats over the top-right corner of
-// the page. Ctrl+F opens it, Enter / Shift+Enter (or F3 / Shift+F3) step
-// through matches, Esc closes it and clears the highlight.
+// the page. Ctrl+F opens it, Enter / Shift+Enter (or the find-next and
+// find-previous commands, F3 / Shift+F3) step through matches, Esc closes it and clears the highlight.
 Rectangle {
     id: bar
 
@@ -129,21 +129,12 @@ Rectangle {
         }
     }
 
-    // Only the visible tab's bar takes the shortcuts. Ion's own pages
-    // (BuiltinPage.qml) use Find for their search field instead.
-    Shortcut {
-        sequences: [StandardKey.Find]
-        enabled: bar.view.visible && Pages.pageOf(bar.view.url).length === 0
-        onActivated: bar.open()
-    }
-    Shortcut {
-        sequences: [StandardKey.FindNext]
-        enabled: bar.view.visible && bar.visible
-        onActivated: bar.search(1)
-    }
-    Shortcut {
-        sequences: [StandardKey.FindPrevious]
-        enabled: bar.view.visible && bar.visible
-        onActivated: bar.search(-1)
+    // The find, find-next and find-previous commands (Commands.qml) step
+    // through matches, opening the bar first if it is closed.
+    function step(direction) {
+        if (!visible)
+            open()
+        else
+            search(direction)
     }
 }

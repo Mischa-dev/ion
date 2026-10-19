@@ -25,6 +25,7 @@ Rectangle {
 
     readonly property var browser: frame.Window.window
 
+    // The find command (Commands.qml) searches the list instead.
     function focusSearch() {
         search.forceActiveFocus()
         search.selectAll()
@@ -159,12 +160,5 @@ Rectangle {
                 Layout.fillHeight: true
             }
         }
-    }
-
-    // Ctrl+F searches the list, as a find bar would.
-    Shortcut {
-        sequences: [StandardKey.Find]
-        enabled: frame.visible
-        onActivated: frame.focusSearch()
     }
 }
