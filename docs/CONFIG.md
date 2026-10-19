@@ -9,6 +9,11 @@ home-manager module covers both platforms).
 | `config.toml` | home-manager (`programs.ion`) or you | Base layer. Ion never writes it. |
 | `overrides.toml` | Ion's settings UI | Wins over the base. Delete a key to fall back. |
 
+Settings (`ion://settings`, Ctrl+,) edits everything below and saves to
+`overrides.toml`. A setting that `config.toml` also sets says so, and "Use
+config.toml" drops the change. "Copy your changes as Nix" turns the overrides
+into a `programs.ion` snippet for home-manager.
+
 Tables merge key by key; any other value in `overrides.toml` replaces the base
 value whole (a list is replaced, not appended to). Both files are watched and
 re-applied as soon as they change. A file that fails to parse or does not fit

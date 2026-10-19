@@ -59,12 +59,7 @@ Popup {
         NumberAnimation { property: "y"; from: card.y - Theme.spacing * 2; to: card.y; duration: Theme.animationMs; easing.type: Easing.OutCubic }
     }
 
-    background: Rectangle {
-        radius: Theme.radius + 2
-        color: Theme.surface
-        border.width: 1
-        border.color: Theme.border
-    }
+    background: IonSurface {}
 
     contentItem: AgentConversation {
         id: conversation

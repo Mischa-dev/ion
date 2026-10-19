@@ -92,7 +92,7 @@ Item {
 
                 IconButton {
                     Layout.fillWidth: true
-                    glyph: "+"
+                    iconName: "plus"
                     tip: qsTr("New tab")
                     onClicked: strip.newTabRequested()
                 }
@@ -100,14 +100,14 @@ Item {
                 IconButton {
                     id: menuButton
                     visible: strip.expanded
-                    glyph: "⋯"
+                    iconName: "more"
                     tip: qsTr("Tabs and sessions")
                     onClicked: strip.menuRequested(menuButton)
                 }
 
                 IconButton {
                     visible: strip.expanded
-                    glyph: strip.collapsed ? "»" : "«"
+                    iconName: strip.collapsed ? "chevrons-right" : "chevrons-left"
                     tip: strip.collapsed ? qsTr("Keep sidebar open") : qsTr("Collapse sidebar")
                     onClicked: Config.set("ui.collapseSidebar", !strip.collapsed)
                 }
@@ -202,7 +202,7 @@ Item {
                         IconButton {
                             Layout.preferredWidth: Theme.tabHeight - Theme.spacing * 2
                             Layout.preferredHeight: Theme.tabHeight - Theme.spacing * 2
-                            glyph: "×"
+                            iconName: "close"
                             tip: qsTr("Close tab")
                             visible: strip.expanded && (tab.current || tabMouse.containsMouse || hovered)
                             onClicked: strip.closeRequested(tab.row)

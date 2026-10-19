@@ -68,12 +68,7 @@ Popup {
     modal: true
     focus: true
 
-    background: Rectangle {
-        radius: Theme.radius
-        color: Theme.surface
-        border.color: Theme.border
-        border.width: 1
-    }
+    background: IonSurface {}
 
     contentItem: ColumnLayout {
         id: column
