@@ -227,6 +227,12 @@ pub mod qobject {
         #[cxx_name = "movePane"]
         fn move_pane(self: Pin<&mut Tabs>, index: i32, step: i32);
 
+        /// Put the pane of the tab at `index` right before (or `after`) the
+        /// pane of the tab at `anchor`, in their split view.
+        #[qinvokable]
+        #[cxx_name = "placePane"]
+        fn place_pane(self: Pin<&mut Tabs>, index: i32, anchor: i32, after: bool);
+
         /// The split view on screen as JSON `{id, tabs, sizes, vertical}`
         /// (`tabs` are rows, in pane order), or `null`.
         #[qinvokable]
@@ -1015,6 +1021,7 @@ impl qobject::Tabs {
             .map(|(i, t)| {
                 serde_json::json!({
                     "kind": "tab",
+                    "id": t.id,
                     "index": i,
                     "title": t.title,
                     "url": t.url,
@@ -1036,6 +1043,7 @@ impl qobject::Tabs {
                 .map(|(n, c)| {
                     serde_json::json!({
                         "kind": "closed",
+                        "id": c.tab.id,
                         "index": n,
                         "title": c.tab.title,
                         "url": c.tab.url,
@@ -1095,6 +1103,14 @@ impl qobject::Tabs {
                 .rust_mut()
                 .list
                 .set_split_vertical(id, vertical);
+            self.sync();
+        }
+    }
+
+    fn place_pane(mut self: Pin<&mut Self>, index: i32, anchor: i32, after: bool) {
+        let len = self.list.len();
+        if let (Some(i), Some(a)) = (to_index(index, len), to_index(anchor, len)) {
+            self.as_mut().rust_mut().list.place_pane(i, a, after);
             self.sync();
         }
     }

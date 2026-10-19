@@ -140,14 +140,20 @@ ApplicationWindow {
             draggedOutRow = -1
             return
         }
+        // Essentials never join a split, so they get no drop hint either.
+        if (Tabs.pinnedAt(index) === 2)
+            return
         if (draggedOutRow < 0) {
             draggedOutRow = index
             const previous = previousTab()
             if (previous >= 0)
                 Tabs.activate(previous)
         }
+        // No hint where the drop can't split: a full split view the tab isn't
+        // already in, or an Essential shown in place of the dragged tab.
         const split = JSON.parse(Tabs.currentSplit())
-        panes.showDrop(split && split.tabs.length >= 4 ? null : panes.mapFromItem(null, scenePos))
+        const full = split && split.tabs.length >= 4 && !split.tabs.includes(index)
+        panes.showDrop(full || Tabs.pinnedAt(Tabs.currentIndex) === 2 ? null : panes.mapFromItem(null, scenePos))
     }
 
     // Let go over the page, the dragged tab opens beside the page shown, on
@@ -162,12 +168,15 @@ ApplicationWindow {
                 Tabs.activate(index)
             return
         }
-        // A full split view (four panes) takes no more; the page stays put.
-        if (Tabs.splitTabs(Tabs.currentIndex, index) < 0)
+        // A full split view (four panes) takes no more, and an Essential joins
+        // none; the dragged tab stays current as it was before the drag.
+        if (Tabs.splitTabs(Tabs.currentIndex, index) < 0) {
+            Tabs.activate(index)
             return
-        // It joins after the current pane; the first half puts it before.
-        if (side === "left" || side === "top")
-            Tabs.movePane(index, -1)
+        }
+        // Next to the current pane, on the side the hint showed; a tab already
+        // in the split moves there too.
+        Tabs.placePane(index, Tabs.currentIndex, side === "right" || side === "bottom")
         Tabs.activate(index)
     }
 
@@ -180,8 +189,11 @@ ApplicationWindow {
             return
         }
         const current = Tabs.currentIndex
+        // Essentials show in every workspace, so they never share the page.
+        if (Tabs.pinnedAt(current) === 2)
+            return
         const previous = previousTab()
-        if (previous >= 0) {
+        if (previous >= 0 && Tabs.pinnedAt(previous) !== 2) {
             Tabs.splitTabs(current, previous)
         } else {
             const index = Tabs.openTabNextToCurrent("", false)
