@@ -95,6 +95,10 @@ WebEngineView {
     // Ion's when this tab's first load starts. Later loads don't reset it.
     property bool pageSchemeRestored: false
     onLoadingChanged: info => {
+        if (info.status === WebEngineView.LoadSucceededStatus)
+            snapshotSoon.restart()
+        else if (info.status === WebEngineView.LoadStartedStatus && !visible)
+            snapshot = ""
         // Ion's own error page covers Chromium's until something replaces it;
         // a load that only starts, or is stopped, leaves Chromium's in place.
         if (info.status === WebEngineView.LoadFailedStatus)
@@ -147,6 +151,33 @@ WebEngineView {
     function zoomIn() { setZoom(Zoom.stepIn(zoomFactor)) }
     function zoomOut() { setZoom(Zoom.stepOut(zoomFactor)) }
     function resetZoom() { setZoom(1.0) }
+
+    // A small picture of the page for the tab strips' hover previews, taken
+    // while the tab is on screen: after each load and every so often. Kept as
+    // the grab result, which owns the image `snapshot` points to.
+    property url snapshot: ""
+    property var snapshotResult: null
+    function takeSnapshot() {
+        if (!visible || width <= 0 || height <= 0 || loadError.visible)
+            return
+        grabToImage(result => {
+            snapshotResult = result
+            snapshot = result.url
+        }, Qt.size(Theme.previewWidth * Screen.devicePixelRatio,
+                   Math.round(Theme.previewWidth * Screen.devicePixelRatio * height / width)))
+    }
+    Timer {
+        id: snapshotSoon
+        interval: Theme.noticeMs / 2
+        onTriggered: view.takeSnapshot()
+    }
+    Timer {
+        interval: Theme.snapshotMs
+        repeat: true
+        running: view.visible && Qt.application.state === Qt.ApplicationActive
+        onTriggered: view.takeSnapshot()
+    }
+    onVisibleChanged: if (visible) snapshotSoon.restart()
 
     // Saves the visible area (or the whole page) as a PNG in the downloads
     // folder and copies it to the clipboard.

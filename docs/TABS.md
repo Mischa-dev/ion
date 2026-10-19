@@ -52,6 +52,17 @@ used before the current one.
 The ⋯ menu's "Recently closed" lists the last ten closed tabs; any of them
 can be reopened, not only the latest (Ctrl/Cmd+Shift+T).
 
+## Hover previews
+
+Resting the pointer on a tab shows a card with its full title, its site and
+a picture of the page from when it was last on screen, below the tab in the
+top strip and beside it in the sidebar. The card also says when a tab is
+asleep, playing or muted, or waiting for you.
+
+A page in a background tab that opens a dialog (alert, confirm, a sign-in
+prompt) doesn't interrupt the tab in front: the dialog waits until its tab
+is shown, and the tab is marked with a pulsing dot meanwhile.
+
 ## Split view
 
 Up to four tabs can share the page area, side by side or stacked:

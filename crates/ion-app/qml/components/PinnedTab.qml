@@ -17,6 +17,8 @@ Rectangle {
     required property var list
     required property int currentIndex
     property var view: null
+    // Hover previews open to the right in the sidebar, below in the top strip.
+    property bool previewBeside: false
 
     readonly property bool current: row === currentIndex
 
@@ -88,7 +90,13 @@ Rectangle {
         visible: tab.view?.needsAttention ?? false
     }
 
-    ToolTip.visible: tabMouse.containsMouse && !tabMouse.dragging
-    ToolTip.text: tab.title.length > 0 ? tab.title : tab.url
-    ToolTip.delay: Theme.hoverDelayMs * 2
+    TabPreview {
+        view: tab.view
+        title: tab.title
+        url: tab.url
+        suspended: tab.suspended
+        current: tab.current
+        beside: tab.previewBeside
+        wanted: tabMouse.containsMouse && !tabMouse.pressed
+    }
 }

@@ -63,7 +63,7 @@ Rectangle {
             Layout.alignment: Qt.AlignVCenter
             Layout.fillWidth: chip.vertical && chip.name.length === 0
             visible: !chip.compact && chip.collapsed && chip.tabs > 0
-            text: chip.vertical && chip.name.length === 0 ? qsTr("%n tab(s)", "", chip.tabs) : chip.tabs
+            text: chip.vertical && chip.name.length === 0 ? (chip.tabs === 1 ? qsTr("1 tab") : qsTr("%1 tabs").arg(chip.tabs)) : chip.tabs
             color: Theme.textMuted
             font.pixelSize: Theme.fontSize - 1
         }

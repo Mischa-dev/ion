@@ -22,6 +22,8 @@ Rectangle {
     property bool showTitle: true
     // Untitled tabs show their address instead of "New Tab" (the sidebar).
     property bool urlAsTitle: false
+    // Hover previews open to the right in the sidebar, below in the top strip.
+    property bool previewBeside: false
     // In a split view, and whether that view is on screen.
     property bool inSplit: false
     property bool splitShowing: false
@@ -43,6 +45,16 @@ Rectangle {
          : current ? Theme.surface : tabMouse.containsMouse || splitShowing ? Theme.surfaceRaised : "transparent"
 
     Behavior on color { ColorAnimation { duration: Theme.animationMs } }
+
+    TabPreview {
+        view: tab.view
+        title: tab.title
+        url: tab.url
+        suspended: tab.suspended
+        current: tab.current
+        beside: tab.previewBeside
+        wanted: tabMouse.containsMouse && !tabMouse.pressed && !closeButton.hovered && !audio.hovered
+    }
 
     TabDragArea {
         id: tabMouse

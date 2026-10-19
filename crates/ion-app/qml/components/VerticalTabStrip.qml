@@ -195,6 +195,7 @@ Item {
                         list: essentialsGrid
                         currentIndex: strip.currentIndex
                         view: strip.viewAt(cell.row)
+                        previewBeside: true
                         onActivated: index => strip.activated(index)
                         onCloseRequested: index => strip.closeRequested(index)
                         onMoveRequested: (from, to) => strip.moveRequested(from, to)
@@ -308,6 +309,7 @@ Item {
                         list: slot.ListView.view
                         currentIndex: strip.currentIndex
                         view: strip.viewAt(slot.row)
+                        previewBeside: true
                         inSplit: slot.split >= 0
                         splitShowing: slot.split >= 0 && slot.split === strip.currentSplit
                         showTitle: strip.expanded
