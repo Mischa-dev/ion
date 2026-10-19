@@ -105,6 +105,18 @@ pub const COMMANDS: &[Command] = &[
         "",
     ),
     command(
+        "passwords",
+        "Passwords",
+        "logins keys keychain saved accounts manager vault credentials",
+        "",
+    ),
+    command(
+        "generate-password",
+        "Copy a strong new password",
+        "generate random secure create",
+        "",
+    ),
+    command(
         "clear-cookies",
         "Clear all cookies (signs you out of sites)",
         "privacy delete sign out logout site data",

@@ -196,6 +196,11 @@ in
           )) "Browsing data deleted when Ion quits.";
         };
 
+        passwords = {
+          enable = setting types.bool "Offer to save passwords typed into sites.";
+          autofill = setting types.bool "Fill a site's only saved login in when its login page loads.";
+        };
+
         sites = mkOption {
           type = types.attrsOf (
             types.submodule {

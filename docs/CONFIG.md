@@ -98,6 +98,10 @@ blockThirdPartyCookies = true
 clearOnExit = []             # any of "cookies", "cache", "history" (the cache
                              # is cleared as Ion next starts)
 
+[passwords]                  # saved in the system keyring's protection (docs/PRIVACY.md)
+enable = true                # offer to save passwords typed into sites
+autofill = true              # fill a site's only saved login when its page loads
+
 [ai]                         # Ion Agent: @ion or !ai in the address bar
 enable = false               # off until you turn it on
 provider = "openai"          # any OpenAI-compatible chat completions API

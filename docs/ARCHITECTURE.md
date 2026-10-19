@@ -21,6 +21,8 @@ nix/
   packaging-check.nix     validates desktop file, AppStream data, Ion.app
 crates/
   ion-core/               shared core: app constants, URL-bar input resolution
+  ion-keyring/            named secrets in the OS keyring (docs/PRIVACY.md)
+  ion-passwords/          the password manager's logic and page script
   ion-basics/             downloads, per-site zoom, permission prompts and panel, page dialogs, find,
                           screenshots, context menu and new-tab tiles
   ion-platform/           Chromium switches, one-instance-per-profile hand-off

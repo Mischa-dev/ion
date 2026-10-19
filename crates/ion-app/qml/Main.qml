@@ -112,6 +112,11 @@ ApplicationWindow {
         importDialog.show()
     }
 
+    // The password manager, its search set to `query` ("" for everything).
+    function showPasswords(query) {
+        passwordManager.show(query || "")
+    }
+
     // Keyboard focus follows the visible page (so Space, arrows and Find work
     // right after switching tabs), unless the person is typing in the URL bar.
     onCurrentViewChanged: Qt.callLater(focusPage)
@@ -283,6 +288,7 @@ ApplicationWindow {
     CommandPalette { id: palette; browser: window }
 
     ImportDialog { id: importDialog }
+    PasswordManager { id: passwordManager }
     ExtensionsDialog { id: extensionsDialog; browser: window }
 
     // Per-site CSS and userscripts, installed on the profile.
@@ -316,6 +322,7 @@ ApplicationWindow {
             downloads: downloads
             agentSidebar: agentSidebar
             onBookmarkToggled: window.toggleBookmark()
+            onPasswordsRequested: query => window.showPasswords(query)
         }
     }
 
@@ -425,6 +432,7 @@ ApplicationWindow {
                     }
                     onOpenInNewTab: target => window.openTab(target, false)
                     onAskAgent: input => window.askAgent(input)
+                    onManagePasswords: window.showPasswords(Passwords.host(url.toString()))
                 }
             }
         }

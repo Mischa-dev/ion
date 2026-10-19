@@ -12,6 +12,8 @@ WebEngineView {
 
     // Reader mode for this tab: `reader.toggle()`, `reader.active`.
     readonly property alias reader: readerMode
+    // Saved passwords on this tab's pages: `passwords.prompt`, `passwords.formOnPage`.
+    readonly property alias passwords: formFill
 
     // Emitted when the page asks for a new tab or window (target=_blank, window.open).
     signal newTabRequested(var request)
@@ -19,6 +21,8 @@ WebEngineView {
     signal openInNewTab(url target)
     // The page's menu asked an agent about the selection (`@ion …`).
     signal askAgent(string input)
+    // A login field's list asked for the password manager.
+    signal managePasswords()
 
     // False for tabs a page opened (window.open), whose blank document the
     // page fills in itself; those must not be covered by the new-tab page.
@@ -120,6 +124,11 @@ WebEngineView {
     }
     onNewWindowRequested: request => view.newTabRequested(request)
 
+    // Ion's login-form helper talks to its page script over this channel,
+    // in the isolated world the page's own scripts can't see.
+    webChannel: formFill.channel
+    webChannelWorld: WebEngineScript.ApplicationWorld
+
     // Both are off by default; Ion asks before a page uses them.
     settings.fullScreenSupportEnabled: true
     settings.screenCaptureEnabled: true
@@ -138,6 +147,11 @@ WebEngineView {
     function takeScreenshot(fullPage) { screenshotTool.capture(fullPage) }
 
     NewTabPage { view: view }
+    FormFill {
+        id: formFill
+        view: view
+        onManageRequested: view.managePasswords()
+    }
     AdblockCosmetics { view: view }
     FindBar { view: view }
     PermissionPrompt { view: view; tabId: view.tabId }
