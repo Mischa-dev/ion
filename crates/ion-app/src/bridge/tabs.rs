@@ -629,7 +629,7 @@ impl qobject::Tabs {
     fn sync(mut self: Pin<&mut Self>) {
         // Wake the current tab before announcing it, so its view is never shown
         // while still unloaded.
-        if let Some(woken) = self.as_mut().rust_mut().list.note_current(now()) {
+        for woken in self.as_mut().rust_mut().list.note_current(now()) {
             self.as_mut().notify_row(woken as i32, ROLE_SUSPENDED);
         }
         let count = self.list.len() as i32;

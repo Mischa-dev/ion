@@ -291,21 +291,25 @@ ApplicationWindow {
         interval: 1000
         onTriggered: Tabs.saveSession()
     }
-    // Unload background tabs nobody has looked at for `general.suspendTabsAfter`
-    // minutes. Tabs playing sound are left alone.
+    // Unload background tabs nobody has looked at for `seconds` (0: every
+    // background tab). Tabs on screen, playing sound or waiting with a dialog
+    // are left alone.
+    function sleepIdleTabs(seconds) {
+        for (const index of Tabs.idleTabs(seconds)) {
+            const view = views.itemAt(index)
+            if (view && !view.recentlyAudible && !view.needsAttention)
+                Tabs.setSuspended(index, true)
+        }
+    }
+    // Every minute, for tabs idle for `general.suspendTabsAfter` minutes.
     Timer {
         interval: 60 * 1000
         repeat: true
         running: true
         onTriggered: {
             const minutes = Config.value("general.suspendTabsAfter")
-            if (!(minutes > 0))
-                return
-            for (const index of Tabs.idleTabs(minutes * 60)) {
-                const view = views.itemAt(index)
-                if (view && !view.recentlyAudible)
-                    Tabs.setSuspended(index, true)
-            }
+            if (minutes > 0)
+                window.sleepIdleTabs(minutes * 60)
         }
     }
     Timer {
@@ -399,7 +403,11 @@ ApplicationWindow {
         }
     }
 
-    SessionMenu { id: sessionMenu; onSearchRequested: tabSearch.show() }
+    SessionMenu {
+        id: sessionMenu
+        onSearchRequested: tabSearch.show()
+        onSleepRequested: window.sleepIdleTabs(0)
+    }
     TabMenu { id: tabMenu; browser: window; workspaceMenu: workspaceMenu; groupMenu: groupMenu }
     GroupMenu { id: groupMenu }
     WorkspaceMenu { id: workspaceMenu }

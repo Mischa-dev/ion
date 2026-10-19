@@ -106,6 +106,12 @@ pub const COMMANDS: &[Command] = &[
         "side by side tile two tabs",
         &["Ctrl+Alt+S"],
     ),
+    command(
+        "sleep-tabs",
+        "Put background tabs to sleep",
+        "suspend unload discard free memory",
+        &[],
+    ),
     command("next-tab", "Next tab", "switch right", NEXT_TAB),
     command("previous-tab", "Previous tab", "switch left", PREVIOUS_TAB),
     command(

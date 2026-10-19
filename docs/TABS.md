@@ -67,6 +67,16 @@ shows a dot (or icon) per workspace next to the current one's name:
 The workspace button opens the menu to add, rename, recolor, reorder or
 delete workspaces.
 
+## Sleeping tabs
+
+Background tabs nobody has looked at for `general.suspendTabsAfter` minutes
+(30 by default, 0 turns it off) are put to sleep: their page is unloaded to
+free memory, their icon dims, and they load again when shown. Tabs on screen
+(including every pane of the split view showing), tabs playing sound and
+tabs waiting with a dialog stay awake. "Put to sleep" in a tab's menu, and
+"Put background tabs to sleep" in the ⋯ menu or the command palette, do it
+right away.
+
 ## Hover previews
 
 Resting the pointer on a tab shows a card with its full title, its site and

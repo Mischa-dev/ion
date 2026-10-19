@@ -810,12 +810,14 @@ impl TabList {
     }
 
     /// Record that time `now` has been reached with the current tab showing:
-    /// the tab that was current before (if it changed) and the current one are
-    /// stamped as active now, tabs never stamped get `now`, and the current tab
-    /// is no longer suspended. Returns the current index if that cleared its
-    /// suspended flag.
-    pub fn note_current(&mut self, now: u64) -> Option<usize> {
-        let current = self.current()?;
+    /// the tab that was current before (if it changed) and the tabs on screen
+    /// are stamped as active now, tabs never stamped get `now`, and the tabs
+    /// on screen (the current one and the rest of its split view) are no
+    /// longer suspended. Returns the rows whose suspended flag that cleared.
+    pub fn note_current(&mut self, now: u64) -> Vec<usize> {
+        let Some(current) = self.current() else {
+            return Vec::new();
+        };
         let current_id = self.tabs[current].id;
         if let Some(previous) = self.seen_current.filter(|&id| id != current_id)
             && let Some(i) = self.index_of(previous)
@@ -835,19 +837,37 @@ impl TabList {
                 tab.last_active = now;
             }
         }
-        let tab = &mut self.tabs[current];
-        tab.last_active = now;
-        std::mem::take(&mut tab.suspended).then_some(current)
+        let shown: Vec<usize> = (0..self.tabs.len())
+            .filter(|&i| self.on_screen(i))
+            .collect();
+        shown
+            .into_iter()
+            .filter(|&i| {
+                let tab = &mut self.tabs[i];
+                tab.last_active = now;
+                std::mem::take(&mut tab.suspended)
+            })
+            .collect()
     }
 
-    /// Background tabs that have not been current for `idle_secs` and are not
-    /// suspended yet, in strip order. Blank tabs are left alone.
+    /// Whether the tab at `index` is on screen: the current tab, or another
+    /// pane of its split view.
+    pub fn on_screen(&self, index: usize) -> bool {
+        Some(index) == self.current()
+            || self
+                .current_split()
+                .zip(self.tabs.get(index))
+                .is_some_and(|(split, tab)| split.tabs.contains(&tab.id))
+    }
+
+    /// Background tabs that have not been on screen for `idle_secs` and are
+    /// not suspended yet, in strip order. Blank tabs are left alone.
     pub fn idle_tabs(&self, now: u64, idle_secs: u64) -> Vec<usize> {
         self.tabs
             .iter()
             .enumerate()
             .filter(|&(i, tab)| {
-                Some(i) != self.current()
+                !self.on_screen(i)
                     && !tab.suspended
                     && !tab.url.is_empty()
                     && tab.last_active != 0
@@ -857,10 +877,10 @@ impl TabList {
             .collect()
     }
 
-    /// Suspend or wake the tab at `index`. The current tab cannot be
-    /// suspended. True if the flag changed.
+    /// Suspend or wake the tab at `index`. Tabs on screen (the current one
+    /// and its split view) cannot be suspended. True if the flag changed.
     pub fn set_suspended(&mut self, index: usize, suspended: bool) -> bool {
-        if suspended && Some(index) == self.current() {
+        if suspended && self.on_screen(index) {
             return false;
         }
         match self.tabs.get_mut(index) {
@@ -1646,12 +1666,12 @@ mod tests {
         assert!(!l.set_suspended(0, true), "the current tab stays awake");
         assert_eq!(l.idle_tabs(160, 60), [2]);
         l.activate(1);
-        assert_eq!(l.note_current(170), Some(1));
+        assert_eq!(l.note_current(170), [1]);
         assert!(!l.get(1).unwrap().suspended);
         // "a" stopped being current at 170, so it is idle only from 230.
         assert_eq!(l.idle_tabs(229, 60), [2]);
         assert_eq!(l.idle_tabs(230, 60), [0, 2]);
-        assert_eq!(l.note_current(231), None);
+        assert!(l.note_current(231).is_empty());
     }
 
     #[test]
@@ -1659,7 +1679,7 @@ mod tests {
         let mut l = list(&["a"]);
         l.open(1, "b", "", false);
         assert!(l.idle_tabs(1_000_000, 60).is_empty());
-        assert_eq!(TabList::new().note_current(5), None);
+        assert!(TabList::new().note_current(5).is_empty());
     }
 
     #[test]
@@ -2094,6 +2114,18 @@ mod tests {
         l.close(0);
         assert_eq!(l.search_closed(contains("example")), [0, 1]);
         assert_eq!(l.search_closed(contains("a.ex")), [1]);
+    }
+
+    #[test]
+    fn split_panes_on_screen_stay_awake() {
+        let mut l = list(&["a", "b", "c", "d"]);
+        l.note_current(10);
+        assert!(l.set_suspended(2, true));
+        l.split_tabs(0, 2).unwrap();
+        // Joining the split view on screen wakes the tab, and it can't sleep.
+        assert_eq!(l.note_current(20), [2]);
+        assert!(!l.set_suspended(2, true));
+        assert_eq!(l.idle_tabs(1000, 60), [1, 3]);
     }
 
     #[test]

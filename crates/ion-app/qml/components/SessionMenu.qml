@@ -30,6 +30,7 @@ Item {
     palette.placeholderText: Theme.textMuted
 
     signal searchRequested()
+    signal sleepRequested()
 
     function open(anchor) {
         menu.popup(anchor, 0, anchor.height)
@@ -70,6 +71,10 @@ Item {
         IonMenuItem {
             text: qsTr("Search tabs…")
             onTriggered: root.searchRequested()
+        }
+        IonMenuItem {
+            text: qsTr("Put background tabs to sleep")
+            onTriggered: root.sleepRequested()
         }
         IonMenuItem {
             text: qsTr("Vertical tabs")
