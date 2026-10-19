@@ -83,8 +83,9 @@ IonMenu {
     }
     IonMenuItem {
         text: qsTr("Put to sleep")
-        // The current tab is always awake; see general.suspendTabsAfter.
-        enabled: !root.isCurrent && !(root.view?.suspended ?? true)
+        // Tabs on screen (the current one and its split's panes) stay awake;
+        // see general.suspendTabsAfter. Their views are the visible ones.
+        enabled: !(root.view?.visible ?? true) && !(root.view?.suspended ?? true)
         onTriggered: Tabs.setSuspended(root.index, true)
     }
 

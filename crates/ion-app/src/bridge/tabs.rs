@@ -929,11 +929,18 @@ impl qobject::Tabs {
             return;
         };
         let rows = self.list.group_rows(id);
-        // Keep the window open: closing every tab is closing the window.
-        if rows.len() == self.list.len() {
-            let end = self.list.len();
+        // Keep the group's workspace from emptying (closing every tab would
+        // close the window): open a blank tab there, as closing its last tab
+        // does.
+        let workspace = rows
+            .first()
+            .and_then(|&i| self.list.get(i))
+            .map(|t| t.workspace);
+        if let Some(workspace) = workspace.filter(|&w| self.list.rows_in(w).len() == rows.len()) {
+            let shown = workspace == self.list.current_workspace();
+            let end = self.list.insert_index(self.list.len());
             self.as_mut()
-                .insert_with(end, |list, i| list.open(i, "", "", true));
+                .insert_with(end, |list, i| list.open_in(workspace, i, "", "", shown));
         }
         for &row in rows.iter().rev() {
             self.as_mut().close_tab(row as i32);
