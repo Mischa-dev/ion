@@ -809,6 +809,7 @@ ApplicationWindow {
     function runCommand(id) { commands.run(id) }
     // What the side-panel command reopens when nothing is showing.
     function lastPanel() { return sidePanel.lastOpen }
+    function copyText(text) { commands.copyText(text) }
     function canRunCommand(id) { return commands.available(id) }
 
     ShortcutEditor { id: shortcutEditor }
