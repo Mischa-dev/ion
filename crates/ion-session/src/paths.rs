@@ -28,7 +28,7 @@ pub fn data_dir() -> Option<PathBuf> {
 
 /// Write `contents` to `path` atomically: readers see the old file or the new
 /// one, never a half-written file if Ion crashes mid-save.
-pub(crate) fn write_atomic(path: &std::path::Path, contents: &[u8]) -> std::io::Result<()> {
+pub fn write_atomic(path: &std::path::Path, contents: &[u8]) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         let mut builder = fs::DirBuilder::new();
         builder.recursive(true);
