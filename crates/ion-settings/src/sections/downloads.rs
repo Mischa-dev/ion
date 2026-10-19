@@ -4,7 +4,7 @@ pub fn section(_: &Context) -> Section {
     Section::new(
         "downloads",
         "Downloads",
-        "↓",
+        "download",
         "Where downloaded files go.",
         vec![Group::new(
             "",

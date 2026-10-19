@@ -283,6 +283,50 @@ impl History {
     }
 }
 
+impl History {
+    /// Pages matching `query` (every word in the URL or title), most
+    /// recently visited first, at most `limit`. For the History page.
+    pub fn recent(&self, query: &str, limit: usize) -> Vec<&HistoryEntry> {
+        let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+        let mut hits: Vec<&HistoryEntry> = self
+            .entries
+            .iter()
+            .filter(|entry| {
+                let url = entry.url.to_lowercase();
+                let title = entry.title.to_lowercase();
+                words
+                    .iter()
+                    .all(|w| url.contains(w.as_str()) || title.contains(w.as_str()))
+            })
+            .collect();
+        hits.sort_by(|a, b| b.last_visit.cmp(&a.last_visit).then(a.url.cmp(&b.url)));
+        hits.truncate(limit);
+        hits
+    }
+
+    /// Forget every page on `site` and its subdomains (`example.com` covers
+    /// `www.example.com` and `docs.example.com`). Returns how many went.
+    pub fn remove_site(&mut self, site: &str) -> usize {
+        let site = site.to_lowercase();
+        let site = site.strip_prefix("www.").unwrap_or(&site);
+        if site.is_empty() {
+            return 0;
+        }
+        let before = self.entries.len();
+        self.entries.retain(|e| {
+            let url = e.url.to_lowercase();
+            let host = host(&url);
+            let host = host.split(':').next().unwrap_or(host);
+            !(host == site || host.ends_with(&format!(".{site}")))
+        });
+        let removed = before - self.entries.len();
+        if removed > 0 {
+            self.reindex();
+        }
+        removed
+    }
+}
+
 /// The host of a lowercase URL without a leading `www.`.
 fn host(url: &str) -> &str {
     let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
@@ -296,6 +340,37 @@ mod tests {
     use crate::paths::test_dir;
 
     const NOW: u64 = 1_800_000_000;
+
+    #[test]
+    fn recent_is_newest_first_and_filtered() {
+        let mut h = History::new();
+        h.record_visit("https://a.example/", "Alpha", NOW - 100);
+        h.record_visit("https://b.example/", "Beta", NOW - 10);
+        h.record_visit("https://c.example/docs", "Gamma docs", NOW - 50);
+        assert_eq!(
+            urls(&h.recent("", 10)),
+            [
+                "https://b.example/",
+                "https://c.example/docs",
+                "https://a.example/"
+            ]
+        );
+        assert_eq!(urls(&h.recent("DOCS", 10)), ["https://c.example/docs"]);
+        assert_eq!(h.recent("", 1).len(), 1);
+    }
+
+    #[test]
+    fn remove_site_takes_subdomains_only() {
+        let mut h = History::new();
+        h.record_visit("https://www.example.com/a", "", NOW);
+        h.record_visit("https://docs.example.com/b", "", NOW);
+        h.record_visit("http://example.com:8080/c", "", NOW);
+        h.record_visit("https://notexample.com/", "", NOW);
+        assert_eq!(h.remove_site("www.example.com"), 3);
+        assert_eq!(urls(&h.recent("", 10)), ["https://notexample.com/"]);
+        assert!(h.get("https://www.example.com/a").is_none());
+        assert_eq!(h.remove_site(""), 0);
+    }
 
     fn urls<'a>(entries: &[&'a HistoryEntry]) -> Vec<&'a str> {
         entries.iter().map(|e| e.url.as_str()).collect()

@@ -12,6 +12,8 @@ WebEngineView {
 
     // Reader mode for this tab: `reader.toggle()`, `reader.active`.
     readonly property alias reader: readerMode
+    // Saved passwords on this tab's pages: `passwords.prompt`, `passwords.formOnPage`.
+    readonly property alias passwords: formFill
     readonly property alias findBar: findBar
     // Ion's own page drawn over this tab, if any (`builtinPage.active`).
     readonly property alias builtinPage: builtinPage
@@ -22,6 +24,8 @@ WebEngineView {
     signal openInNewTab(url target)
     // The page's menu asked an agent about the selection (`@ion …`).
     signal askAgent(string input)
+    // A login field's list asked for the password manager.
+    signal managePasswords(string section)
 
     // False for tabs a page opened (window.open), whose blank document the
     // page fills in itself; those must not be covered by the new-tab page.
@@ -110,10 +114,25 @@ WebEngineView {
     // Ion's when this tab's first load starts. Later loads don't reset it.
     property bool pageSchemeRestored: false
     onLoadingChanged: info => {
+        live = true
         // Ion's own error page covers Chromium's until something replaces it;
         // a load that only starts, or is stopped, leaves Chromium's in place.
-        live = true
-        if (info.status === WebEngineView.LoadFailedStatus)
+        // HTTPS-first: the https page Ion asked for failed; go back to http
+        // ("upgrade") or offer it ("strict").
+        // Only a connection or certificate failure means "no https here"; a
+        // load the person stopped doesn't.
+        const noHttps = info.status === WebEngineView.LoadFailedStatus
+                && (info.errorDomain === WebEngineView.ConnectionErrorDomain
+                    || info.errorDomain === WebEngineView.CertificateErrorDomain)
+                && info.errorCode !== -3
+        const insecure = noHttps ? Privacy.httpsFallback(info.url.toString()) : ""
+        if (insecure.length > 0 && Privacy.httpsMode() === "strict") {
+            loadError.item.showInsecureOffer(info, insecure)
+        } else if (insecure.length > 0) {
+            Qt.callLater(() => view.url = insecure)
+            notify(qsTr("%1 has no secure connection; loaded without HTTPS")
+                   .arg(insecure.replace(/^http:\/\//, "").split("/")[0]))
+        } else if (info.status === WebEngineView.LoadFailedStatus)
             loadError.item.showFor(info)
         else if (info.status === WebEngineView.LoadSucceededStatus && loadError.item)
             loadError.item.visible = false
@@ -139,6 +158,10 @@ WebEngineView {
     }
     onNewWindowRequested: request => view.newTabRequested(request)
 
+    // Ion's login-form helper talks to its page script over this channel,
+    // in the isolated world the page's own scripts can't see.
+    webChannel: formFill.channel
+    webChannelWorld: WebEngineScript.ApplicationWorld
     // A crashed (or killed) page shows Ion's page instead of a blank tab;
     // Try again or Reload starts a fresh page process.
     onRenderProcessTerminated: (terminationStatus, exitCode) => {
@@ -174,6 +197,12 @@ WebEngineView {
     TabPart {
         active: view.live && view.visible && view.showNewTabPage && Basics.isNewTabUrl(view.url)
         sourceComponent: NewTabPage { view: browserTab }
+    }
+    // Eager: the tab's webChannel is this part's.
+    FormFill {
+        id: formFill
+        view: view
+        onManageRequested: section => view.managePasswords(section)
     }
     BuiltinPage { id: builtinPage; view: view }
     TabPart { sourceComponent: AdblockCosmetics { view: browserTab } }
@@ -283,6 +312,10 @@ WebEngineView {
         sourceComponent: LoadErrorPage {
             anchors.fill: parent
             onRetry: browserTab.reload()
+            onContinueInsecure: target => {
+                Privacy.allowHttp(target)
+                browserTab.url = target
+            }
         }
     }
 }

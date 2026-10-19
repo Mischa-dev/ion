@@ -8,7 +8,7 @@ pub fn section(_: &Context) -> Section {
     Section::new(
         "config",
         "Config file",
-        "⚙",
+        "settings",
         "Everything here is also plain TOML. Changes made on this page go to overrides.toml and win over config.toml, which Ion never writes, so a home-manager config keeps working.",
         vec![Group::new(
             "",

@@ -39,6 +39,36 @@ pub mod qobject {
         #[qinvokable]
         fn search(self: &Bookmarks, query: &QString, limit: i32) -> QString;
 
+        /// Bookmarks directly in `folder` ("" for the top level), newest
+        /// first, as JSON like `search`, plus `added`.
+        #[qinvokable]
+        #[cxx_name = "inFolder"]
+        fn in_folder(self: &Bookmarks, folder: &QString) -> QString;
+
+        /// Every folder as a JSON array of `{path, name, depth, count}`.
+        #[qinvokable]
+        fn folders(self: &Bookmarks) -> QString;
+
+        /// Change a bookmark. Returns why it couldn't be changed, or "".
+        #[qinvokable]
+        fn edit(
+            self: Pin<&mut Bookmarks>,
+            url: &QString,
+            new_url: &QString,
+            title: &QString,
+            folder: &QString,
+        ) -> QString;
+
+        /// Rename a folder and those inside it. Returns how many bookmarks moved.
+        #[qinvokable]
+        #[cxx_name = "renameFolder"]
+        fn rename_folder(self: Pin<&mut Bookmarks>, from: &QString, to: &QString) -> i32;
+
+        /// Delete a folder, those inside it and their bookmarks.
+        #[qinvokable]
+        #[cxx_name = "removeFolder"]
+        fn remove_folder(self: Pin<&mut Bookmarks>, folder: &QString) -> i32;
+
         /// Browsers with a profile Ion can import from, e.g. "Firefox".
         #[qinvokable]
         #[cxx_name = "importSources"]
@@ -161,6 +191,80 @@ impl qobject::Bookmarks {
             .map(|b| serde_json::json!({ "url": b.url, "title": b.title, "folder": b.folder }))
             .collect();
         QString::from(serde_json::Value::Array(hits).to_string().as_str())
+    }
+
+    fn in_folder(&self, folder: &QString) -> QString {
+        let items: Vec<serde_json::Value> = self
+            .bookmarks
+            .in_folder(&folder.to_string())
+            .into_iter()
+            .map(|b| {
+                serde_json::json!({
+                    "url": b.url, "title": b.title, "folder": b.folder, "added": b.added,
+                })
+            })
+            .collect();
+        QString::from(serde_json::Value::Array(items).to_string().as_str())
+    }
+
+    fn folders(&self) -> QString {
+        let folders: Vec<serde_json::Value> = self
+            .bookmarks
+            .folders()
+            .into_iter()
+            .map(|(path, count)| {
+                let depth = path.matches('/').count();
+                let name = path.rsplit('/').next().unwrap_or_default().to_owned();
+                serde_json::json!({ "path": path, "name": name, "depth": depth, "count": count })
+            })
+            .collect();
+        QString::from(serde_json::Value::Array(folders).to_string().as_str())
+    }
+
+    fn edit(
+        mut self: Pin<&mut Self>,
+        url: &QString,
+        new_url: &QString,
+        title: &QString,
+        folder: &QString,
+    ) -> QString {
+        let result = self.as_mut().rust_mut().bookmarks.edit(
+            &url.to_string(),
+            &new_url.to_string(),
+            &title.to_string(),
+            &folder.to_string(),
+        );
+        match result {
+            Ok(()) => {
+                self.changed();
+                QString::default()
+            }
+            Err(e) => QString::from(e.as_str()),
+        }
+    }
+
+    fn rename_folder(mut self: Pin<&mut Self>, from: &QString, to: &QString) -> i32 {
+        let moved = self
+            .as_mut()
+            .rust_mut()
+            .bookmarks
+            .rename_folder(&from.to_string(), &to.to_string());
+        if moved > 0 {
+            self.changed();
+        }
+        i32::try_from(moved).unwrap_or(i32::MAX)
+    }
+
+    fn remove_folder(mut self: Pin<&mut Self>, folder: &QString) -> i32 {
+        let removed = self
+            .as_mut()
+            .rust_mut()
+            .bookmarks
+            .remove_folder(&folder.to_string());
+        if removed > 0 {
+            self.changed();
+        }
+        i32::try_from(removed).unwrap_or(i32::MAX)
     }
 
     fn import_sources(&self) -> QStringList {
