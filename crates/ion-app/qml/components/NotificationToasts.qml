@@ -202,7 +202,7 @@ ColumnLayout {
 
                 IconButton {
                     Layout.alignment: Qt.AlignTop
-                    glyph: "×"
+                    iconName: "close"
                     tip: qsTr("Dismiss")
                     onClicked: toasts.close(toast.notification)
                 }

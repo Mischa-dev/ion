@@ -20,19 +20,28 @@ Dialog {
         color: Qt.rgba(Theme.background.r, Theme.background.g, Theme.background.b, Theme.scrimOpacity)
     }
 
-    background: Rectangle {
-        radius: Theme.radius
-        color: Theme.surface
-        border.color: Theme.border
-        border.width: Theme.hairline
+    background: Item {
+        IonShadow {
+            anchors.fill: parent
+            radius: Theme.radiusLarge
+            spread: Theme.shadowRadius * 1.5
+            offset: Theme.shadowOffset * 2
+        }
+        Rectangle {
+            anchors.fill: parent
+            radius: Theme.radiusLarge
+            color: Theme.surface
+            border.color: Theme.border
+            border.width: Theme.hairline
+        }
     }
 
     header: Text {
         text: dialog.title
         visible: text.length > 0
         color: Theme.text
-        font.pixelSize: Theme.fontSize + 2
-        font.weight: Font.DemiBold
+        font.pixelSize: Theme.fontSizeLarge
+        font.weight: Theme.weightBold
         padding: Theme.spacing * 3
         bottomPadding: Theme.spacing
     }
@@ -56,6 +65,7 @@ Dialog {
                 text: button.text
                 color: button.primary ? Theme.onAccent : Theme.text
                 font.pixelSize: Theme.fontSize
+                font.weight: Theme.weightMedium
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
             }
@@ -67,13 +77,15 @@ Dialog {
                 // Keyboard focus (Tab) shows as a ring, like the focused URL bar.
                 border.width: button.visualFocus ? Theme.hairline * 2 : 0
                 border.color: button.primary ? Theme.text : Theme.accent
+
+                Behavior on color { ColorAnimation { duration: Theme.animationFastMs } }
             }
         }
     }
 
     enter: Transition {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.animationMs }
-        NumberAnimation { property: "scale"; from: 0.97; to: 1; duration: Theme.animationSlowMs; easing.type: Easing.OutCubic }
+        NumberAnimation { property: "scale"; from: Theme.popupStartScale; to: 1; duration: Theme.animationSlowMs; easing.type: Theme.easeOut }
     }
     exit: Transition {
         NumberAnimation { property: "opacity"; from: 1; to: 0; duration: Theme.animationMs }

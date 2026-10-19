@@ -22,6 +22,24 @@ ApplicationWindow {
     height: 820
     visible: true
     color: Theme.background
+    // The style's own controls (tooltips, scroll bars, text cursors) in the
+    // theme's colors rather than the platform's.
+    palette {
+        window: Theme.background
+        windowText: Theme.text
+        base: Theme.surfaceRaised
+        text: Theme.text
+        button: Theme.surfaceRaised
+        buttonText: Theme.text
+        highlight: Theme.accent
+        highlightedText: Theme.onAccent
+        toolTipBase: Theme.surfaceRaised
+        toolTipText: Theme.text
+        mid: Theme.surfaceHover
+        dark: Theme.border
+        light: Theme.surfaceHover
+        placeholderText: Theme.textMuted
+    }
     title: currentView && currentView.title ? currentView.title + " — Ion" : "Ion"
 
     // Persistent profile: cookies, cache and storage survive restarts.
