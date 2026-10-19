@@ -209,7 +209,7 @@ Popup {
                 enabled: (root.checkup.total ?? 0) > 0
                 onClicked: exportConfirm.open()
             }
-            IconButton { glyph: "✕"; tip: qsTr("Close"); onClicked: root.close() }
+            IconButton { iconName: "close"; tip: qsTr("Close"); onClicked: root.close() }
         }
 
         // Where the secrets are, or why they can't be used.
@@ -415,7 +415,7 @@ Popup {
                             readOnly: !root.editing
                         }
                         IconButton {
-                            glyph: "⧉"
+                            iconName: "copy"
                             tip: qsTr("Copy username")
                             onClicked: root.copy(usernameField.text, qsTr("Username copied"))
                         }
@@ -433,18 +433,18 @@ Popup {
                         }
                         IconButton {
                             visible: root.editing
-                            glyph: "✦"
+                            iconName: "reload"
                             tip: qsTr("Generate a strong password")
                             onClicked: passwordField.text = Passwords.generate()
                         }
                         IconButton {
                             visible: !root.editing
-                            glyph: root.reveal ? "◉" : "◎"
+                            iconName: root.reveal ? "eye-off" : "eye"
                             tip: root.reveal ? qsTr("Hide password") : qsTr("Show password")
                             onClicked: root.reveal = !root.reveal
                         }
                         IconButton {
-                            glyph: "⚿"
+                            iconName: "key"
                             tip: qsTr("Copy password")
                             onClicked: root.copy(root.editing ? passwordField.text : root.passwordOf(root.selected),
                                                  qsTr("Password copied; the clipboard clears in a minute"))

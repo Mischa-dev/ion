@@ -188,12 +188,7 @@ TextField {
         onAboutToShow: field.lastPointer = Qt.point(-1, -1)
         closePolicy: Popup.NoAutoClose
 
-        background: Rectangle {
-            radius: Theme.radius
-            color: Theme.surface
-            border.width: 1
-            border.color: Theme.border
-        }
+        background: IonSurface {}
 
         contentItem: ListView {
             id: list

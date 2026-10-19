@@ -11,7 +11,7 @@ IconButton {
     readonly property real progress: panel?.activeProgress ?? -1
 
     visible: (panel?.items.length ?? 0) > 0
-    glyph: "↓"
+    iconName: "download"
     tip: activeCount > 0 ? qsTr("Downloads (%1 running)").arg(activeCount) : qsTr("Downloads")
     onClicked: panel.toggle()
 

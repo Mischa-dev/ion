@@ -166,12 +166,7 @@ Menu {
     padding: Theme.spacing / 2
     implicitWidth: Theme.tabMaxWidth * 1.2
 
-    background: Rectangle {
-        radius: Theme.radius
-        color: Theme.surface
-        border.color: Theme.border
-        border.width: 1
-    }
+    background: IonSurface {}
 
     Component {
         id: itemComponent

@@ -22,6 +22,24 @@ ApplicationWindow {
     height: 820
     visible: true
     color: Theme.background
+    // The style's own controls (tooltips, scroll bars, text cursors) in the
+    // theme's colors rather than the platform's.
+    palette {
+        window: Theme.background
+        windowText: Theme.text
+        base: Theme.surfaceRaised
+        text: Theme.text
+        button: Theme.surfaceRaised
+        buttonText: Theme.text
+        highlight: Theme.accent
+        highlightedText: Theme.onAccent
+        toolTipBase: Theme.surfaceRaised
+        toolTipText: Theme.text
+        mid: Theme.surfaceHover
+        dark: Theme.border
+        light: Theme.surfaceHover
+        placeholderText: Theme.textMuted
+    }
     // A private window or another profile says so in its title.
     readonly property bool privateWindow: Privacy.windowKind() === "private"
     readonly property string appTitle: Privacy.profileName().length > 0 ? "Ion — " + Privacy.profileName() : "Ion"

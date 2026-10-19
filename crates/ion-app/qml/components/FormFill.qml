@@ -275,11 +275,10 @@ Item {
                     contentItem: RowLayout {
                         spacing: Theme.spacing * 1.5
 
-                        Text {
-                            text: row.modelData.kind === "generate" ? "✦" : row.modelData.kind === "manage" ? "⚙"
-                                : row.modelData.kind === "address" ? "⌂" : "⚿"
+                        Icon {
+                            name: row.modelData.kind === "generate" ? "reload" : row.modelData.kind === "manage" ? "settings"
+                                : row.modelData.kind === "address" ? "home" : "key"
                             color: row.modelData.kind === "generate" ? Theme.accent : Theme.textMuted
-                            font.pixelSize: Theme.fontSize + 1
                             Layout.alignment: Qt.AlignVCenter
                         }
                         ColumnLayout {

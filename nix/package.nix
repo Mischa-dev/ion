@@ -4,6 +4,7 @@
   callPackage,
   rustPlatform,
   qt6,
+  inter,
   src,
   # Google's Widevine DRM module (`widevine-cdm`, unfree), for Netflix,
   # Spotify and other streaming sites; `packages.ion-widevine` passes it.
@@ -46,6 +47,12 @@ rustPlatform.buildRustPackage {
     export RUSTFLAGS="${qt.rustflags} ''${RUSTFLAGS:-}"
     export CXXFLAGS="${qt.cxxflags} ''${CXXFLAGS:-}"
   '';
+
+  # Inter, Ion's interface typeface, shipped with the app instead of relying
+  # on what the system has installed. macOS keeps its system font.
+  qtWrapperArgs = lib.optionals stdenv.hostPlatform.isLinux [
+    "--set-default ION_FONT_DIR ${inter}/share/fonts"
+  ];
 
   cargoBuildFlags = [
     "--package"

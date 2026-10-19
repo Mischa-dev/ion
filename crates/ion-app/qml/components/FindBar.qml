@@ -111,19 +111,19 @@ Rectangle {
         }
 
         IconButton {
-            glyph: "↑"
+            iconName: "chevron-up"
             tip: qsTr("Previous match")
             enabled: bar.matchCount > 0
             onClicked: bar.search(-1)
         }
         IconButton {
-            glyph: "↓"
+            iconName: "chevron-down"
             tip: qsTr("Next match")
             enabled: bar.matchCount > 0
             onClicked: bar.search(1)
         }
         IconButton {
-            glyph: "×"
+            iconName: "close"
             tip: qsTr("Close")
             onClicked: bar.close()
         }

@@ -46,11 +46,10 @@ ToolButton {
     }
 
     contentItem: Item {
-        Text {
+        Icon {
             anchors.centerIn: parent
-            text: control.addressPrompt ? "⌂" : "⚿"
+            name: control.addressPrompt ? "home" : "key"
             color: control.prompt ? Theme.accent : Theme.text
-            font.pixelSize: Theme.fontSize + 3
         }
         // A dot while an offer waits.
         Rectangle {
@@ -216,7 +215,7 @@ ToolButton {
                     IconButton {
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
-                        glyph: popup.reveal ? "◉" : "◎"
+                        iconName: popup.reveal ? "eye-off" : "eye"
                         tip: popup.reveal ? qsTr("Hide password") : qsTr("Show password")
                         onClicked: popup.reveal = !popup.reveal
                     }
@@ -306,13 +305,13 @@ ToolButton {
                             }
                         }
                         IconButton {
-                            glyph: "⧉"
+                            iconName: "copy"
                             tip: qsTr("Copy username")
                             enabled: loginRow.modelData.username.length > 0
                             onClicked: Passwords.copySecret(loginRow.modelData.username)
                         }
                         IconButton {
-                            glyph: "⚿"
+                            iconName: "key"
                             tip: qsTr("Copy password")
                             onClicked: {
                                 const login = JSON.parse(Passwords.credentials(loginRow.modelData.id))
