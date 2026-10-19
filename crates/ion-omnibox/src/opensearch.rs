@@ -84,29 +84,27 @@ pub fn parse(xml: &str, page_host: &str) -> Option<SiteEngine> {
         .filter(|name| !name.is_empty())
         .unwrap_or_else(|| page_host.clone());
 
+    // The first results page that works; a broken or off-site one doesn't
+    // stop a later one from being used.
     let template = tags(xml, "Url").find_map(|tag| {
         let kind = attribute(tag, "type").unwrap_or("text/html");
         if kind != "text/html" {
             return None;
         }
         let template = decode(attribute(tag, "template")?);
-        // Only the query; optional parameters ({startPage?} and the like) go.
         if !template.contains("{searchTerms}") {
             return None;
         }
         let template = template.replace("{searchTerms}", "\u{0}");
-        let template = strip_optional_parameters(&template).replace('\u{0}', "{}");
-        Some(template)
+        let template = fill_parameters(&template)?.replace('\u{0}', "{}");
+        let url = url::Url::parse(&template.replace("{}", "q")).ok()?;
+        if !matches!(url.scheme(), "https" | "http") {
+            return None;
+        }
+        let host = url.host_str()?.trim_start_matches("www.").to_lowercase();
+        same_site(&host, &page_host).then_some(template)
     })?;
 
-    let url = url::Url::parse(&template.replace("{}", "q")).ok()?;
-    if !matches!(url.scheme(), "https" | "http") {
-        return None;
-    }
-    let host = url.host_str()?.trim_start_matches("www.").to_lowercase();
-    if !same_site(&host, &page_host) {
-        return None;
-    }
     Some(SiteEngine {
         host: page_host,
         name,
@@ -265,20 +263,68 @@ fn same_site(a: &str, b: &str) -> bool {
     a == b || registrable_domain(a).is_some_and(|base| registrable_domain(b) == Some(base))
 }
 
-/// Drop `name={param}` / `name={param?}` pairs left in a template.
-fn strip_optional_parameters(template: &str) -> String {
-    let Some((base, query)) = template.split_once('?') else {
-        return template.to_owned();
+/// What Ion sends for OpenSearch's standard required parameters.
+const PARAMETER_DEFAULTS: &[(&str, &str)] = &[
+    ("inputEncoding", "UTF-8"),
+    ("outputEncoding", "UTF-8"),
+    ("language", "*"),
+    ("startIndex", "1"),
+    ("startPage", "1"),
+    ("count", "20"),
+];
+
+/// Fills the parameters left in `template` other than the query: query
+/// pairs holding only optional ones (`{startPage?}`) go, standard required
+/// ones get their defaults, and an unknown required one means Ion can't use
+/// the template.
+fn fill_parameters(template: &str) -> Option<String> {
+    let template = match template.split_once('?') {
+        Some((base, query)) => {
+            let kept: Vec<&str> = query
+                .split('&')
+                .filter(|pair| !only_optional_parameters(pair))
+                .collect();
+            if kept.is_empty() {
+                base.to_owned()
+            } else {
+                format!("{base}?{}", kept.join("&"))
+            }
+        }
+        None => template.to_owned(),
     };
-    let kept: Vec<&str> = query
-        .split('&')
-        .filter(|pair| !pair.contains('{'))
-        .collect();
-    if kept.is_empty() {
-        base.to_owned()
-    } else {
-        format!("{base}?{}", kept.join("&"))
+    let mut filled = String::with_capacity(template.len());
+    let mut rest = template.as_str();
+    while let Some(start) = rest.find('{') {
+        let end = start + rest[start..].find('}')?;
+        filled.push_str(&rest[..start]);
+        let name = &rest[start + 1..end];
+        // An optional parameter outside the query is just left empty.
+        if !name.ends_with('?') {
+            let value = PARAMETER_DEFAULTS
+                .iter()
+                .find(|(known, _)| *known == name)
+                .map(|(_, value)| *value)?;
+            filled.push_str(value);
+        }
+        rest = &rest[end + 1..];
     }
+    filled.push_str(rest);
+    Some(filled)
+}
+
+/// Whether every parameter in a query pair is optional (`{name?}`).
+fn only_optional_parameters(pair: &str) -> bool {
+    let mut any = false;
+    for piece in pair.split('{').skip(1) {
+        let Some((name, _)) = piece.split_once('}') else {
+            return false;
+        };
+        if !name.ends_with('?') {
+            return false;
+        }
+        any = true;
+    }
+    any
 }
 
 /// Opening tags named `name` (with or without a namespace prefix).
@@ -600,6 +646,32 @@ mod tests {
         assert_eq!(parse_for_page(xml, "https://docs.example.com/"), None);
         let engine = parse_for_page(xml, "http://docs.example.com/").unwrap();
         assert_eq!(engine.template, "http://docs.example.com/s?q={}");
+    }
+
+    #[test]
+    fn required_parameters_get_their_defaults() {
+        let xml = r#"<OpenSearchDescription><Url type="text/html"
+            template="https://example.com/s?q={searchTerms}&amp;lang={language}&amp;page={startPage?}&amp;ie={inputEncoding}"/>
+            </OpenSearchDescription>"#;
+        let engine = parse(xml, "example.com").unwrap();
+        assert_eq!(
+            engine.template,
+            "https://example.com/s?q={}&lang=*&ie=UTF-8"
+        );
+        let unknown = r#"<OpenSearchDescription><Url type="text/html"
+            template="https://example.com/s?q={searchTerms}&amp;key={custom:apiKey}"/>
+            </OpenSearchDescription>"#;
+        assert_eq!(parse(unknown, "example.com"), None);
+    }
+
+    #[test]
+    fn a_later_url_is_used_when_an_earlier_one_is_unusable() {
+        let xml = r#"<OpenSearchDescription>
+            <Url type="text/html" template="https://elsewhere.example/s?q={searchTerms}"/>
+            <Url type="text/html" template="https://example.com/s?q={searchTerms}"/>
+            </OpenSearchDescription>"#;
+        let engine = parse(xml, "example.com").unwrap();
+        assert_eq!(engine.template, "https://example.com/s?q={}");
     }
 
     #[test]
