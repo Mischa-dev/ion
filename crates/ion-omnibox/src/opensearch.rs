@@ -212,6 +212,18 @@ impl SiteEngines {
     pub fn clear(&mut self) {
         self.engines.clear();
     }
+
+    /// Drop the engines of `site` and its subdomains. True if any went.
+    pub fn forget_site(&mut self, site: &str) -> bool {
+        let site = site.trim().trim_start_matches("www.").to_lowercase();
+        if site.is_empty() {
+            return false;
+        }
+        let before = self.engines.len();
+        self.engines
+            .retain(|e| e.host != site && !e.host.ends_with(&format!(".{site}")));
+        self.engines.len() != before
+    }
 }
 
 #[cfg(test)]
@@ -224,6 +236,23 @@ mod tests {
   <Url type="text/html" method="get" template="https://www.youtube.com/results?search_query={searchTerms}&amp;page={startPage?}&amp;utm_source=opensearch"/>
   <Url type="application/x-suggestions+json" template="https://suggest.example/?q={searchTerms}"/>
 </OpenSearchDescription>"#;
+
+    #[test]
+    fn forgetting_a_site_takes_its_subdomains() {
+        let mut engines = SiteEngines::default();
+        for host in ["youtube.com", "music.youtube.com", "notyoutube.com"] {
+            engines.add(SiteEngine {
+                name: host.into(),
+                host: host.into(),
+                template: format!("https://{host}/?q={{}}"),
+            });
+        }
+        assert!(engines.forget_site("www.YouTube.com"));
+        let left: Vec<&str> = engines.iter().map(|e| e.host.as_str()).collect();
+        assert_eq!(left, ["notyoutube.com"]);
+        assert!(!engines.forget_site("youtube.com"));
+        assert!(!engines.forget_site(""));
+    }
 
     #[test]
     fn reads_a_description() {

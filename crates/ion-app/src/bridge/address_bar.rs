@@ -136,6 +136,38 @@ fn with_site_searches<T>(f: impl FnOnce(&mut SiteSearches) -> T) -> T {
     f(searches)
 }
 
+impl SiteSearches {
+    /// Saves the engines and has bang tables rebuilt.
+    fn changed(&self) {
+        SITE_SEARCHES_REVISION.fetch_add(1, Ordering::Relaxed);
+        if let Some(path) = &self.path
+            && let Err(err) =
+                ion_session::paths::write_atomic(path, self.engines.to_json().as_bytes())
+        {
+            eprintln!("ion: could not save site searches: {err}");
+        }
+    }
+}
+
+/// Forgets the searches learned on `site` and its subdomains, or on every
+/// site: they record where the person has been, so they go with history.
+pub fn forget_site_searches(site: Option<&str>) {
+    with_site_searches(|s| {
+        let forgot = match site {
+            Some(site) => s.engines.forget_site(site),
+            None => {
+                let had = !s.engines.is_empty();
+                s.engines.clear();
+                had
+            }
+        };
+        s.tried.clear();
+        if forgot {
+            s.changed();
+        }
+    })
+}
+
 /// The sites' searches found so far and a revision that changes with them.
 pub fn site_searches() -> (u64, Vec<SiteEngine>) {
     with_site_searches(|s| {
@@ -283,13 +315,7 @@ impl qobject::AddressBar {
             if !s.engines.add(engine) {
                 return false;
             }
-            SITE_SEARCHES_REVISION.fetch_add(1, Ordering::Relaxed);
-            if let Some(path) = &s.path
-                && let Err(err) =
-                    ion_session::paths::write_atomic(path, s.engines.to_json().as_bytes())
-            {
-                eprintln!("ion: could not save site searches: {err}");
-            }
+            s.changed();
             true
         })
     }
