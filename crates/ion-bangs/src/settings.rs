@@ -158,6 +158,18 @@ pub fn options<'a>(
         changes: vec![("gestures.swipe", SettingValue::Flag(!swipe))],
         active: false,
     });
+    let mouse = config.gestures.mouse;
+    options.push(SettingOption {
+        title: if mouse {
+            "Turn off mouse gestures"
+        } else {
+            "Turn on mouse gestures (right-drag)"
+        }
+        .into(),
+        keywords: "settings gestures mouse right button drag stroke vivaldi opera",
+        changes: vec![("gestures.mouse", SettingValue::Flag(!mouse))],
+        active: false,
+    });
     for (pinch, value, title) in [
         (PinchAction::Zoom, "zoom", "Pinch: zoom the page"),
         (

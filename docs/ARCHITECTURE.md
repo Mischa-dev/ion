@@ -37,7 +37,7 @@ crates/
   ion-agent/              Ion Agent's runtime: tasks, browser tools, model access
   ion-panels/             the side panel: web panels and notes (clippings)
   ion-input/              keyboard shortcuts (the keymap and its remaps), touchpad
-                          swipe and pinch recognizers
+                          swipe and pinch, mouse gesture strokes
   ion-app/                the binary (`ion`)
     build.rs              auto-discovers bridges, C++ shims and QML files
     src/main.rs           startup: QtWebEngine init, app, QML engine
@@ -143,7 +143,9 @@ from `config.toml` and offer to go back to it.
   scrolling and pinching. Sideways scrolling past the page's edge becomes a
   back/forward swipe (`ion_input::swipe`, drawn by `SwipeIndicator.qml`);
   pinching zooms the page (`ion_input::pinch`) and the result is saved per
-  site like Ctrl+scroll.
+  site like Ctrl+scroll. With `gestures.mouse`, the same filter holds back
+  right-button presses over the page: a stroke (`ion_input::mouse`, drawn
+  by `StrokeTrail.qml`) runs a command, anything else is replayed as a click.
 - The side panel (`SidePanel.qml`, Ctrl+Shift+L) holds notes (`NotesPanel.qml`)
   and web panels; `Panels` (`bridge/panels.rs`) keeps both through
   `ion_panels` in `panels.json` and `notes.json` in the data directory. Each

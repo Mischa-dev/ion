@@ -28,6 +28,8 @@ pub mod qobject {
         #[qproperty(f64, zoom_factor, cxx_name = "zoomFactor")]
         #[qproperty(QString, swipe_direction, cxx_name = "swipeDirection", READ, NOTIFY)]
         #[qproperty(f64, swipe_progress, cxx_name = "swipeProgress", READ, NOTIFY)]
+        #[qproperty(bool, stroking, READ, NOTIFY)]
+        #[qproperty(QString, stroke_label, cxx_name = "strokeLabel", READ, NOTIFY)]
         #[namespace = "ion"]
         type Gestures = super::GesturesRust;
 
@@ -61,6 +63,39 @@ pub mod qobject {
         #[cxx_name = "swipeStarted"]
         fn swipe_started(self: Pin<&mut Gestures>, gesture: i32, x: f64, y: f64);
 
+        /// The right button went down at (`x`, `y`) in window coordinates.
+        /// Returns whether to hold the press back (mouse gestures are on
+        /// and it is over the page).
+        #[qinvokable]
+        #[cxx_name = "strokeBegin"]
+        fn stroke_begin(self: Pin<&mut Gestures>, x: f64, y: f64) -> bool;
+
+        /// The pointer moved with the right button held.
+        #[qinvokable]
+        #[cxx_name = "strokeTo"]
+        fn stroke_to(self: Pin<&mut Gestures>, x: f64, y: f64);
+
+        /// The right button went up. Returns whether the stroke ran a
+        /// command; if not, the click goes to the page.
+        #[qinvokable]
+        #[cxx_name = "strokeEnd"]
+        fn stroke_end(self: Pin<&mut Gestures>, x: f64, y: f64) -> bool;
+
+        /// The stroke reached (`x`, `y`), in window coordinates, for its trail.
+        #[qsignal]
+        #[cxx_name = "strokeMoved"]
+        fn stroke_moved(self: Pin<&mut Gestures>, x: f64, y: f64);
+
+        /// A mouse stroke began at (`x`, `y`) in window coordinates, so the
+        /// split view pane there can become current before it runs.
+        #[qsignal]
+        #[cxx_name = "strokeStarted"]
+        fn stroke_started(self: Pin<&mut Gestures>, x: f64, y: f64);
+
+        /// A mouse stroke asks for this command.
+        #[qsignal]
+        fn command(self: Pin<&mut Gestures>, id: QString);
+
         /// A swipe went far enough: go "back" or "forward".
         #[qsignal]
         fn navigate(self: Pin<&mut Gestures>, direction: QString);
@@ -85,6 +120,7 @@ use cxx_qt::CxxQtType;
 use cxx_qt::casting::Upcast;
 use cxx_qt_lib::{QRectF, QString};
 use ion_config::PinchAction;
+use ion_input::mouse::{self, Stroke};
 use ion_input::pinch::Pinch;
 use ion_input::swipe::{Direction, Outcome, Phase, Scroll, Swipe};
 
@@ -98,6 +134,9 @@ pub struct GesturesRust {
     swipe_progress: f64,
     swipe: Swipe,
     pinch: Option<Pinch>,
+    stroking: bool,
+    stroke_label: QString,
+    stroke: Option<Stroke>,
     attached: bool,
 }
 
@@ -241,6 +280,75 @@ impl qobject::Gestures {
                 false
             }
             _ => false,
+        }
+    }
+
+    /// The command the stroke so far would run, if any.
+    fn stroke_command(&self) -> Option<String> {
+        let moves = self.stroke.as_ref()?.moves().to_owned();
+        let custom = &ion_config::global().config().gestures.mouse_strokes;
+        mouse::actions(custom).remove(&moves)
+    }
+
+    fn set_stroke_label(mut self: Pin<&mut Self>) {
+        let title = self
+            .stroke_command()
+            .and_then(|id| ion_bangs::commands::find(&id).map(|c| c.title))
+            .unwrap_or_default();
+        let label = QString::from(title);
+        if self.stroke_label != label {
+            self.as_mut().rust_mut().stroke_label = label;
+            self.stroke_label_changed();
+        }
+    }
+
+    fn set_stroking(mut self: Pin<&mut Self>, stroking: bool) {
+        if self.stroking != stroking {
+            self.as_mut().rust_mut().stroking = stroking;
+            self.stroking_changed();
+        }
+    }
+
+    fn stroke_begin(mut self: Pin<&mut Self>, x: f64, y: f64) -> bool {
+        if !ion_config::global().config().gestures.mouse || !contains(&self.area, x, y) {
+            return false;
+        }
+        self.as_mut().rust_mut().stroke = Some(Stroke::begin(x, y));
+        self.as_mut().set_stroke_label();
+        self.stroke_started(x, y);
+        true
+    }
+
+    fn stroke_to(mut self: Pin<&mut Self>, x: f64, y: f64) {
+        let moved = {
+            let mut rust = self.as_mut().rust_mut();
+            let Some(stroke) = rust.stroke.as_mut() else {
+                return;
+            };
+            stroke.to(x, y);
+            stroke.moved()
+        };
+        if moved {
+            self.as_mut().set_stroking(true);
+            self.as_mut().stroke_moved(x, y);
+        }
+        self.set_stroke_label();
+    }
+
+    fn stroke_end(mut self: Pin<&mut Self>, x: f64, y: f64) -> bool {
+        self.as_mut().stroke_to(x, y);
+        let command = self.stroke_command();
+        let moved = self.stroke.as_ref().is_some_and(Stroke::moved);
+        self.as_mut().rust_mut().stroke = None;
+        self.as_mut().set_stroking(false);
+        self.as_mut().set_stroke_label();
+        match command {
+            Some(id) => {
+                self.command(QString::from(id.as_str()));
+                true
+            }
+            // A stroke that matched nothing still isn't a click.
+            None => moved,
         }
     }
 }
