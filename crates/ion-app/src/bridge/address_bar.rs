@@ -107,7 +107,7 @@ const MAX_SUGGEST_INPUT: usize = 120;
 pub struct AddressBarRust;
 
 /// Sites' own searches, loaded from `site-searches.json` on first use, and
-/// the hosts already looked at this run.
+/// the hosts looked at since startup or the last history clear.
 struct SiteSearches {
     engines: SiteEngines,
     tried: HashSet<String>,
@@ -312,7 +312,9 @@ impl qobject::AddressBar {
             return false;
         };
         with_site_searches(|s| {
-            if !s.engines.add(engine) {
+            // Only answers to a look this run asked for: clearing history
+            // forgets the pending ones too.
+            if !s.tried.contains(&host) || !s.engines.add(engine) {
                 return false;
             }
             s.changed();
