@@ -415,7 +415,12 @@ ApplicationWindow {
     }
     Connections {
         target: History
-        function onChanged() { historySaveTimer.restart() }
+        // A private window shares the data directory; the normal window's
+        // process owns history.json and inputs.json.
+        function onChanged() {
+            if (!window.privateWindow)
+                historySaveTimer.restart()
+        }
     }
     // `[privacy]` cookie settings follow config changes live.
     Connections {
@@ -593,6 +598,7 @@ ApplicationWindow {
         downloads: downloads
         agentSidebar: agentSidebar
         onBookmarkToggled: window.toggleBookmark()
+        onRunCommand: id => window.runCommand(id)
         onPasswordsRequested: query => window.showPasswords(query)
         onProfilesRequested: window.showProfiles()
     }
@@ -794,6 +800,14 @@ ApplicationWindow {
             }
         }
 
+        // Notes and web panels (Ctrl+Shift+L).
+        SidePanel {
+            id: sidePanel
+            Layout.fillHeight: true
+            Layout.preferredWidth: implicitWidth
+            browser: window
+        }
+
         AgentSidebar {
             id: agentSidebar
             Layout.row: 0
@@ -837,6 +851,8 @@ ApplicationWindow {
         downloads: downloads
     }
     function runCommand(id) { commands.run(id) }
+    // What the side-panel command reopens when nothing is showing.
+    function lastPanel() { return sidePanel.lastOpen }
     function canRunCommand(id) { return commands.available(id) }
 
     ShortcutEditor { id: shortcutEditor }

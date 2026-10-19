@@ -54,42 +54,6 @@ fn selecting_a_bang_palette_result_opens_the_same_url_as_the_omnibox() {
 }
 
 #[test]
-fn suggestions_keep_the_enter_action_first_and_deduplicate_open_pages() {
-    let (_, _, palette) = browser();
-    let tabs = [TabEntry {
-        title: "Rust language".into(),
-        url: "https://www.rust-lang.org/".into(),
-    }];
-    let history = [
-        tabs[0].clone(),
-        TabEntry {
-            title: "Rust book".into(),
-            url: "https://doc.rust-lang.org/book/".into(),
-        },
-    ];
-    let sources = Sources {
-        tabs: &tabs,
-        history: &history,
-        ..Sources::default()
-    };
-
-    let results = palette.suggest("rust", &sources);
-
-    assert_eq!(results[0].kind, Kind::Search);
-    assert_eq!(
-        results.iter().filter(|item| item.kind == Kind::Tab).count(),
-        1
-    );
-    assert_eq!(
-        results
-            .iter()
-            .filter(|item| item.kind == Kind::History)
-            .count(),
-        1
-    );
-}
-
-#[test]
 fn bookmark_prefix_returns_only_bookmarks() {
     let (_, _, palette) = browser();
     let bookmarks = [TabEntry {

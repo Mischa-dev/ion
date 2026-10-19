@@ -208,6 +208,7 @@ Popup {
                 width: ListView.view.width
                 height: root.rowHeight
                 item: modelData
+                query: field.text.replace(/^[>*!]/, "")
                 current: ListView.isCurrentItem
                 onPointerMoved: position => root.pointed(index, position)
                 onChosen: modifiers => root.choose(modelData, modifiers & Qt.ControlModifier)

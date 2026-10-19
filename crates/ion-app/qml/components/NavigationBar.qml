@@ -14,6 +14,8 @@ Rectangle {
     property alias urlBar: urlBar
 
     signal bookmarkToggled()
+    // A quick action picked in the address bar: an `ion_bangs::commands` id.
+    signal runCommand(string id)
     // The password manager, searching for `query`.
     signal passwordsRequested(string query)
     // The profiles list, from the private/profile badge.
@@ -126,6 +128,7 @@ Rectangle {
                     urlBar.focus = false
             }
             onAskAgent: input => bar.askAgent(input)
+            onRunCommand: id => bar.runCommand(id)
 
             AgentCard {
                 id: agentCard
