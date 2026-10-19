@@ -48,12 +48,6 @@ rustPlatform.buildRustPackage {
     export CXXFLAGS="${qt.cxxflags} ''${CXXFLAGS:-}"
   '';
 
-  # Inter, Ion's interface typeface, shipped with the app instead of relying
-  # on what the system has installed. macOS keeps its system font.
-  qtWrapperArgs = lib.optionals stdenv.hostPlatform.isLinux [
-    "--set-default ION_FONT_DIR ${inter}/share/fonts"
-  ];
-
   cargoBuildFlags = [
     "--package"
     "ion-app"
@@ -80,11 +74,17 @@ rustPlatform.buildRustPackage {
       '';
 
   # Ion passes it to QtWebEngine as `--widevine-path` (ion-platform).
-  qtWrapperArgs = lib.optionals (widevine != null) [
-    "--set-default"
-    "ION_WIDEVINE_PATH"
-    widevinePath
-  ];
+  qtWrapperArgs =
+    # Inter, Ion's interface typeface, shipped with the app instead of
+    # relying on what the system has installed. macOS keeps its system font.
+    lib.optionals stdenv.hostPlatform.isLinux [
+      "--set-default ION_FONT_DIR ${inter}/share/fonts"
+    ]
+    ++ lib.optionals (widevine != null) [
+      "--set-default"
+      "ION_WIDEVINE_PATH"
+      widevinePath
+    ];
 
   # After wrapQtAppsHook has wrapped the bundle's binary, so `ion` on PATH
   # (and `nix run`) starts the same wrapped app.
