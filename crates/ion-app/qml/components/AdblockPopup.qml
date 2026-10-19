@@ -277,7 +277,7 @@ Popup {
                 }
                 background: Rectangle {
                     radius: Theme.radius
-                    color: updateButton.hovered ? Theme.surfaceHover : "transparent"
+                    color: updateButton.hovered ? Theme.hoverOverlay : "transparent"
                 }
             }
         }

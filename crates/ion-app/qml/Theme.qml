@@ -145,6 +145,9 @@ QtObject {
     readonly property int paletteWidth: 640
     readonly property int paletteMaxRows: 8
     readonly property real scrimOpacity: 0.4
+    // What a modal popup dims the window with: darker, never a wash of the
+    // background color, so a white page behind turns dim rather than grey.
+    readonly property color scrim: Qt.rgba(0, 0, 0, dark ? 0.5 : 0.28)
     // Colors offered for workspaces. A workspace without one uses `accent`.
     readonly property var workspaceColors: [
         { name: qsTr("Red"), value: "#e5484d" },
@@ -157,6 +160,8 @@ QtObject {
         { name: qsTr("Pink"), value: "#d6409f" }
     ]
     readonly property int workspaceDotSize: 10
+    // Letters and marks drawn on one of the colors above.
+    readonly property color onSwatch: "#ffffff"
 
     // Things that are present but asleep, like a suspended tab's icon.
     readonly property real dimmedOpacity: 0.45

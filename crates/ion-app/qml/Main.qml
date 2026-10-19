@@ -760,18 +760,26 @@ ApplicationWindow {
             currentSplit: panes.split ? panes.split.id : -1
         }
 
-        NavigationBar {
-            id: navBar
+        // With horizontal tabs the toolbar spans the window under them.
+        LayoutItemProxy {
             Layout.fillWidth: true
-            view: window.currentView
-            downloads: downloads
-            mediaSessions: mediaSessions
-            agentSidebar: agentSidebar
-            onBookmarkToggled: window.toggleBookmark()
-            onRunCommand: id => window.runCommand(id)
-            onPasswordsRequested: query => window.showPasswords(query)
-            onProfilesRequested: window.showProfiles()
+            visible: !window.verticalTabs
+            target: navBar
         }
+    }
+
+    // One toolbar, placed by a LayoutItemProxy: under the tab strip, or over
+    // the page beside the vertical tab sidebar, which then runs full height.
+    NavigationBar {
+        id: navBar
+        view: window.currentView
+        downloads: downloads
+        mediaSessions: mediaSessions
+        agentSidebar: agentSidebar
+        onBookmarkToggled: window.toggleBookmark()
+        onRunCommand: id => window.runCommand(id)
+        onPasswordsRequested: query => window.showPasswords(query)
+        onProfilesRequested: window.showProfiles()
     }
 
     SessionMenu {
@@ -783,11 +791,18 @@ ApplicationWindow {
     GroupMenu { id: groupMenu }
     WorkspaceMenu { id: workspaceMenu }
 
-    RowLayout {
+    // Sidebars run full height on either side; the middle column holds the
+    // toolbar (vertical tabs only) over the page.
+    GridLayout {
         anchors.fill: parent
-        spacing: 0
+        columns: 4
+        rowSpacing: 0
+        columnSpacing: 0
 
         VerticalTabStrip {
+            Layout.row: 0
+            Layout.column: 0
+            Layout.rowSpan: 2
             Layout.fillHeight: true
             // Above the page, which an expanded collapsed sidebar covers.
             z: 1
@@ -815,12 +830,42 @@ ApplicationWindow {
             currentSplit: panes.split ? panes.split.id : -1
         }
 
+        LayoutItemProxy {
+            Layout.row: 0
+            Layout.column: 1
+            Layout.fillWidth: true
+            visible: window.verticalTabs && !fullScreen.active
+            target: navBar
+        }
+
         // One web view per tab, stacked; only the current one is visible, or
-        // the panes of its split view.
+        // the panes of its split view. The page sits in the chrome as a
+        // rounded card, edge to edge in fullscreen.
         Item {
             id: pageArea
+
+            readonly property bool framed: !fullScreen.active
+            Layout.row: 1
+            Layout.column: 1
             Layout.fillWidth: true
             Layout.fillHeight: true
+            Layout.leftMargin: framed && !window.verticalTabs ? Theme.spacing * 1.5 : 0
+            Layout.rightMargin: framed ? Theme.spacing * 1.5 : 0
+            Layout.bottomMargin: framed ? Theme.spacing * 1.5 : 0
+
+            IonShadow {
+                anchors.fill: parent
+                visible: pageArea.framed
+                radius: Theme.radiusLarge
+                spread: Theme.spacing * 1.5
+                offset: Theme.hairline
+                strength: 0.5
+            }
+            PageFrame {
+                anchors.fill: parent
+                z: 100
+                visible: pageArea.framed
+            }
 
             // Shown in place of a tab whose video is in picture-in-picture.
             Column {
@@ -985,14 +1030,24 @@ ApplicationWindow {
         // Notes and web panels (Ctrl+Shift+L).
         SidePanel {
             id: sidePanel
+            // Beside the toolbar too only when the toolbar row is in use
+            // (vertical tabs); spanning an empty row would open it up.
+            Layout.row: window.verticalTabs ? 0 : 1
+            Layout.column: 2
+            Layout.rowSpan: window.verticalTabs ? 2 : 1
             Layout.fillHeight: true
+            Layout.preferredHeight: 0
             Layout.preferredWidth: implicitWidth
             browser: window
         }
 
         AgentSidebar {
             id: agentSidebar
+            Layout.row: window.verticalTabs ? 0 : 1
+            Layout.column: 3
+            Layout.rowSpan: window.verticalTabs ? 2 : 1
             Layout.fillHeight: true
+            Layout.preferredHeight: 0
             Layout.preferredWidth: implicitWidth
             view: window.currentView
             onAsk: input => navBar.askAgent(input)

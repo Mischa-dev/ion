@@ -14,6 +14,9 @@ TextField {
 
     // URL of the page in the current tab.
     property url currentUrl
+    // The current address failed to load (Ion's error page is showing), so it
+    // gets no lock even when it is https.
+    property bool loadFailed: false
     // Emitted with the resolved URL when the person presses Enter.
     signal navigate(url target)
     // Emitted after Enter or Escape, so the page can take keyboard focus back.
@@ -68,23 +71,100 @@ TextField {
     // QML has no clipboard API; an invisible text field copies answers.
     TextInput { id: clipboard; visible: false }
 
+    // The address split for display while the field isn't being edited:
+    // `{ secure, local, host, rest }`, or null for addresses shown as typed (ion:,
+    // file:, data: …).
+    readonly property var parts: {
+        const match = /^(https?):\/\/([^\/?#]+)(.*)$/.exec(currentUrl.toString())
+        if (!match)
+            return null
+        const rest = match[3] === "/" ? "" : match[3]
+        // Credentials before an `@` are never shown: `https://bank.example@evil.test`
+        // would otherwise read as bank.example.
+        const host = match[2].slice(match[2].lastIndexOf("@") + 1).replace(/^www\./, "")
+        // Plain http to this machine never leaves it: no warning.
+        const local = /^(localhost|127\.[\d.]+|\[::1\])(:\d+)?$/.test(host)
+        return { secure: match[1] === "https", local: local, host: host, rest: rest }
+    }
+    // Shown over the field while it holds the current address, raw or as
+    // displayUrl() tidies it, and nobody is editing it.
+    readonly property bool showParts: parts !== null && !activeFocus
+        && (text === currentUrl.toString() || text === displayUrl(currentUrl.toString()))
+
     implicitHeight: Theme.urlBarHeight
-    color: Theme.text
+    // Hidden while the tidy address below stands in for it.
+    color: showParts ? "transparent" : Theme.text
     placeholderText: qsTr("Search or enter address")
     placeholderTextColor: Theme.textMuted
     selectionColor: Theme.accent
     selectedTextColor: Theme.onAccent
     font.pixelSize: Theme.fontSize
-    leftPadding: Theme.spacing * 2
+    leftPadding: Theme.spacing * 2 + Theme.iconSize + Theme.spacing
     rightPadding: Theme.spacing * 2
     verticalAlignment: TextInput.AlignVCenter
     selectByMouse: true
 
     background: Rectangle {
         radius: Theme.radius
-        color: Theme.surfaceRaised
-        border.width: field.activeFocus ? 1 : 0
-        border.color: Theme.accent
+        color: field.activeFocus ? Theme.surface : field.hovered ? Theme.surfaceHover : Theme.surfaceRaised
+        border.width: field.activeFocus ? Theme.hairline * 2 : 0
+        border.color: Theme.focusRing
+
+        Behavior on color { ColorAnimation { duration: Theme.animationMs } }
+
+        IonShadow {
+            anchors.fill: parent
+            z: -1
+            visible: field.activeFocus
+            radius: parent.radius
+            spread: Theme.spacing * 2
+            offset: Theme.hairline * 2
+            strength: 0.5
+        }
+    }
+
+    // What the address is: a lock for encrypted pages, an open lock in the
+    // warning color for plain http, a warning sign for a page that failed to
+    // load, a globe for local and Ion's own pages, a magnifier while typing.
+    Icon {
+        x: Theme.spacing * 2
+        anchors.verticalCenter: parent.verticalCenter
+        readonly property bool insecure: field.parts !== null && !field.parts.secure && !field.parts.local
+        name: field.activeFocus ? "search"
+            : field.loadFailed ? "warning"
+            : field.parts === null || field.parts.local ? "globe"
+            : field.parts.secure ? "lock" : "unlock"
+        color: (insecure || field.loadFailed) && !field.activeFocus ? Theme.warning : Theme.textMuted
+        size: Theme.iconSize - 2
+    }
+
+    // The address, tidied: the site in full color, the rest quieter.
+    Row {
+        x: field.leftPadding
+        width: field.width - field.leftPadding - field.rightPadding
+        anchors.verticalCenter: parent.verticalCenter
+        visible: field.showParts
+        clip: true
+
+        Text {
+            id: hostText
+            // A host too long to fit keeps its end, the part that names the site.
+            width: Math.min(implicitWidth, parent.width)
+            text: field.parts?.host ?? ""
+            textFormat: Text.PlainText
+            elide: Text.ElideLeft
+            color: Theme.text
+            font.pixelSize: Theme.fontSize
+            font.weight: Theme.weightMedium
+        }
+        Text {
+            width: Math.max(0, parent.width - hostText.width)
+            text: field.parts?.rest ?? ""
+            textFormat: Text.PlainText
+            color: Theme.textSubtle
+            font.pixelSize: Theme.fontSize
+            elide: Text.ElideRight
+        }
     }
 
     // The address for reading: "github.com/Mischa-dev/ion" rather than

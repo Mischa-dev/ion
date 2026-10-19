@@ -32,12 +32,22 @@ Rectangle {
     radius: Theme.radius
     z: tabMouse.dragging ? 1 : 0
     transform: Translate { x: tabMouse.dragX; y: tabMouse.dragY }
-    color: tabMouse.dragging ? Theme.surfaceHover
-         : current ? Theme.surface : tabMouse.containsMouse ? Theme.surfaceRaised : Theme.background
-    border.width: essential ? Theme.hairline : 0
-    border.color: current ? Theme.accent : Theme.border
+    color: current || tabMouse.dragging ? Theme.surface
+         : tabMouse.containsMouse ? Theme.hoverOverlay : Theme.background
+    border.width: essential || current ? Theme.hairline : 0
+    border.color: current && essential ? Theme.accent : Theme.border
 
     Behavior on color { ColorAnimation { duration: Theme.animationMs } }
+
+    IonShadow {
+        anchors.fill: parent
+        z: -1
+        visible: tab.current || tabMouse.dragging
+        radius: tab.radius
+        spread: tabMouse.dragging ? Theme.shadowRadius / 2 : Theme.spacing / 2
+        offset: Theme.hairline
+        strength: tabMouse.dragging ? 0.8 : 0.35
+    }
 
     TabDragArea {
         id: tabMouse

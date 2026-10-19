@@ -21,7 +21,8 @@ MenuItem {
         spacing: Theme.spacing * 1.5
 
         Icon {
-            visible: item.iconName.length > 0
+            // Blank, holding the column, in menus that have icons.
+            visible: item.iconName.length > 0 || (item.menu?.icons ?? false)
             name: item.iconName
             color: item.highlighted ? Theme.text : Theme.textMuted
         }

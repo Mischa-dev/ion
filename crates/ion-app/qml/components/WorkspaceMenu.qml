@@ -41,6 +41,7 @@ Item {
 
     IonMenu {
         id: menu
+        icons: true
         palette: root.palette
 
         onAboutToShow: root.workspaces = JSON.parse(Tabs.workspaces())
@@ -62,6 +63,7 @@ Item {
 
         IonMenuItem {
             text: qsTr("New workspace…")
+            iconName: "plus"
             onTriggered: root.create()
         }
         IonMenuItem {
@@ -97,6 +99,7 @@ Item {
 
         IonMenuItem {
             text: qsTr("Delete workspace…")
+            iconName: "trash"
             enabled: root.workspaces.length > 1
             onTriggered: deleteDialog.open()
         }

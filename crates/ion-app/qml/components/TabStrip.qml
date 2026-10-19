@@ -77,7 +77,7 @@ Rectangle {
     // Keep the current tab fully in view when it changes or tabs are added.
     onShownCurrentChanged: Qt.callLater(() => list.positionViewAtIndex(strip.shownCurrent, ListView.Contain))
 
-    implicitHeight: Theme.tabHeight + Theme.spacing
+    implicitHeight: Theme.tabHeight + Theme.spacing * 2
     color: Theme.background
 
     RowLayout {
@@ -197,8 +197,11 @@ Rectangle {
                 Loader {
                     id: body
                     x: slot.groupFirst ? chip.implicitWidth + slot.gap : 0
+                    // Inset from the clipped list edges, leaving room for the
+                    // current tab's shadow.
+                    y: Theme.spacing / 2
                     width: slot.tabWidth
-                    height: parent.height
+                    height: parent.height - Theme.spacing
                     visible: !slot.folded
                     // Kept loaded while folded: unloading would end a drag passing by.
                     active: true

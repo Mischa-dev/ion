@@ -83,7 +83,7 @@ ToolButton {
 
     background: Rectangle {
         radius: Theme.radius
-        color: control.down ? Theme.surfaceRaised : control.hovered ? Theme.surfaceHover : "transparent"
+        color: control.down ? Theme.pressOverlay : control.hovered ? Theme.hoverOverlay : "transparent"
     }
 
     ToolTip.visible: hovered && !tipDismissed && !showName

@@ -8,6 +8,10 @@ import Ion
 Menu {
     id: menu
 
+    // Leave an icon's width before every label, so rows with and without an
+    // icon line up. Set it on menus where some rows have one.
+    property bool icons: false
+
     // Drawn by Qt Quick in every style. On macOS the default is a native menu,
     // which ignores the delegate, background and transitions below.
     popupType: Popup.Item

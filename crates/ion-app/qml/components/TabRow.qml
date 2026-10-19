@@ -39,12 +39,25 @@ Rectangle {
     signal droppedOut(int index, point scenePos)
 
     radius: Theme.radius
-    z: tabMouse.dragging ? 1 : 0
+    z: tabMouse.dragging ? 2 : current ? 1 : 0
     transform: Translate { x: tabMouse.dragX; y: tabMouse.dragY }
-    color: tabMouse.dragging ? Theme.surfaceHover
-         : current ? Theme.surface : tabMouse.containsMouse || splitShowing ? Theme.surfaceRaised : "transparent"
+    // The current tab is a raised card; others are flat until hovered.
+    color: current || tabMouse.dragging ? Theme.surface
+         : tabMouse.containsMouse || splitShowing ? Theme.hoverOverlay : "transparent"
+    border.width: current ? Theme.hairline : 0
+    border.color: Theme.border
 
     Behavior on color { ColorAnimation { duration: Theme.animationMs } }
+
+    IonShadow {
+        anchors.fill: parent
+        z: -1
+        visible: tab.current || tabMouse.dragging
+        radius: tab.radius
+        spread: tabMouse.dragging ? Theme.shadowRadius / 2 : Theme.spacing / 2
+        offset: Theme.hairline
+        strength: tabMouse.dragging ? 0.8 : 0.35
+    }
 
     TabPreview {
         view: tab.view
@@ -89,12 +102,12 @@ Rectangle {
         }
 
         // Split views are marked so it's clear which tabs open together.
-        Text {
+        Icon {
             Layout.alignment: Qt.AlignVCenter
             visible: tab.inSplit && tab.showTitle
-            text: "◫"
+            name: "split"
+            size: Theme.iconSize - 4
             color: tab.splitShowing ? Theme.accent : Theme.textMuted
-            font.pixelSize: Theme.fontSize
         }
 
         Text {
@@ -104,6 +117,7 @@ Rectangle {
                 : tab.urlAsTitle && tab.url.length > 0 ? tab.url : qsTr("New Tab")
             color: tab.current ? Theme.text : Theme.textMuted
             font.pixelSize: Theme.fontSize
+            font.weight: tab.current ? Theme.weightMedium : Font.Normal
             elide: Text.ElideRight
             textFormat: Text.PlainText
         }
@@ -120,9 +134,14 @@ Rectangle {
             Layout.preferredWidth: Theme.tabHeight - Theme.spacing * 2
             Layout.preferredHeight: Theme.tabHeight - Theme.spacing * 2
             iconName: "close"
+            iconSize: Theme.iconSize - 4
             tip: qsTr("Close tab")
-            visible: tab.showTitle && (tab.current || tabMouse.containsMouse || hovered)
+            visible: tab.showTitle
+            opacity: tab.current || tabMouse.containsMouse || hovered ? 1 : 0
+            enabled: opacity > 0
             onClicked: tab.closeRequested(tab.row)
+
+            Behavior on opacity { NumberAnimation { duration: Theme.animationFastMs } }
         }
     }
 }

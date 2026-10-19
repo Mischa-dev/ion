@@ -77,11 +77,14 @@ Rectangle {
             agentCard.openFor(id)
     }
 
-    color: Theme.surface
+    // One piece with the tab strip; the page below is a card of its own.
+    color: Theme.background
 
     RowLayout {
         anchors.fill: parent
         anchors.margins: Theme.spacing
+        anchors.leftMargin: Theme.spacing * 1.5
+        anchors.rightMargin: Theme.spacing * 1.5
         spacing: Theme.spacing / 2
 
         IconButton {
@@ -108,6 +111,7 @@ Rectangle {
             id: urlBar
             Layout.fillWidth: true
             currentUrl: bar.view?.url ?? ""
+            loadFailed: bar.view?.loadFailed ?? false
             onNavigate: target => {
                 if (bar.view)
                     bar.view.url = target
@@ -186,15 +190,6 @@ Rectangle {
         DownloadsButton { panel: bar.downloads }
     }
 
-    // Hairline between the browser chrome and the page.
-    Rectangle {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        height: Theme.hairline
-        color: Theme.border
-    }
-
     // Load progress along the bottom edge. It eases forward instead of
     // jumping, runs to the end when the load finishes and then fades out.
     Rectangle {
@@ -207,8 +202,10 @@ Rectangle {
 
         anchors.left: parent.left
         anchors.bottom: parent.bottom
+        anchors.leftMargin: Theme.spacing * 2
         height: 2
-        width: parent.width * shown
+        radius: 1
+        width: (parent.width - Theme.spacing * 4) * shown
         color: Theme.accent
         opacity: 0
 
