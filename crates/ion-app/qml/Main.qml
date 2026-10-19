@@ -149,8 +149,11 @@ ApplicationWindow {
             if (previous >= 0)
                 Tabs.activate(previous)
         }
+        // No hint where the drop can't split: a full split view, or an
+        // Essential shown in place of the dragged tab.
         const split = JSON.parse(Tabs.currentSplit())
-        panes.showDrop(split && split.tabs.length >= 4 ? null : panes.mapFromItem(null, scenePos))
+        const full = split && split.tabs.length >= 4
+        panes.showDrop(full || Tabs.pinnedAt(Tabs.currentIndex) === 2 ? null : panes.mapFromItem(null, scenePos))
     }
 
     // Let go over the page, the dragged tab opens beside the page shown, on
