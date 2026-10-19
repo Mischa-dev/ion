@@ -71,10 +71,13 @@ WebEngineView {
         }
         siteCssScript = script
     }
-    function runInFrames(frame, script) {
-        frame.runJavaScript(script, WebEngineScript.ApplicationWorld)
+    // `script` in `frame` and all its subframes, in Ion's world unless
+    // `world` says otherwise.
+    function runInFrames(frame, script, world) {
+        const target = world ?? WebEngineScript.ApplicationWorld
+        frame.runJavaScript(script, target)
         for (const child of frame.children)
-            runInFrames(child, script)
+            runInFrames(child, script, target)
     }
 
     Component.onCompleted: {
@@ -298,11 +301,35 @@ WebEngineView {
         }
     }
 
+    // The policy last applied, to spot a settings change that affects the
+    // open page.
+    property string autoplayPolicy: ""
+
+    // `[media] autoplay` or a `[sites]` entry changed: the open page follows
+    // at once. "block" is enforced in its frames now; the engine's gesture
+    // rule for sound takes effect from the page's next load.
+    Connections {
+        target: Config
+        function onRevisionChanged() {
+            if (view.loading)
+                return
+            const before = view.autoplayPolicy
+            view.applyAutoplay(view.url.toString())
+            if (view.autoplayPolicy === before)
+                return
+            if (view.autoplayPolicy === "block")
+                view.runInFrames(view.mainFrame, Media.blockAutoplayScript, WebEngineScript.MainWorld)
+            else if (before === "block")
+                view.runInFrames(view.mainFrame, Media.unblockAutoplayScript, WebEngineScript.MainWorld)
+        }
+    }
+
     // `[media] autoplay` for the page about to load. The engine's gesture
     // rule lets silent media play and holds sound back; "block" adds a page
     // script that holds silent media back too.
     function applyAutoplay(target) {
         const policy = Media.autoplay(target)
+        autoplayPolicy = policy
         settings.playbackRequiresUserGesture = policy !== "allow"
         const installed = userScripts.find("ion-autoplay-block")
         if (policy === "block" && installed.length === 0) {

@@ -40,11 +40,17 @@ pub fn requires_gesture(policy: Autoplay) -> bool {
 /// Page script (main world, document creation, every frame) for
 /// `autoplay = "block"`: until the frame has had a click or key press,
 /// `play()` is refused and media that starts anyway (the `autoplay`
-/// attribute) is paused.
+/// attribute) is paused. Run again on a loaded page (the policy changed to
+/// "block"), it also pauses what is already playing on its own.
+/// [`UNBLOCK_SCRIPT`] lifts it from a loaded page.
 pub const BLOCK_SCRIPT: &str = r#"(() => {
-  if (window.__ionAutoplayBlocked) return;
+  const active = () => !window.__ionAutoplayBlocked ||
+    !!(navigator.userActivation && navigator.userActivation.hasBeenActive);
   window.__ionAutoplayBlocked = true;
-  const active = () => !!(navigator.userActivation && navigator.userActivation.hasBeenActive);
+  if (!active())
+    document.querySelectorAll("audio, video").forEach(media => media.pause());
+  if (window.__ionAutoplayInstalled) return;
+  window.__ionAutoplayInstalled = true;
   const play = HTMLMediaElement.prototype.play;
   HTMLMediaElement.prototype.play = function () {
     if (!active())
@@ -56,6 +62,10 @@ pub const BLOCK_SCRIPT: &str = r#"(() => {
       event.target.pause();
   }, true);
 })();"#;
+
+/// Page script (main world) that lifts [`BLOCK_SCRIPT`] from a loaded page
+/// whose policy is no longer "block".
+pub const UNBLOCK_SCRIPT: &str = "window.__ionAutoplayBlocked = false;";
 
 #[cfg(test)]
 mod tests {
@@ -116,7 +126,7 @@ mod tests {
 
     #[test]
     fn block_script_guards_against_running_twice() {
-        assert!(BLOCK_SCRIPT.contains("__ionAutoplayBlocked"));
+        assert!(BLOCK_SCRIPT.contains("if (window.__ionAutoplayInstalled) return;"));
         assert!(BLOCK_SCRIPT.contains("hasBeenActive"));
     }
 }

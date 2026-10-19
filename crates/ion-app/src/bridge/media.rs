@@ -18,6 +18,13 @@ pub mod qobject {
             READ,
             CONSTANT
         )]
+        #[qproperty(
+            QString,
+            unblock_autoplay_script,
+            cxx_name = "unblockAutoplayScript",
+            READ,
+            CONSTANT
+        )]
         #[namespace = "ion"]
         type Media = super::MediaRust;
 
@@ -32,12 +39,14 @@ use cxx_qt_lib::QString;
 
 pub struct MediaRust {
     block_autoplay_script: QString,
+    unblock_autoplay_script: QString,
 }
 
 impl Default for MediaRust {
     fn default() -> Self {
         Self {
             block_autoplay_script: QString::from(ion_media::autoplay::BLOCK_SCRIPT),
+            unblock_autoplay_script: QString::from(ion_media::autoplay::UNBLOCK_SCRIPT),
         }
     }
 }
