@@ -11,6 +11,7 @@ pub mod config;
 pub mod download_log;
 pub mod downloads;
 pub mod extensions;
+pub mod fonts;
 pub mod history;
 pub mod keymap;
 pub mod load_error;

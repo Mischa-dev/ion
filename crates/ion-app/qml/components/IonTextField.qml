@@ -2,7 +2,8 @@ import QtQuick
 import QtQuick.Controls
 import Ion
 
-// A single-line text input in Ion's look, like the URL bar's.
+// A single-line text input in Ion's look, like the URL bar's: a quiet filled
+// field that lifts to the page color with an accent ring while focused.
 TextField {
     id: field
 
@@ -19,8 +20,10 @@ TextField {
 
     background: Rectangle {
         radius: Theme.radius
-        color: Theme.surfaceRaised
-        border.width: field.activeFocus ? Theme.hairline : 0
-        border.color: Theme.accent
+        color: field.activeFocus ? Theme.surface : field.hovered ? Theme.surfaceHover : Theme.surfaceRaised
+        border.width: field.activeFocus ? Theme.hairline * 2 : 0
+        border.color: Theme.focusRing
+
+        Behavior on color { ColorAnimation { duration: Theme.animationMs } }
     }
 }
