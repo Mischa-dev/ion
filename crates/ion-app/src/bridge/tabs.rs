@@ -1021,6 +1021,7 @@ impl qobject::Tabs {
             .map(|(i, t)| {
                 serde_json::json!({
                     "kind": "tab",
+                    "id": t.id,
                     "index": i,
                     "title": t.title,
                     "url": t.url,
@@ -1042,6 +1043,7 @@ impl qobject::Tabs {
                 .map(|(n, c)| {
                     serde_json::json!({
                         "kind": "closed",
+                        "id": c.tab.id,
                         "index": n,
                         "title": c.tab.title,
                         "url": c.tab.url,
