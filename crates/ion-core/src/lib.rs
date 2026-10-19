@@ -8,6 +8,7 @@
 pub mod engines;
 pub mod load_error;
 pub mod navigation;
+pub mod pages;
 
 /// Human-facing application name.
 pub const APP_NAME: &str = "Ion";

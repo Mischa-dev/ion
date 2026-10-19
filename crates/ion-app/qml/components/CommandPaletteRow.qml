@@ -21,19 +21,18 @@ Rectangle {
     // pointer don't steal the keyboard selection.
     signal pointerMoved(point position)
 
-    function glyph(kind) {
+    function iconFor(kind) {
         switch (kind) {
-        case "tab": return "▭"
-        case "bookmark": return "★"
-        case "history": return "↺"
-        case "session": return "▤"
-        case "setting": return "⚙"
-        case "command": return "›"
-        case "bang": return "!"
-        case "open": return "↗"
-        case "agent": return "@"
-        case "answer": return "="
-        default: return "⌕"
+        case "tab": return "tabs"
+        case "bookmark": return "star"
+        case "history": return "history"
+        case "session": return "layers"
+        case "setting": return "settings"
+        case "command": return "chevron-right"
+        case "open": return "globe"
+        case "agent": return "agent"
+        case "answer": return "copy"
+        default: return "search"
         }
     }
 
@@ -88,7 +87,7 @@ Rectangle {
     implicitHeight: Theme.tabHeight + Theme.spacing * 2
     radius: Theme.radius
     // One highlight only: pointing at a row selects it, like the arrow keys.
-    color: current ? Theme.surfaceRaised : "transparent"
+    color: current ? Theme.hoverOverlay : "transparent"
 
     RowLayout {
         anchors.fill: parent
@@ -96,24 +95,29 @@ Rectangle {
         anchors.rightMargin: Theme.spacing * 2
         spacing: Theme.spacing * 2
 
-        Item {
-            Layout.preferredWidth: Theme.iconSize
-            Layout.preferredHeight: Theme.iconSize
+        // The site's icon, or the kind of result, in a soft tile.
+        Rectangle {
+            implicitWidth: Theme.iconSize + Theme.spacing * 2
+            implicitHeight: implicitWidth
+            radius: Theme.radiusSmall
+            color: row.current ? Theme.accentSoft : Theme.hoverOverlay
 
             Image {
                 id: favicon
-                anchors.fill: parent
+                anchors.centerIn: parent
+                width: Theme.iconSize
+                height: Theme.iconSize
                 sourceSize: Qt.size(Theme.iconSize, Theme.iconSize)
                 source: row.pageUrl.length > 0 ? "image://favicon/" + row.pageUrl : ""
                 // Unknown icons load as an empty image.
                 visible: status === Image.Ready && implicitWidth > 0
             }
-            Text {
+            Icon {
                 anchors.centerIn: parent
                 visible: !favicon.visible
-                text: row.glyph(row.item.kind)
+                name: row.iconFor(row.item.kind)
+                size: Theme.iconSize - 2
                 color: row.current ? Theme.accent : Theme.textMuted
-                font.pixelSize: Theme.fontSize + 2
             }
         }
 
@@ -127,6 +131,7 @@ Rectangle {
                 textFormat: Text.StyledText
                 color: Theme.text
                 font.pixelSize: row.item.kind === "answer" ? Theme.fontSize + 2 : Theme.fontSize
+                font.weight: row.current ? Theme.weightMedium : Font.Normal
                 elide: Text.ElideRight
             }
             Text {
@@ -135,16 +140,28 @@ Rectangle {
                 text: row.marked(row.item.subtitle ?? "", false)
                 textFormat: Text.StyledText
                 color: Theme.textMuted
-                font.pixelSize: Theme.fontSize - 2
+                font.pixelSize: Theme.fontSizeSmall
                 elide: Text.ElideMiddle
             }
         }
 
-        Text {
-            visible: text.length > 0
-            text: row.hintText(row.item.hint ?? "")
-            color: Theme.textMuted
-            font.pixelSize: Theme.fontSize - 1
+        // Shortcut or action hint, as a key cap.
+        Rectangle {
+            visible: hint.text.length > 0
+            implicitWidth: hint.implicitWidth + Theme.spacing * 2
+            implicitHeight: hint.implicitHeight + Theme.spacing / 2
+            radius: Theme.radiusSmall
+            color: "transparent"
+            border.width: Theme.hairline
+            border.color: Theme.border
+
+            Text {
+                id: hint
+                anchors.centerIn: parent
+                text: row.hintText(row.item.hint ?? "")
+                color: Theme.textMuted
+                font.pixelSize: Theme.fontSizeSmall
+            }
         }
     }
 

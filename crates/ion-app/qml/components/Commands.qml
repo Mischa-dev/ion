@@ -8,7 +8,8 @@ import Ion
 // `browser` (the main window) provides openTab(url), newTab(), closeTab(i),
 // closeOtherTabs(i), focusUrlBar(), toggleBookmark(), showImport(),
 // showExtensions(), toggleFullScreen(), askAgent(input), startAgentQuestion(),
-// toggleAgentSidebar(), showAgentActivity(), profile and currentView.
+// toggleAgentSidebar(), showAgentActivity(), openPage(id, path),
+// showClearData(), profile and currentView.
 Item {
     id: root
 
@@ -54,7 +55,12 @@ Item {
         case "reload": view?.reload(); break
         case "hard-reload": view?.reloadAndBypassCache(); break
         case "stop": view?.stop(); break
-        case "find": view?.findBar.open(); break
+        case "find":
+            if (view?.builtinPage.active)
+                view.builtinPage.focusSearch()
+            else
+                view?.findBar.open()
+            break
         case "find-next": view?.findBar.step(1); break
         case "find-previous": view?.findBar.step(-1); break
         case "zoom-in": view?.zoomIn(); break
@@ -106,6 +112,8 @@ Item {
         case "tab-7": Tabs.activateNth(6); break
         case "tab-8": Tabs.activateNth(7); break
         case "last-tab": Tabs.activateNth(-1); break
+        case "settings": browser.openPage("settings"); break
+        case "clear-browsing-data": browser.showClearData(); break
         case "quit": Qt.quit(); break
         default: console.warn("Commands: unknown command", id)
         }
