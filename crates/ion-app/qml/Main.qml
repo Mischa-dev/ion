@@ -68,23 +68,25 @@ ApplicationWindow {
         return index >= 0 && index < views.count ? views.itemAt(index) : null
     }
 
-    // For the tab menu, within the tab's workspace. Closing from the end keeps
-    // the lower indexes valid.
+    // For the tab menu, within the tab's strip. Pinned tabs and Essentials
+    // stay. Closing from the end keeps the lower indexes valid.
     function closeTabsAfter(index) {
-        const workspace = Tabs.workspaceAt(index)
-        for (let i = Tabs.count - 1; i > index; i--) {
-            if (Tabs.workspaceAt(i) === workspace)
-                Tabs.closeTab(i)
+        const rows = []
+        for (let i = Tabs.neighbour(index, 1); i >= 0; i = Tabs.neighbour(i, 1)) {
+            if (Tabs.pinnedAt(i) === 0)
+                rows.push(i)
         }
+        rows.reverse().forEach(i => Tabs.closeTab(i))
     }
 
     function closeOtherTabs(index) {
-        const workspace = Tabs.workspaceAt(index)
         closeTabsAfter(index)
-        for (let i = index - 1; i >= 0; i--) {
-            if (Tabs.workspaceAt(i) === workspace)
-                Tabs.closeTab(i)
+        const rows = []
+        for (let i = Tabs.neighbour(index, -1); i >= 0; i = Tabs.neighbour(i, -1)) {
+            if (Tabs.pinnedAt(i) === 0)
+                rows.push(i)
         }
+        rows.forEach(i => Tabs.closeTab(i))
     }
 
     function newTab() {
@@ -300,10 +302,12 @@ ApplicationWindow {
             workspace: Tabs.workspace
             onActivated: index => Tabs.activate(index)
             onCloseRequested: index => window.closeTab(index)
-            onMoveRequested: (from, to) => Tabs.moveTab(from, to)
+            onMoveRequested: (from, to) => Tabs.dragTab(from, to)
+            onDropRequested: index => Tabs.dropTab(index)
             onNewTabRequested: window.newTab()
             onMenuRequested: anchor => sessionMenu.open(anchor)
             onTabMenuRequested: index => tabMenu.openFor(index)
+            onGroupMenuRequested: (group, anchor) => groupMenu.openFor(group, anchor)
             onWorkspaceMenuRequested: anchor => workspaceMenu.open(anchor)
             views: views
             viewsRevision: window.viewsRevision
@@ -320,7 +324,8 @@ ApplicationWindow {
     }
 
     SessionMenu { id: sessionMenu }
-    TabMenu { id: tabMenu; browser: window; workspaceMenu: workspaceMenu }
+    TabMenu { id: tabMenu; browser: window; workspaceMenu: workspaceMenu; groupMenu: groupMenu }
+    GroupMenu { id: groupMenu }
     WorkspaceMenu { id: workspaceMenu }
 
     RowLayout {
@@ -341,10 +346,12 @@ ApplicationWindow {
             workspace: Tabs.workspace
             onActivated: index => Tabs.activate(index)
             onCloseRequested: index => window.closeTab(index)
-            onMoveRequested: (from, to) => Tabs.moveTab(from, to)
+            onMoveRequested: (from, to) => Tabs.dragTab(from, to)
+            onDropRequested: index => Tabs.dropTab(index)
             onNewTabRequested: window.newTab()
             onMenuRequested: anchor => sessionMenu.open(anchor)
             onTabMenuRequested: index => tabMenu.openFor(index)
+            onGroupMenuRequested: (group, anchor) => groupMenu.openFor(group, anchor)
             onWorkspaceMenuRequested: anchor => workspaceMenu.open(anchor)
             views: views
             viewsRevision: window.viewsRevision

@@ -2,13 +2,14 @@ import QtQuick
 
 // Mouse handling for one tab in TabStrip or VerticalTabStrip: left press
 // activates the tab, middle click closes it, right click opens its menu, and
-// dragging it along the strip reorders it live. The strip's model moves the
+// dragging it along the strip reorders it live; letting go settles which
+// tab group it is in. The strip's model moves the
 // row as the pointer passes over a neighbour, so the dragged tab always stays
 // under the pointer.
 MouseArea {
     id: area
 
-    required property ListView list   // the strip's tab list; delegates have `row`
+    required property var list        // the strip's ListView or GridView; delegates have `row`
     required property int index       // the tab's row in the model
 
     readonly property bool dragging: dragActive
@@ -18,6 +19,8 @@ MouseArea {
     signal activated(int index)
     signal closeRequested(int index)
     signal moveRequested(int from, int to)
+    // A drag ended with the tab at `index`; it may join or leave a group.
+    signal dropped(int index)
     signal menuRequested(int index)
 
     anchors.fill: parent
@@ -55,8 +58,16 @@ MouseArea {
             area.moveRequested(index, target.row)
     }
 
-    onReleased: dragActive = false
-    onCanceled: dragActive = false
+    onReleased: {
+        if (dragActive)
+            area.dropped(index)
+        dragActive = false
+    }
+    onCanceled: {
+        if (dragActive)
+            area.dropped(index)
+        dragActive = false
+    }
 
     onClicked: mouse => {
         if (mouse.button === Qt.MiddleButton)

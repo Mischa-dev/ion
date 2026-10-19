@@ -23,6 +23,28 @@ pub struct SavedTab {
     /// Id of the workspace the tab belongs to (see [`Session::workspaces`]).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub workspace: u32,
+    /// Pinned to the front of its workspace's strip.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub pinned: bool,
+    /// An Essential: pinned and shown in every workspace.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub essential: bool,
+    /// Id of the tab group it belongs to (see [`Session::groups`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<u32>,
+}
+
+/// A tab group as stored on disk.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SavedGroup {
+    pub id: u32,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    /// A `#rrggbb` color, or empty for the theme's accent.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub color: String,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub collapsed: bool,
 }
 
 /// A workspace as stored on disk.
@@ -52,6 +74,9 @@ pub struct Session {
     /// whose tabs all belong to one default workspace.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub workspaces: Vec<SavedWorkspace>,
+    /// Tab groups, named by their tabs' `group`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub groups: Vec<SavedGroup>,
 }
 
 fn default_version() -> u32 {
@@ -62,6 +87,10 @@ fn is_zero(n: &u32) -> bool {
     *n == 0
 }
 
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
 impl Default for Session {
     fn default() -> Self {
         Self {
@@ -69,6 +98,7 @@ impl Default for Session {
             tabs: Vec::new(),
             current: 0,
             workspaces: Vec::new(),
+            groups: Vec::new(),
         }
     }
 }

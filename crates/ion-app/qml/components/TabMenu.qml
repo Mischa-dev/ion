@@ -11,6 +11,14 @@ IonMenu {
     required property var browser
     // For "New workspace…" from the move submenu.
     required property var workspaceMenu
+    // For naming a new tab group.
+    required property var groupMenu
+    // This workspace's groups as `{id, name, color, collapsed, tabs}`, and the
+    // tab's group and pin (0 none, 1 workspace, 2 Essential), refreshed when
+    // the menu opens.
+    property var groups: []
+    property int group: -1
+    property int pin: 0
     // Workspaces as `{id, name, color, tabs}`, refreshed when the menu opens.
     property var workspaces: []
     // The tab the menu was opened on, and its web view.
@@ -35,6 +43,9 @@ IonMenu {
         index = tabIndex
         view = browser.viewAt(tabIndex)
         workspaces = JSON.parse(Tabs.workspaces())
+        groups = JSON.parse(Tabs.groups(Tabs.workspace))
+        group = Tabs.groupAt(tabIndex)
+        pin = Tabs.pinnedAt(tabIndex)
         popup()
     }
 
@@ -64,16 +75,57 @@ IonMenu {
         }
     }
     IonMenuItem {
-        text: qsTr("Suspend")
+        text: qsTr("Put to sleep")
         // The current tab is always awake; see general.suspendTabsAfter.
         enabled: !root.isCurrent && !(root.view?.suspended ?? true)
         onTriggered: Tabs.setSuspended(root.index, true)
+    }
+
+    IonMenuSeparator {}
+
+    IonMenuItem {
+        text: root.pin === 1 ? qsTr("Unpin tab") : qsTr("Pin tab")
+        onTriggered: Tabs.pinTab(root.index, root.pin === 1 ? 0 : 1)
+    }
+    IonMenuItem {
+        text: root.pin === 2 ? qsTr("Remove from Essentials") : qsTr("Add to Essentials")
+        onTriggered: Tabs.pinTab(root.index, root.pin === 2 ? 0 : 2)
+    }
+    IonMenuItem {
+        text: qsTr("Add to new group")
+        visible: root.pin === 0
+        height: visible ? implicitHeight : 0
+        onTriggered: root.groupMenu.create(root.index)
+    }
+    IonMenu {
+        id: groupsMenu
+        palette: root.palette
+        title: qsTr("Add to group")
+        enabled: root.pin === 0 && root.groups.some(g => g.id !== root.group)
+
+        Instantiator {
+            model: root.groups.filter(g => g.id !== root.group)
+            delegate: IonMenuItem {
+                required property var modelData
+                text: modelData.name.length > 0 ? modelData.name : qsTr("Unnamed group")
+                onTriggered: Tabs.setGroup(root.index, modelData.id)
+            }
+            onObjectAdded: (index, object) => groupsMenu.insertItem(index, object)
+            onObjectRemoved: (index, object) => groupsMenu.removeItem(object)
+        }
+    }
+    IonMenuItem {
+        text: qsTr("Remove from group")
+        visible: root.group >= 0
+        height: visible ? implicitHeight : 0
+        onTriggered: Tabs.setGroup(root.index, -1)
     }
 
     IonMenu {
         id: moveMenu
         palette: root.palette
         title: qsTr("Move to workspace")
+        enabled: root.pin !== 2
 
         Instantiator {
             model: root.workspaces.filter(w => w.id !== Tabs.workspaceAt(root.index))
@@ -104,7 +156,7 @@ IonMenu {
         text: qsTr("Close other tabs")
         enabled: {
             root.workspaces // re-read each time the menu opens
-            return Tabs.workspaceTabCount(Tabs.workspaceAt(root.index)) > 1
+            return Tabs.neighbour(root.index, 1) >= 0 || Tabs.neighbour(root.index, -1) >= 0
         }
         onTriggered: root.browser.closeOtherTabs(root.index)
     }

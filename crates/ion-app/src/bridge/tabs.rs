@@ -2,8 +2,12 @@
 //! `ion_session::TabList`, saved to disk so Ion reopens where it left off.
 //!
 //! Roles: `tabId` (stable while the tab is open), `url`, `title`, `icon`,
-//! `suspended`, `workspace` (its workspace's id) and `row` (its row here, for
-//! views that filter the model by workspace). The window creates one web view
+//! `suspended`, `workspace` (its workspace's id), `row` (its row here, for
+//! views that filter the model by workspace), `pinned`, `essential` (pinned
+//! in every workspace), and the tab group: `group` (id or -1), `groupName`,
+//! `groupColor`, `groupCollapsed`, `groupFirst` and `groupLast` (the tab
+//! starts or ends its group's run in the strip) and `sectionEnd` (the last
+//! Essential, pinned or other tab in the strip). The window creates one web view
 //! per row and reports navigation back with `setUrl` and `setTitle`; everything
 //! else (open, close, reorder, workspaces, sessions) goes through the
 //! invokables below so the strip, the palette and later agents share one model.
@@ -118,6 +122,97 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "workspacesChanged"]
         fn workspaces_changed(self: Pin<&mut Tabs>);
+
+        /// Tab groups were added, removed, renamed, recolored or folded.
+        #[qsignal]
+        #[cxx_name = "groupsChanged"]
+        fn groups_changed(self: Pin<&mut Tabs>);
+
+        /// Pin the tab at `index`: 0 unpins it, 1 pins it to its workspace, 2
+        /// makes it an Essential, pinned in every workspace. Returns its new
+        /// index.
+        #[qinvokable]
+        #[cxx_name = "pinTab"]
+        fn pin_tab(self: Pin<&mut Tabs>, index: i32, pin: i32) -> i32;
+
+        /// One step of dragging a tab: like `moveTab`, but it only joins or
+        /// leaves a group once `dropTab` says where it was let go.
+        #[qinvokable]
+        #[cxx_name = "dragTab"]
+        fn drag_tab(self: Pin<&mut Tabs>, from: i32, to: i32) -> bool;
+
+        #[qinvokable]
+        #[cxx_name = "dropTab"]
+        fn drop_tab(self: Pin<&mut Tabs>, index: i32);
+
+        /// Start a tab group with the tab at `index`. Returns the group's id, or
+        /// -1 for a pinned tab.
+        #[qinvokable]
+        #[cxx_name = "createGroup"]
+        fn create_group(self: Pin<&mut Tabs>, index: i32, name: &QString, color: &QString) -> i32;
+
+        /// Move the tab at `index` into group `id`, or out of its group with -1.
+        #[qinvokable]
+        #[cxx_name = "setGroup"]
+        fn set_group(self: Pin<&mut Tabs>, index: i32, id: i32);
+
+        #[qinvokable]
+        #[cxx_name = "renameGroup"]
+        fn rename_group(self: Pin<&mut Tabs>, id: i32, name: &QString);
+
+        #[qinvokable]
+        #[cxx_name = "setGroupColor"]
+        fn set_group_color(self: Pin<&mut Tabs>, id: i32, color: &QString);
+
+        /// Fold or unfold a group. Folding the current tab's group moves to a
+        /// tab outside it first.
+        #[qinvokable]
+        #[cxx_name = "setGroupCollapsed"]
+        fn set_group_collapsed(self: Pin<&mut Tabs>, id: i32, collapsed: bool);
+
+        /// Dissolve a group, keeping its tabs.
+        #[qinvokable]
+        fn ungroup(self: Pin<&mut Tabs>, id: i32);
+
+        /// Close every tab of a group. The window keeps at least one tab.
+        #[qinvokable]
+        #[cxx_name = "closeGroup"]
+        fn close_group(self: Pin<&mut Tabs>, id: i32);
+
+        /// The groups of workspace `id`, in strip order, as a JSON array of
+        /// `{id, name, color, collapsed, tabs}`.
+        #[qinvokable]
+        fn groups(self: &Tabs, workspace: i32) -> QString;
+
+        /// How workspace `id`'s strip is filled, as JSON `{pinned, tabs}`: its
+        /// pinned tabs (not Essentials) and its other tabs outside folded
+        /// groups.
+        #[qinvokable]
+        #[cxx_name = "stripLayout"]
+        fn strip_layout(self: &Tabs, workspace: i32) -> QString;
+
+        /// Id of the group of the tab at `index`, or -1.
+        #[qinvokable]
+        #[cxx_name = "groupAt"]
+        fn group_at(self: &Tabs, index: i32) -> i32;
+
+        /// How the tab at `index` is pinned: 0 not, 1 to its workspace, 2 as
+        /// an Essential.
+        #[qinvokable]
+        #[cxx_name = "pinnedAt"]
+        fn pinned_at(self: &Tabs, index: i32) -> i32;
+
+        /// Recently closed tabs, most recent first, as a JSON array of
+        /// `{url, title, icon, workspace}`.
+        #[qinvokable]
+        #[cxx_name = "closedTabs"]
+        fn closed_tabs(self: &Tabs) -> QString;
+
+        /// Reopen the `n`th most recently closed tab (0 is the latest).
+        /// Returns its index, or -1.
+        #[qinvokable]
+        #[cxx_name = "reopenClosedTabAt"]
+        fn reopen_closed_tab_at(self: Pin<&mut Tabs>, n: i32) -> i32;
 
         /// Open a tab at the end of the strip. Returns its index.
         #[qinvokable]
@@ -306,7 +401,8 @@ use cxx_qt_lib::{
     QByteArray, QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QStringList, QVariant,
 };
 use ion_session::history::now;
-use ion_session::{Session, SessionStore, TabList, WorkspaceId};
+use ion_session::tabs::Pin as PinKind;
+use ion_session::{GroupId, Session, SessionStore, TabList, WorkspaceId};
 
 const ROLE_ID: i32 = 0x0100; // Qt::UserRole
 const ROLE_URL: i32 = ROLE_ID + 1;
@@ -315,6 +411,15 @@ const ROLE_ICON: i32 = ROLE_ID + 3;
 const ROLE_SUSPENDED: i32 = ROLE_ID + 4;
 const ROLE_WORKSPACE: i32 = ROLE_ID + 5;
 const ROLE_ROW: i32 = ROLE_ID + 6;
+const ROLE_PINNED: i32 = ROLE_ID + 7;
+const ROLE_ESSENTIAL: i32 = ROLE_ID + 8;
+const ROLE_GROUP: i32 = ROLE_ID + 9;
+const ROLE_GROUP_NAME: i32 = ROLE_ID + 10;
+const ROLE_GROUP_COLOR: i32 = ROLE_ID + 11;
+const ROLE_GROUP_COLLAPSED: i32 = ROLE_ID + 12;
+const ROLE_GROUP_FIRST: i32 = ROLE_ID + 13;
+const ROLE_GROUP_LAST: i32 = ROLE_ID + 14;
+const ROLE_SECTION_END: i32 = ROLE_ID + 15;
 
 pub struct TabsRust {
     list: TabList,
@@ -324,6 +429,7 @@ pub struct TabsRust {
     closed_count: i32,
     restoring: bool,
     workspace: i32,
+    groups_revision: u64,
 }
 
 impl Default for TabsRust {
@@ -336,6 +442,7 @@ impl Default for TabsRust {
             closed_count: 0,
             restoring: false,
             workspace: 0,
+            groups_revision: 0,
         }
     }
 }
@@ -362,6 +469,41 @@ impl qobject::Tabs {
             ROLE_SUSPENDED => QVariant::from(&tab.suspended),
             ROLE_WORKSPACE => QVariant::from(&(tab.workspace as i32)),
             ROLE_ROW => QVariant::from(&index.row()),
+            ROLE_PINNED => QVariant::from(&tab.pinned),
+            ROLE_ESSENTIAL => QVariant::from(&tab.essential),
+            ROLE_GROUP => QVariant::from(&tab.group.map_or(-1, |g| g as i32)),
+            ROLE_GROUP_NAME | ROLE_GROUP_COLOR | ROLE_GROUP_COLLAPSED => {
+                let group = tab.group.and_then(|g| self.list.group(g));
+                match role {
+                    ROLE_GROUP_NAME => {
+                        QVariant::from(&QString::from(group.map_or("", |g| g.name.as_str())))
+                    }
+                    ROLE_GROUP_COLOR => {
+                        QVariant::from(&QString::from(group.map_or("", |g| g.color.as_str())))
+                    }
+                    _ => QVariant::from(&group.is_some_and(|g| g.collapsed)),
+                }
+            }
+            ROLE_GROUP_FIRST | ROLE_GROUP_LAST => {
+                let row = index.row() as usize;
+                let step = if role == ROLE_GROUP_FIRST { -1 } else { 1 };
+                let edge = tab.group.is_some()
+                    && self
+                        .list
+                        .neighbour(row, step)
+                        .and_then(|i| self.list.get(i))
+                        .is_none_or(|t| t.group != tab.group);
+                QVariant::from(&edge)
+            }
+            ROLE_SECTION_END => {
+                let next = self
+                    .list
+                    .neighbour(index.row() as usize, 1)
+                    .and_then(|i| self.list.get(i));
+                let end =
+                    next.is_none_or(|t| t.pinned != tab.pinned || t.essential != tab.essential);
+                QVariant::from(&end)
+            }
             _ => QVariant::default(),
         }
     }
@@ -375,6 +517,15 @@ impl qobject::Tabs {
         roles.insert(ROLE_SUSPENDED, QByteArray::from("suspended"));
         roles.insert(ROLE_WORKSPACE, QByteArray::from("workspace"));
         roles.insert(ROLE_ROW, QByteArray::from("row"));
+        roles.insert(ROLE_PINNED, QByteArray::from("pinned"));
+        roles.insert(ROLE_ESSENTIAL, QByteArray::from("essential"));
+        roles.insert(ROLE_GROUP, QByteArray::from("group"));
+        roles.insert(ROLE_GROUP_NAME, QByteArray::from("groupName"));
+        roles.insert(ROLE_GROUP_COLOR, QByteArray::from("groupColor"));
+        roles.insert(ROLE_GROUP_COLLAPSED, QByteArray::from("groupCollapsed"));
+        roles.insert(ROLE_GROUP_FIRST, QByteArray::from("groupFirst"));
+        roles.insert(ROLE_GROUP_LAST, QByteArray::from("groupLast"));
+        roles.insert(ROLE_SECTION_END, QByteArray::from("sectionEnd"));
         roles
     }
 
@@ -409,10 +560,18 @@ impl qobject::Tabs {
             self.as_mut().rust_mut().workspace = workspace;
             self.as_mut().workspace_changed();
         }
+        let revision = self.list.groups_revision();
+        if self.groups_revision != revision {
+            self.as_mut().rust_mut().groups_revision = revision;
+            self.as_mut().rows_shifted(0);
+            self.as_mut().groups_changed();
+        }
         self.session_changed();
     }
 
-    /// Rows from `first` on changed position: tell views reading `row`.
+    /// Rows from `first` on changed position or neighbours: tell views
+    /// reading `row` or the group edges. Every role, since a move can change
+    /// a tab's group too.
     fn rows_shifted(mut self: Pin<&mut Self>, first: usize) {
         let len = self.list.len();
         if first >= len {
@@ -421,31 +580,55 @@ impl qobject::Tabs {
         let root = QModelIndex::default();
         let top = self.index(first as i32, 0, &root);
         let bottom = self.index(len as i32 - 1, 0, &root);
-        let mut roles = QList::<i32>::default();
-        roles.append(ROLE_ROW);
-        self.as_mut().data_changed(&top, &bottom, &roles);
+        self.as_mut()
+            .data_changed(&top, &bottom, &QList::<i32>::default());
     }
 
-    /// Insert a tab row through `open`, which gets the list and the clamped
-    /// index and returns the new tab's index.
+    /// Move the row at `from` to `to` around `apply`, which makes the same
+    /// move in the list, then announce the change.
+    fn move_row_with(
+        mut self: Pin<&mut Self>,
+        from: usize,
+        to: usize,
+        apply: impl FnOnce(&mut TabList),
+    ) {
+        let moved = from != to;
+        if moved {
+            // Qt wants the destination as "insert before this row" in the old layout.
+            let destination = if to > from { to + 1 } else { to } as i32;
+            let root = QModelIndex::default();
+            self.as_mut()
+                .begin_move_rows(&root, from as i32, from as i32, &root, destination);
+        }
+        apply(&mut self.as_mut().rust_mut().list);
+        if moved {
+            self.as_mut().end_move_rows();
+        }
+        // Neighbours of both the old and the new place may change edges.
+        self.as_mut().rows_shifted(from.min(to).saturating_sub(1));
+        self.sync();
+    }
+
+    /// Insert a tab row at `index` through `open`, which gets the list and
+    /// `index` and must put the new tab exactly there.
     fn insert_with(
         mut self: Pin<&mut Self>,
         index: usize,
         open: impl FnOnce(&mut TabList, usize) -> usize,
     ) -> i32 {
-        let index = index.min(self.list.len());
         let row = index as i32;
         self.as_mut()
             .begin_insert_rows(&QModelIndex::default(), row, row);
         open(&mut self.as_mut().rust_mut().list, index);
         self.as_mut().end_insert_rows();
-        self.as_mut().rows_shifted(index + 1);
+        self.as_mut().rows_shifted(index.saturating_sub(1));
         self.sync();
         row
     }
 
     fn insert_at(self: Pin<&mut Self>, index: usize, url: &QString, activate: bool) -> i32 {
         let url = url.to_string();
+        let index = self.list.insert_index(index);
         self.insert_with(index, |list, i| list.open(i, &url, "", activate))
     }
 
@@ -455,8 +638,9 @@ impl qobject::Tabs {
     }
 
     fn open_tab_next_to_current(self: Pin<&mut Self>, url: &QString, activate: bool) -> i32 {
-        let next = self.list.current().map_or(0, |i| i + 1);
-        self.insert_at(next, url, activate)
+        let url = url.to_string();
+        let next = self.list.next_to_current_index();
+        self.insert_with(next, |list, _| list.open_next_to_current(&url, activate))
     }
 
     fn open_tab_at(self: Pin<&mut Self>, index: i32, url: &QString, activate: bool) -> i32 {
@@ -474,7 +658,7 @@ impl qobject::Tabs {
             ion_safety::global().tab_closed(tab.id);
         }
         self.as_mut().end_remove_rows();
-        self.as_mut().rows_shifted(i);
+        self.as_mut().rows_shifted(i.saturating_sub(1));
         self.sync();
         true
     }
@@ -513,23 +697,239 @@ impl qobject::Tabs {
         let (Some(f), Some(t)) = (to_index(from, len), to_index(to, len)) else {
             return false;
         };
-        if f == t {
+        let Some(t) = self.list.move_target(f, t) else {
             return false;
-        }
-        // Qt wants the destination as "insert before this row" in the old layout.
-        let destination = if t > f { to + 1 } else { to };
-        let root = QModelIndex::default();
-        if !self
-            .as_mut()
-            .begin_move_rows(&root, from, from, &root, destination)
-        {
-            return false;
-        }
-        self.as_mut().rust_mut().list.move_tab(f, t);
-        self.as_mut().end_move_rows();
-        self.as_mut().rows_shifted(f.min(t));
-        self.sync();
+        };
+        self.as_mut().move_row_with(f, t, |list| {
+            list.move_tab(f, t);
+        });
         true
+    }
+
+    fn drag_tab(mut self: Pin<&mut Self>, from: i32, to: i32) -> bool {
+        let len = self.list.len();
+        let (Some(f), Some(t)) = (to_index(from, len), to_index(to, len)) else {
+            return false;
+        };
+        let Some(t) = self.list.move_target(f, t) else {
+            return false;
+        };
+        self.as_mut().move_row_with(f, t, |list| {
+            list.drag_tab(f, t);
+        });
+        true
+    }
+
+    fn drop_tab(mut self: Pin<&mut Self>, index: i32) {
+        let Some(i) = to_index(index, self.list.len()) else {
+            return;
+        };
+        if self.as_mut().rust_mut().list.drop_tab(i) {
+            self.as_mut().rows_shifted(0);
+            self.sync();
+        }
+    }
+
+    fn pin_tab(mut self: Pin<&mut Self>, index: i32, pin: i32) -> i32 {
+        let Some(i) = to_index(index, self.list.len()) else {
+            return -1;
+        };
+        let kind = match pin {
+            2 => PinKind::Everywhere,
+            1 => PinKind::Workspace,
+            _ => PinKind::None,
+        };
+        let Some(to) = self.list.pin_target(i, kind) else {
+            return -1;
+        };
+        self.as_mut().move_row_with(i, to, |list| {
+            list.pin(i, kind);
+        });
+        to as i32
+    }
+
+    fn create_group(mut self: Pin<&mut Self>, index: i32, name: &QString, color: &QString) -> i32 {
+        let Some(i) = to_index(index, self.list.len()) else {
+            return -1;
+        };
+        if self.list.get(i).is_some_and(|t| t.pinned) {
+            return -1;
+        }
+        let Some(to) = self.list.group_target(i, None) else {
+            return -1;
+        };
+        let (name, color) = (name.to_string(), color.to_string());
+        let mut id = -1;
+        self.as_mut().move_row_with(i, to, |list| {
+            id = list
+                .create_group(i, &name, &color)
+                .map_or(-1, |(g, _)| g as i32);
+        });
+        id
+    }
+
+    fn set_group(mut self: Pin<&mut Self>, index: i32, id: i32) {
+        let Some(i) = to_index(index, self.list.len()) else {
+            return;
+        };
+        let group = GroupId::try_from(id)
+            .ok()
+            .filter(|&g| self.list.group(g).is_some());
+        let Some(to) = self.list.group_target(i, group) else {
+            return;
+        };
+        self.as_mut().move_row_with(i, to, |list| {
+            list.set_group(i, group);
+        });
+    }
+
+    fn rename_group(mut self: Pin<&mut Self>, id: i32, name: &QString) {
+        if let Ok(id) = GroupId::try_from(id) {
+            self.as_mut()
+                .rust_mut()
+                .list
+                .rename_group(id, &name.to_string());
+            self.sync();
+        }
+    }
+
+    fn set_group_color(mut self: Pin<&mut Self>, id: i32, color: &QString) {
+        if let Ok(id) = GroupId::try_from(id) {
+            self.as_mut()
+                .rust_mut()
+                .list
+                .set_group_color(id, &color.to_string());
+            self.sync();
+        }
+    }
+
+    fn set_group_collapsed(mut self: Pin<&mut Self>, id: i32, collapsed: bool) {
+        if let Ok(id) = GroupId::try_from(id) {
+            self.as_mut()
+                .rust_mut()
+                .list
+                .set_group_collapsed(id, collapsed);
+            self.sync();
+        }
+    }
+
+    fn ungroup(mut self: Pin<&mut Self>, id: i32) {
+        if let Ok(id) = GroupId::try_from(id) {
+            self.as_mut().rust_mut().list.ungroup(id);
+            self.sync();
+        }
+    }
+
+    fn close_group(mut self: Pin<&mut Self>, id: i32) {
+        let Ok(id) = GroupId::try_from(id) else {
+            return;
+        };
+        let rows = self.list.group_rows(id);
+        // Keep the window open: closing every tab is closing the window.
+        if rows.len() == self.list.len() {
+            let end = self.list.len();
+            self.as_mut()
+                .insert_with(end, |list, i| list.open(i, "", "", true));
+        }
+        for &row in rows.iter().rev() {
+            self.as_mut().close_tab(row as i32);
+        }
+    }
+
+    fn groups(&self, workspace: i32) -> QString {
+        let rows =
+            WorkspaceId::try_from(workspace).map_or_else(|_| Vec::new(), |w| self.list.rows_in(w));
+        let mut seen = Vec::new();
+        for &i in &rows {
+            if let Some(g) = self.list.get(i).and_then(|t| t.group)
+                && !seen.contains(&g)
+            {
+                seen.push(g);
+            }
+        }
+        let list: Vec<serde_json::Value> = seen
+            .iter()
+            .filter_map(|&g| self.list.group(g))
+            .map(|g| {
+                serde_json::json!({
+                    "id": g.id,
+                    "name": g.name,
+                    "color": g.color,
+                    "collapsed": g.collapsed,
+                    "tabs": self.list.group_rows(g.id).len(),
+                })
+            })
+            .collect();
+        QString::from(serde_json::Value::Array(list).to_string().as_str())
+    }
+
+    fn strip_layout(&self, workspace: i32) -> QString {
+        let (mut pinned, mut tabs) = (0, 0);
+        if let Ok(w) = WorkspaceId::try_from(workspace) {
+            for tab in self
+                .list
+                .rows_in(w)
+                .into_iter()
+                .filter_map(|i| self.list.get(i))
+            {
+                if tab.pinned {
+                    pinned += 1;
+                } else if !tab
+                    .group
+                    .and_then(|g| self.list.group(g))
+                    .is_some_and(|g| g.collapsed)
+                {
+                    tabs += 1;
+                }
+            }
+        }
+        QString::from(
+            serde_json::json!({ "pinned": pinned, "tabs": tabs })
+                .to_string()
+                .as_str(),
+        )
+    }
+
+    fn group_at(&self, index: i32) -> i32 {
+        to_index(index, self.list.len())
+            .and_then(|i| self.list.get(i))
+            .and_then(|t| t.group)
+            .map_or(-1, |g| g as i32)
+    }
+
+    fn pinned_at(&self, index: i32) -> i32 {
+        match to_index(index, self.list.len()).and_then(|i| self.list.get(i)) {
+            Some(t) if t.essential => 2,
+            Some(t) if t.pinned => 1,
+            _ => 0,
+        }
+    }
+
+    fn closed_tabs(&self) -> QString {
+        let list: Vec<serde_json::Value> = self
+            .list
+            .closed_tabs()
+            .map(|c| {
+                serde_json::json!({
+                    "url": c.tab.url,
+                    "title": c.tab.title,
+                    "icon": c.tab.icon,
+                    "workspace": c.tab.workspace,
+                })
+            })
+            .collect();
+        QString::from(serde_json::Value::Array(list).to_string().as_str())
+    }
+
+    fn reopen_closed_tab_at(self: Pin<&mut Self>, n: i32) -> i32 {
+        let Some(index) = usize::try_from(n)
+            .ok()
+            .and_then(|n| self.list.reopen_index_at(n))
+        else {
+            return -1;
+        };
+        let n = n as usize;
+        self.insert_with(index, |list, i| list.reopen_closed_at(n).unwrap_or(i))
     }
 
     fn notify_row(mut self: Pin<&mut Self>, row: i32, role: i32) {
@@ -748,10 +1148,17 @@ impl qobject::Tabs {
         else {
             return;
         };
-        if self.as_mut().rust_mut().list.move_to_workspace(i, id) {
-            self.as_mut().notify_row(index, ROLE_WORKSPACE);
-            self.sync();
-        }
+        let movable = self.list.workspace(id).is_some()
+            && self
+                .list
+                .get(i)
+                .is_some_and(|t| !t.essential && t.workspace != id);
+        let Some(to) = self.list.workspace_move_target(i).filter(|_| movable) else {
+            return;
+        };
+        self.as_mut().move_row_with(i, to, |list| {
+            list.move_to_workspace(i, id);
+        });
     }
 
     fn workspace_at(&self, index: i32) -> i32 {
