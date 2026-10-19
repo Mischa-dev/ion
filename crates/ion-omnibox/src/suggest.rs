@@ -463,7 +463,12 @@ fn remote_rows(palette: &Palette, query: &str, remote: &[String], pages: &[Item]
         .filter_map(|suggestion| {
             let item = match palette.omnibox().resolve(suggestion)? {
                 Resolved::Url(url) => {
-                    if pages.iter().any(|p| p.action == Action::Open(url.clone())) {
+                    // An open tab's row switches to it rather than opening it.
+                    let target = normalize(&url);
+                    if pages.iter().any(|p| {
+                        p.action == Action::Open(url.clone())
+                            || (p.kind == Kind::Tab && normalize(&p.subtitle) == target)
+                    }) {
                         return None;
                     }
                     Item {
@@ -675,6 +680,19 @@ mod tests {
         let w = world();
         let items = run(&w, "nix man");
         assert_eq!(items[1].kind, Kind::Bookmark);
+    }
+
+    #[test]
+    fn suggested_addresses_of_open_tabs_are_left_to_the_tab_row() {
+        let mut w = world();
+        w.remote = vec!["rust-lang.org".into()];
+        let items = run(&w, "rust-lang");
+        assert!(items.iter().any(|i| i.action == Action::SwitchTab(1)));
+        assert!(
+            !items
+                .iter()
+                .any(|i| i.kind == Kind::Open && i.title == "rust-lang.org")
+        );
     }
 
     #[test]
