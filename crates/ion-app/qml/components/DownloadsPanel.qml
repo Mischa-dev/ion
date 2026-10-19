@@ -12,6 +12,8 @@ Popup {
     id: panel
 
     required property WebEngineProfile profile
+    // The window, for "Show all downloads" (ion://downloads).
+    property var browser
 
     // WebEngineDownloadRequest objects, newest first.
     property var items: []
@@ -40,6 +42,15 @@ Popup {
             }
         }
         download.accept()
+        // The Downloads page lists it once it ends, across restarts too.
+        download.isFinishedChanged.connect(() => {
+            if (!download.isFinished)
+                return
+            const outcome = download.state === WebEngineDownloadRequest.DownloadCompleted ? "completed"
+                          : download.state === WebEngineDownloadRequest.DownloadCancelled ? "cancelled" : "failed"
+            DownloadHistory.record(download.url.toString(), download.downloadDirectory, download.downloadFileName,
+                                   download.mimeType, Math.max(download.totalBytes, download.receivedBytes), outcome)
+        })
         items = [download].concat(items)
         open()
     }
@@ -132,6 +143,21 @@ Popup {
                 }
                 background: null
                 onClicked: panel.clearFinished()
+            }
+            ToolButton {
+                id: allButton
+                visible: panel.browser !== undefined
+                focusPolicy: Qt.NoFocus
+                contentItem: Text {
+                    text: qsTr("Show all")
+                    color: allButton.hovered ? Theme.text : Theme.textMuted
+                    font.pixelSize: Theme.fontSize
+                }
+                background: null
+                onClicked: {
+                    panel.close()
+                    panel.browser.openPage("downloads")
+                }
             }
         }
 

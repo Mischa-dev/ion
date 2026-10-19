@@ -32,6 +32,9 @@ ApplicationWindow {
         // (Safety, docs/SAFETY.md), so the engine keeps none of its own.
         persistentPermissionsPolicy: WebEngineProfile.PersistentPermissionsPolicy.AskEveryTime
     }
+    // The downloads panel's requests, newest first (the Downloads page lists
+    // the running ones).
+    readonly property var downloadItems: downloads.items
     // Set in Component.onCompleted: instance() is null until the prototype is complete.
     property WebEngineProfile profile: null
     // Folders of the Chrome extensions Ion loaded at startup.
@@ -480,7 +483,7 @@ ApplicationWindow {
         }
     }
 
-    DownloadsPanel { id: downloads; profile: window.profile }
+    DownloadsPanel { id: downloads; profile: window.profile; browser: window }
     NotificationToasts { profile: window.profile }
     FullScreenController {
         id: fullScreen
@@ -521,6 +524,9 @@ ApplicationWindow {
     Shortcut { sequences: ["Ctrl+0"]; onActivated: window.currentView?.resetZoom() }
     Shortcut { sequence: "Ctrl+D"; onActivated: window.toggleBookmark() }
     Shortcut { sequences: [StandardKey.Preferences, "Ctrl+,"]; onActivated: window.openPage("settings") }
+    Shortcut { sequence: "Ctrl+H"; onActivated: window.openPage("history") }
+    Shortcut { sequence: "Ctrl+Shift+O"; onActivated: window.openPage("bookmarks") }
+    Shortcut { sequence: "Ctrl+Shift+J"; onActivated: window.openPage("downloads") }
     Shortcut { sequence: "Ctrl+Alt+R"; onActivated: window.currentView?.reader.toggle() }
     Shortcut { sequence: "Ctrl+Shift+S"; onActivated: window.currentView?.takeScreenshot(false) }
     Shortcut { sequence: "Ctrl+Alt+Shift+S"; onActivated: window.currentView?.takeScreenshot(true) }

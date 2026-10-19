@@ -97,7 +97,14 @@ pub const COMMANDS: &[Command] = &[
         "star favorite save remove unbookmark",
         "Ctrl+D",
     ),
-    command("bookmarks", "Show bookmarks", "favorites starred list", ""),
+    command(
+        "bookmarks",
+        "Bookmarks",
+        "favorites starred list manage folders",
+        "Ctrl+Shift+O",
+    ),
+    command("history", "History", "visited pages recent past", "Ctrl+H"),
+    command("downloads", "Downloads", "files saved list", "Ctrl+Shift+J"),
     command(
         "import-browser-data",
         "Import bookmarks and history",

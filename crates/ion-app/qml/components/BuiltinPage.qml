@@ -12,7 +12,10 @@ Loader {
 
     readonly property string page: Pages.pageOf(view.url)
     readonly property var files: ({
-        settings: "SettingsPage"
+        settings: "SettingsPage",
+        history: "HistoryPage",
+        downloads: "DownloadsPage",
+        bookmarks: "BookmarksPage"
     })
 
     anchors.fill: parent
@@ -21,6 +24,16 @@ Loader {
     active: files[page] !== undefined
     visible: active
     source: active ? "qrc:/qt/qml/Ion/qml/pages/" + files[page] + ".qml" : ""
+
+    // Clicks and scrolling on the page's empty parts stop here instead of
+    // reaching the blank web page underneath (and its context menu).
+    MouseArea {
+        anchors.fill: parent
+        z: -1
+        enabled: loader.active
+        acceptedButtons: Qt.AllButtons
+        onWheel: wheel => wheel.accepted = true
+    }
 
     onLoaded: {
         item.view = Qt.binding(() => loader.view)

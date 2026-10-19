@@ -133,7 +133,9 @@ Popup {
         case "back": view?.goBack(); break
         case "forward": view?.goForward(); break
         case "bookmark-page": browser.toggleBookmark(); break
-        case "bookmarks": Qt.callLater(() => root.show("*")); break
+        case "bookmarks": browser.openPage("bookmarks"); break
+        case "history": browser.openPage("history"); break
+        case "downloads": browser.openPage("downloads"); break
         case "import-browser-data": browser.showImport(); break
         case "clear-cookies": Privacy.clearCookies(browser.profile); break
         case "clear-cache": browser.profile.clearHttpCache(); break
