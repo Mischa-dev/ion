@@ -36,6 +36,14 @@ const fn command(
     }
 }
 
+/// Commands that only make sense with Ion Agent turned on (`ai.enable`).
+pub const AGENT_COMMANDS: &[&str] = &[
+    "ask-agent",
+    "summarize-page",
+    "agent-sidebar",
+    "agent-activity",
+];
+
 const fn shortcut(id: &'static str, title: &'static str, keys: &'static [&'static str]) -> Command {
     Command {
         id,
@@ -359,6 +367,30 @@ pub const COMMANDS: &[Command] = &[
         &["Ctrl+Alt+Shift+S"],
     ),
     command("downloads", "Show downloads", "files saved", &["Ctrl+J"]),
+    command(
+        "side-panel",
+        "Show or hide side panel",
+        "sidebar web panels apps notes",
+        &["Ctrl+Shift+L"],
+    ),
+    command(
+        "notes",
+        "Notes",
+        "side panel jot write clippings scratch",
+        &["Ctrl+Alt+N"],
+    ),
+    command(
+        "clip-to-notes",
+        "Clip selection to notes",
+        "save quote highlight snippet side panel",
+        &["Ctrl+Alt+C"],
+    ),
+    command(
+        "add-web-panel",
+        "Keep page in side panel",
+        "web panel pin app sidebar vivaldi",
+        &[],
+    ),
     command(
         "keyboard-shortcuts",
         "Keyboard shortcuts",

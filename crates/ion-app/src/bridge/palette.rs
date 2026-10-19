@@ -43,31 +43,6 @@ pub mod qobject {
             bookmarks: &QString,
             sessions: &QStringList,
         ) -> QVariant;
-
-        /// Suggestions for the URL bar, in the same row format as `query`.
-        /// The first row is what Enter does with `input` as typed; the rest
-        /// are bang completions, other open tabs, bookmarks and history pages.
-        #[qinvokable]
-        fn suggest(
-            self: &PaletteSearch,
-            input: &QString,
-            titles: &QStringList,
-            urls: &QStringList,
-            current: i32,
-            history: &QString,
-            bookmarks: &QString,
-        ) -> QVariant;
-
-        /// `input` with an address filled in from `urls` (open tabs) or
-        /// `history` (`History.search()`'s JSON), e.g. "git" → "github.com/";
-        /// `input` unchanged when nothing fits.
-        #[qinvokable]
-        fn autocomplete(
-            self: &PaletteSearch,
-            input: &QString,
-            urls: &QStringList,
-            history: &QString,
-        ) -> QString;
     }
 }
 
@@ -99,19 +74,24 @@ pub fn current_bangs() -> Arc<BangTable> {
     table
 }
 
+/// A palette over the configured search engine and bangs.
+pub fn current_palette() -> Palette {
+    let config = ion_config::global().config();
+    let bangs = current_bangs();
+    let engine = SearchEngine::new(&config.search.engine, &config.search.template);
+    Palette::new(Omnibox::new(engine).with_step(bangs.clone()), bangs)
+}
+
 #[derive(Default)]
 pub struct PaletteSearchRust;
 
 impl PaletteSearchRust {
     fn palette(&self) -> Palette {
-        let config = ion_config::global().config();
-        let bangs = current_bangs();
-        let engine = SearchEngine::new(&config.search.engine, &config.search.template);
-        Palette::new(Omnibox::new(engine).with_step(bangs.clone()), bangs)
+        current_palette()
     }
 }
 
-fn strings(list: &QStringList) -> Vec<String> {
+pub(crate) fn strings(list: &QStringList) -> Vec<String> {
     QList::<QString>::from(list)
         .iter()
         .map(ToString::to_string)
@@ -120,7 +100,7 @@ fn strings(list: &QStringList) -> Vec<String> {
 
 /// Pages from `History.search()`'s or `Bookmarks.search()`'s JSON array of
 /// `{ url, title, … }`.
-fn history_entries(json: &str) -> Vec<TabEntry> {
+pub(crate) fn history_entries(json: &str) -> Vec<TabEntry> {
     let text =
         |value: &serde_json::Value, key: &str| value[key].as_str().unwrap_or_default().to_owned();
     match serde_json::from_str::<Vec<serde_json::Value>>(json) {
@@ -136,7 +116,7 @@ fn history_entries(json: &str) -> Vec<TabEntry> {
 }
 
 /// Pair up parallel title and URL lists.
-fn entries(titles: &QStringList, urls: &QStringList) -> Vec<TabEntry> {
+pub(crate) fn entries(titles: &QStringList, urls: &QStringList) -> Vec<TabEntry> {
     strings(titles)
         .into_iter()
         .zip(strings(urls))
@@ -185,49 +165,10 @@ impl qobject::PaletteSearch {
 
         rows(self.palette().query(&input.to_string(), &sources))
     }
-
-    fn suggest(
-        &self,
-        input: &QString,
-        titles: &QStringList,
-        urls: &QStringList,
-        current: i32,
-        history: &QString,
-        bookmarks: &QString,
-    ) -> QVariant {
-        let tabs = entries(titles, urls);
-        let history = history_entries(&history.to_string());
-        let bookmarks = history_entries(&bookmarks.to_string());
-        let sources = Sources {
-            tabs: &tabs,
-            current_tab: usize::try_from(current).ok(),
-            history: &history,
-            bookmarks: &bookmarks,
-            ..Sources::default()
-        };
-        rows(self.palette().suggest(&input.to_string(), &sources))
-    }
-}
-
-impl qobject::PaletteSearch {
-    fn autocomplete(&self, input: &QString, urls: &QStringList, history: &QString) -> QString {
-        let input = input.to_string();
-        let urls = strings(urls);
-        let history = history_entries(&history.to_string());
-        let candidates = urls
-            .iter()
-            .map(String::as_str)
-            .chain(history.iter().map(|page| page.url.as_str()));
-        QString::from(
-            ion_bangs::autofill::complete(&input, candidates)
-                .unwrap_or(input)
-                .as_str(),
-        )
-    }
 }
 
 /// Palette items as a list of `{ kind, title, subtitle, hint, action, value }`.
-fn rows(items: Vec<Item>) -> QVariant {
+pub(crate) fn rows(items: Vec<Item>) -> QVariant {
     let mut rows = QList::<QVariant>::default();
     for item in items {
         let (action, value) = match &item.action {
@@ -253,6 +194,7 @@ fn rows(items: Vec<Item>) -> QVariant {
                 ("set", QVariant::from(&pairs))
             }
             Action::Complete(text) => ("complete", QVariant::from(&QString::from(text.as_str()))),
+            Action::Copy(text) => ("copy", QVariant::from(&QString::from(text.as_str()))),
         };
         let mut row = QMap::<QMapPair_QString_QVariant>::default();
         let mut set = |key: &str, value: QVariant| row.insert(QString::from(key), value);

@@ -5,6 +5,7 @@
 //! `ion-app` (QML + the cxx-qt bridge); everything that decides *what* happens
 //! lives here or in a sibling `ion-*` crate.
 
+pub mod engines;
 pub mod load_error;
 pub mod navigation;
 pub mod pages;

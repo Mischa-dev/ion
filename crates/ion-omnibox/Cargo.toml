@@ -1,0 +1,17 @@
+[package]
+name = "ion-omnibox"
+description = "Address bar smarts for the Ion browser: inline answers, search engines and suggestion ranking"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ion-bangs.workspace = true
+ion-core.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+url.workspace = true
+
+[lints]
+workspace = true

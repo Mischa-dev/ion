@@ -36,6 +36,20 @@ Item {
         clipboard.copy()
     }
 
+    // Quote the page's selected text in a note and show the notes.
+    function clipSelection(view) {
+        if (!view)
+            return
+        view.runJavaScript("window.getSelection().toString()", selection => {
+            if (!selection || selection.trim().length === 0) {
+                view.notify(qsTr("Select some text on the page first."))
+                return
+            }
+            Panels.clip(selection, view.url.toString(), view.title)
+            Panels.show("notes")
+        })
+    }
+
     function run(id) {
         if (!available(id))
             return
@@ -114,6 +128,18 @@ Item {
         case "screenshot": view?.takeScreenshot(false); break
         case "screenshot-page": view?.takeScreenshot(true); break
         case "downloads": downloads.toggle(); break
+        case "side-panel": Panels.toggle(Panels.open.length > 0 ? Panels.open : browser.lastPanel()); break
+        case "notes": Panels.toggle("notes"); break
+        case "clip-to-notes": clipSelection(view); break
+        case "add-web-panel":
+            if (view) {
+                const panel = Panels.add(view.url.toString(), view.title)
+                if (panel.length > 0)
+                    Panels.show(panel)
+                else
+                    view.notify(qsTr("Only web pages can go in the side panel."))
+            }
+            break
         case "keyboard-shortcuts": Qt.callLater(() => shortcutEditor.show()); break
         case "palette": commandPalette.show(); break
         case "tab-1": Tabs.activateNth(0); break
