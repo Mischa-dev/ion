@@ -11,6 +11,7 @@
   rust-analyzer,
   rustPlatform,
   nixfmt,
+  python3,
   ion,
 }:
 let
@@ -29,7 +30,8 @@ mkShell {
     clippy
     rust-analyzer
     nixfmt
-    qt6.qttools # qmllint, qmlformat, qml
+    qt6.qttools # qmllint, qmlformat, qml, qmlprofiler
+    python3 # bench/bench.py
   ];
 
   env = {

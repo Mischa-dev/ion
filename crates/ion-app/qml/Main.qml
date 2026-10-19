@@ -25,14 +25,20 @@ ApplicationWindow {
     title: currentView && currentView.title ? currentView.title + " — Ion" : "Ion"
 
     // Persistent profile: cookies, cache and storage survive restarts.
-    WebEngineProfilePrototype {
-        id: profilePrototype
-        storageName: "Default"
-        // Site permissions are decided and remembered by Ion's safety model
-        // (Safety, docs/SAFETY.md), so the engine keeps none of its own.
-        persistentPermissionsPolicy: WebEngineProfile.PersistentPermissionsPolicy.AskEveryTime
+    // Opening it starts Chromium's storage and network service, the slowest
+    // step of startup, so it is created in startEngine() once the window has
+    // drawn its first frame rather than while the window is being built.
+    Component {
+        id: profileComponent
+        WebEngineProfilePrototype {
+            storageName: "Default"
+            // Site permissions are decided and remembered by Ion's safety model
+            // (Safety, docs/SAFETY.md), so the engine keeps none of its own.
+            persistentPermissionsPolicy: WebEngineProfile.PersistentPermissionsPolicy.AskEveryTime
+        }
     }
-    // Set in Component.onCompleted: instance() is null until the prototype is complete.
+    property WebEngineProfilePrototype profilePrototype: null
+    // Null until startEngine().
     property WebEngineProfile profile: null
     // Folders of the Chrome extensions Ion loaded at startup.
     property var extensionPaths: []
@@ -152,6 +158,8 @@ ApplicationWindow {
     // only exist once `startupFinished` is set at the end, so a tab opened
     // while waiting loads once, after the session restore.
     property bool startupFinished: false
+    // True while the views of a restored session are created; see finishStartup.
+    property bool restoringViews: false
     property bool startupRunning: false
     function finishStartup() {
         if (startupRunning)
@@ -164,22 +172,30 @@ ApplicationWindow {
             extensionPaths = Extensions.paths()
             extensionPaths.forEach(path => extensionManager.loadExtension(path))
         }
+        // Restoring replaces every tab; tabs opened while waiting (Ctrl+T, a
+        // URL handed over by a second launch) are opened again after it.
+        let early = []
+        let restored = false
         if (Config.value("general.restoreSession")) {
-            // Restoring replaces every tab; keep any opened while waiting
-            // (Ctrl+T, a URL handed over by a second launch).
-            const early = []
             for (let i = 0; i < Tabs.count; i++)
                 early.push(Tabs.urlAt(i))
-            if (Tabs.restoreLastSession())
-                early.forEach((target, i) => openTab(target, i === 0))
+            restored = Tabs.restoreLastSession()
+            if (!restored)
+                early = []
         }
+        // The tab views are created now. Restored background tabs wait until
+        // they are first shown, so a big session costs little at startup;
+        // tabs opened below load right away.
+        restoringViews = restored
+        startupFinished = true
+        restoringViews = false
+        early.forEach((target, i) => openTab(target, i === 0))
         // URLs on the command line (`ion %U` from the desktop file) open as new
         // tabs after the restored ones; the first one becomes current.
         const urls = Qt.application.arguments.slice(1).filter(arg => !arg.startsWith("-"))
         urls.forEach((arg, i) => openTab(urlBarResolver.resolve(arg), i === 0))
         if (Tabs.count === 0)
             openTab(homeUrl)
-        startupFinished = true
         sessionSaveTimer.restart()
     }
 
@@ -188,7 +204,32 @@ ApplicationWindow {
         navBar.urlBar.selectAll()
     }
 
-    Component.onCompleted: {
+    // Startup marks for bench/bench.py; Performance.mark keeps each once.
+    property bool firstFrameShown: false
+    Connections {
+        target: window
+        enabled: !window.firstFrameShown
+        function onFrameSwapped() {
+            window.firstFrameShown = true
+            Performance.mark("first-frame")
+        }
+    }
+
+    // The window shows first; the engine starts right after its first frame,
+    // or after a moment if the window isn't drawn (started hidden).
+    Timer {
+        id: engineFallback
+        interval: 200
+        running: true
+        onTriggered: window.startEngine()
+    }
+    onFirstFrameShownChanged: Qt.callLater(startEngine)
+
+    function startEngine() {
+        if (profilePrototype)
+            return
+        engineFallback.stop()
+        profilePrototype = profileComponent.createObject(window)
         profile = profilePrototype.instance()
         Adblock.attach(window.profile)
         Privacy.apply(window.profile)
@@ -257,7 +298,10 @@ ApplicationWindow {
     // `[privacy]` cookie settings follow config changes live.
     Connections {
         target: Config
-        function onRevisionChanged() { Privacy.apply(window.profile) }
+        function onRevisionChanged() {
+            if (window.profile)
+                Privacy.apply(window.profile)
+        }
     }
     Connections {
         target: Qt.application
@@ -387,7 +431,7 @@ ApplicationWindow {
                                               : WebEngineView.LifecycleState.Active
 
                     Component.onCompleted: {
-                        deferred = Tabs.restoring && !current
+                        deferred = (Tabs.restoring || window.restoringViews) && !current
                         if (!deferred)
                             loadSavedUrl()
                     }
@@ -414,8 +458,11 @@ ApplicationWindow {
                             Tabs.setIcon(index, icon.toString())
                     }
                     onLoadingChanged: info => {
-                        if (info.status === WebEngineView.LoadSucceededStatus)
+                        if (info.status === WebEngineView.LoadSucceededStatus) {
                             History.recordVisit(info.url.toString(), title)
+                            Performance.mark("first-page")
+                            Performance.event("page-loaded")
+                        }
                     }
                     onNewTabRequested: request => {
                         const background = request.destination === WebEngineNewWindowRequest.InNewBackgroundTab

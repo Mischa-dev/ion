@@ -24,6 +24,15 @@ WebEngineView {
     // page fills in itself; those must not be covered by the new-tab page.
     property bool showNewTabPage: true
 
+    // Becomes true, for good, the first time the tab is shown or given a
+    // page. The per-page UI below (find bar, prompts, dialogs, error page…)
+    // is only created then, so restored background tabs that haven't been
+    // looked at yet cost little more than a bare web view.
+    property bool live: false
+    // The parts' own `view` properties hide this file's `view` id.
+    readonly property WebEngineView browserTab: view
+    onVisibleChanged: if (visible) live = true
+
     // A tab with no page yet matches the browser chrome instead of glaring
     // white. Pages get the web's usual white canvas, which many rely on.
     backgroundColor: url.toString().length === 0 || url.toString() === "about:blank"
@@ -69,14 +78,19 @@ WebEngineView {
             runInFrames(child, script)
     }
 
-    Component.onCompleted: applyPageTheme()
+    Component.onCompleted: {
+        if (visible || url.toString().length > 0)
+            live = true
+        applyPageTheme()
+    }
 
     // A site of its own may darken differently.
     onUrlChanged: {
+        live = true
         const darken = Theme.engine.darkenPage(url.toString())
         if (settings.forceDarkMode !== darken)
             settings.forceDarkMode = darken
-        loadError.leftFor(url)
+        loadError.item?.leftFor(url)
         // A page's own `history.pushState`/`replaceState` moves the tab to a
         // new entry without a load; the next redirect chain starts there.
         Qt.callLater(() => {
@@ -94,10 +108,11 @@ WebEngineView {
     onLoadingChanged: info => {
         // Ion's own error page covers Chromium's until something replaces it;
         // a load that only starts, or is stopped, leaves Chromium's in place.
+        live = true
         if (info.status === WebEngineView.LoadFailedStatus)
-            loadError.showFor(info)
-        else if (info.status === WebEngineView.LoadSucceededStatus)
-            loadError.visible = false
+            loadError.item.showFor(info)
+        else if (info.status === WebEngineView.LoadSucceededStatus && loadError.item)
+            loadError.item.visible = false
         if (!pageSchemeRestored && info.status === WebEngineView.LoadStartedStatus) {
             pageSchemeRestored = true
             Theme.engine.applyPageScheme()
@@ -135,23 +150,31 @@ WebEngineView {
 
     // Saves the visible area (or the whole page) as a PNG in the downloads
     // folder and copies it to the clipboard.
-    function takeScreenshot(fullPage) { screenshotTool.capture(fullPage) }
+    function takeScreenshot(fullPage) { screenshotTool.item?.capture(fullPage) }
 
-    NewTabPage { view: view }
-    AdblockCosmetics { view: view }
-    FindBar { view: view }
-    PermissionPrompt { view: view; tabId: view.tabId }
-    ScreenSharePicker { view: view }
-    PageDialog { view: view }
-    ScreenshotTool {
-        id: screenshotTool
-        view: view
+    // The new-tab page exists only while it can show: a blank tab on screen.
+    // Built per tab, it would hold a dozen tiles in every tab and rebuild
+    // them all on each config change.
+    TabPart {
+        active: view.live && view.visible && view.showNewTabPage && Basics.isNewTabUrl(view.url)
+        sourceComponent: NewTabPage { view: browserTab }
     }
-    ContextMenuHandler {
-        view: view
-        omnibox: tabOmnibox
-        onOpenInNewTab: target => view.openInNewTab(target)
-        onAskAgent: input => view.askAgent(input)
+    TabPart { sourceComponent: AdblockCosmetics { view: browserTab } }
+    TabPart { sourceComponent: FindBar { view: browserTab } }
+    TabPart { sourceComponent: PermissionPrompt { view: browserTab; tabId: browserTab.tabId } }
+    TabPart { sourceComponent: ScreenSharePicker { view: browserTab } }
+    TabPart { sourceComponent: PageDialog { view: browserTab } }
+    TabPart {
+        id: screenshotTool
+        sourceComponent: ScreenshotTool { view: browserTab }
+    }
+    TabPart {
+        sourceComponent: ContextMenuHandler {
+            view: browserTab
+            omnibox: tabOmnibox
+            onOpenInNewTab: target => view.openInNewTab(target)
+            onAskAgent: input => view.askAgent(input)
+        }
     }
     Omnibox {
         id: tabOmnibox
@@ -230,9 +253,11 @@ WebEngineView {
     // page. That page stays enabled underneath because it makes the failed
     // address the current entry, so the URL bar, title, Reload and Back treat
     // it like any other page.
-    LoadErrorPage {
+    TabPart {
         id: loadError
-        anchors.fill: parent
-        onRetry: view.reload()
+        sourceComponent: LoadErrorPage {
+            anchors.fill: parent
+            onRetry: browserTab.reload()
+        }
     }
 }

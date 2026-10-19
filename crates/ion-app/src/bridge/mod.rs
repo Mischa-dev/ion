@@ -14,6 +14,7 @@ pub mod history;
 pub mod load_error;
 pub mod omnibox;
 pub mod palette;
+pub mod performance;
 pub mod platform;
 pub mod privacy;
 pub mod reader;

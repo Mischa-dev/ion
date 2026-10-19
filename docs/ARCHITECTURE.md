@@ -31,6 +31,7 @@ crates/
   ion-reader/             reader mode: article extraction and the themed reader page
   ion-safety/             permissions and agent trust: decisions, prompts, activity log
   ion-agent/              Ion Agent's runtime: tasks, browser tools, model access
+  ion-perf/               startup marks, memory pressure, per-process memory
   ion-app/                the binary (`ion`)
     build.rs              auto-discovers bridges, C++ shims and QML files
     src/main.rs           startup: QtWebEngine init, app, QML engine
@@ -41,7 +42,9 @@ crates/
     qml/Theme.qml         design tokens singleton (colors, radius, density, motion)
     qml/components/       UI pieces (TabStrip, NavigationBar, UrlBar, BrowserTab…)
 packaging/                Linux desktop file + AppStream, macOS Info.plist
-docs/                     this file; platform.md for per-OS behaviour and checks
+bench/                    speed and memory benchmark (docs/performance.md)
+docs/                     this file; platform.md for per-OS behaviour and checks;
+                          performance.md for what keeps Ion fast and how to measure it
 ```
 
 ## Adding a feature module
