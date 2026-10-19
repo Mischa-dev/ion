@@ -32,8 +32,9 @@ TextField {
     // The search engine's suggestions and the query they are for.
     property var remote: []
     property string remoteQuery: ""
-    // Recent engine answers by query, so backspacing doesn't refetch.
-    property var remoteCache: ({})
+    // Recent engine answers by query, so backspacing doesn't refetch. No
+    // prototype, so queries like "constructor" aren't already "cached".
+    property var remoteCache: Object.create(null)
     property var request: null
 
     readonly property bool suggestionsWanted: {
@@ -54,11 +55,14 @@ TextField {
                 field.request.abort()
                 field.request = null
             }
-            field.remoteCache = {}
+            field.remoteCache = Object.create(null)
             field.remote = []
             field.remoteQuery = ""
-            if (field.activeFocus)
+            // Drop rows for the old engine now, then ask the new one.
+            if (field.activeFocus) {
+                field.refreshSuggestions(false, true)
                 field.fetchRemote()
+            }
         }
     }
     // QML has no clipboard API; an invisible text field copies answers.
@@ -192,7 +196,7 @@ TextField {
                 const found = AddressBar.parseSuggestions(xhr.responseText, query)
                 const cache = field.remoteCache
                 if (Object.keys(cache).length > 200)
-                    field.remoteCache = {}
+                    field.remoteCache = Object.create(null)
                 field.remoteCache[query] = found
                 field.remote = found
                 field.remoteQuery = query
