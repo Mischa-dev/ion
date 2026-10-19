@@ -22,16 +22,18 @@ nix/
 crates/
   ion-core/               shared core: app constants, URL-bar input resolution
   ion-basics/             downloads, per-site zoom, permission prompts and panel, page dialogs, find,
-                          screenshots, context menu and new-tab tiles
+                          screenshots, context menu, new-tab tiles, security key dialog text
   ion-platform/           Chromium switches, one-instance-per-profile hand-off
   ion-bangs/              !bangs and the command palette's ranking
   ion-session/            tabs and workspaces, saved and named sessions, history
   ion-bookmarks/          bookmarks; importing bookmarks and history from Chrome/Firefox
-  ion-sites/              per-site settings ([sites] in config), user scripts and styles
+  ion-sites/              per-site settings ([sites] in config), user scripts and styles,
+                          user agent and site quirks, links that open other apps
   ion-reader/             reader mode: article extraction and the themed reader page
   ion-safety/             permissions and agent trust: decisions, prompts, activity log
   ion-agent/              Ion Agent's runtime: tasks, browser tools, model access
   ion-perf/               startup marks, memory pressure, per-process memory
+  ion-input/              keyboard shortcuts (the keymap and its remaps)
   ion-app/                the binary (`ion`)
     build.rs              auto-discovers bridges, C++ shims and QML files
     src/main.rs           startup: QtWebEngine init, app, QML engine
@@ -44,6 +46,7 @@ crates/
 packaging/                Linux desktop file + AppStream, macOS Info.plist
 bench/                    speed and memory benchmark (docs/performance.md)
 docs/                     this file; platform.md for per-OS behaviour and checks;
+                          compat.md for how Ion makes real sites work;
                           performance.md for what keeps Ion fast and how to measure it
 ```
 
@@ -100,8 +103,12 @@ Shared files with small, append-only edits: root `Cargo.toml`,
   stages implement `InputStep` and run first; `ion_bangs::BangTable` is one.
   Config feeds user bangs through `BangTable::apply`.
 - The Ctrl/Cmd+K palette ranks tabs, history, sessions, commands and bangs in
-  `ion_bangs::palette`; commands are
-  listed in `ion_bangs::commands` and carried out in `CommandPalette.qml`.
+  `ion_bangs::palette`; commands are listed (with their default keys) in
+  `ion_bangs::commands` and carried out in `Commands.qml`, which also binds
+  every command's keys. `ion_input::Keymap` applies `[shortcuts]` remaps; the
+  `Keymap` singleton serves it to QML and the shortcut editor
+  (`ShortcutEditor.qml`, Ctrl+/) writes remaps back to the config. Add new
+  shortcuts as commands there, not as `Shortcut` items, so they can be remapped.
   `Palette::suggest` is the URL bar's narrower version (typed entry first,
   then tabs, history and bang completions), and `ion_bangs::autofill` fills
   in addresses inline; both lists draw their rows with

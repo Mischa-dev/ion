@@ -233,6 +233,8 @@ mod tests {
                 .0
                 .into_iter()
                 .map(|s| s.name)
+                // The built-in user agent quirks always add this one.
+                .filter(|name| name != "ion-user-agent")
                 .collect()
         };
         assert_eq!(names(&config), ["ion-global-privacy-control"]);

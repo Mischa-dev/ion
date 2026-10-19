@@ -783,6 +783,7 @@ dependencies = [
  "ion-bookmarks",
  "ion-config",
  "ion-core",
+ "ion-input",
  "ion-perf",
  "ion-platform",
  "ion-reader",
@@ -839,6 +840,10 @@ version = "0.1.0"
 dependencies = [
  "url",
 ]
+
+[[package]]
+name = "ion-input"
+version = "0.1.0"
 
 [[package]]
 name = "ion-perf"

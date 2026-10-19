@@ -13,6 +13,7 @@ pub mod find;
 pub mod new_tab;
 pub mod permissions;
 pub mod screenshot;
+pub mod webauthn;
 pub mod zoom;
 
 /// The host part of a URL as people read it (`www.` dropped), or `None` for

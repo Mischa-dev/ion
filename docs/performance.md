@@ -53,10 +53,12 @@ build only, then `qmlprofiler --output trace.qtd target/release/ion URL`.
   page starts loading a frame later than before, which is not measurable.
 - **Restored tabs cost almost nothing until shown.** Restoring a session
   loads only the current tab; the others load when first shown, as in Chrome
-  and Firefox. Each tab's per-page UI (new-tab page, find bar, prompts,
-  dialogs, error page, context menu, screenshot tool) is created by a
-  `TabPart` once the tab is live (`BrowserTab.live`), so an unopened restored
-  tab is a bare web view.
+  and Firefox. Most of each tab's per-page UI (new-tab page, permission
+  prompt, page dialogs, screen-share picker, error page, context menu,
+  screenshot tool) is created by a `TabPart` once the tab is live
+  (`BrowserTab.live`), so an unopened restored tab is close to a bare web
+  view. New per-tab UI that only matters once a page loads belongs in a
+  `TabPart` too.
 - **The new-tab page exists only while it shows.** Before, every tab kept one
   (with its tiles) and rebuilt all of them on every config change.
 - **Hardware video on Linux.** VA-API decode and encode features are switched
