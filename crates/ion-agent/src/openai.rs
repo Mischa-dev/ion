@@ -132,7 +132,7 @@ impl Model for OpenAi {
                 break;
             }
         }
-        Ok(stream.finish())
+        stream.finish()
     }
 
     fn models(&self) -> Result<Vec<String>, String> {
@@ -238,7 +238,10 @@ impl Stream {
         }
     }
 
-    pub fn finish(self) -> Reply {
+    pub fn finish(self) -> Result<Reply, String> {
+        if !self.done {
+            return Err("The model service's reply was cut off before it finished.".to_owned());
+        }
         let calls = self
             .calls
             .into_iter()
@@ -249,11 +252,11 @@ impl Stream {
                 c
             })
             .collect();
-        Reply {
+        Ok(Reply {
             text: self.text,
             calls,
             raw: String::new(),
-        }
+        })
     }
 }
 
@@ -442,7 +445,7 @@ mod tests {
         }
         assert!(stream.done);
         assert_eq!(shown, "Qt 6 runs natively.");
-        let reply = stream.finish();
+        let reply = stream.finish().unwrap();
         assert_eq!(reply.text, "Qt 6 runs natively.");
         assert_eq!(
             reply.calls,
@@ -459,6 +462,22 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn incomplete_streams_never_return_partial_replies_or_calls() {
+        for line in [
+            r#"data: {"choices":[{"delta":{"content":"Partial answer"}}]}"#,
+            r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"name":"click","arguments":"{}"}}]}}]}"#,
+        ] {
+            let mut stream = Stream::default();
+            stream.line(line).unwrap();
+            assert!(stream.finish().unwrap_err().contains("cut off"));
+        }
+        assert!(Stream::default().finish().is_err());
+        let mut empty = Stream::default();
+        empty.line("data: [DONE]").unwrap();
+        assert!(empty.finish().unwrap().text.is_empty());
     }
 
     #[test]
