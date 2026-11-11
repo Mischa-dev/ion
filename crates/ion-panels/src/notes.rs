@@ -48,7 +48,11 @@ impl Notes {
     }
 
     pub fn to_json(&self) -> String {
-        serde_json::to_string_pretty(self).unwrap_or_default()
+        // Keep drafts in memory so the editor retains its id, but never
+        // write a placeholder to disk, including when another note is saved.
+        let mut saved = self.clone();
+        saved.notes.retain(|note| !note.text.trim().is_empty());
+        serde_json::to_string_pretty(&saved).unwrap_or_default()
     }
 
     fn next(&mut self) -> u64 {
@@ -181,6 +185,21 @@ mod tests {
         assert_eq!(notes.search("BREAD milk").len(), 1);
         assert!(notes.search("nothing").is_empty());
         assert_eq!(notes.get(a).unwrap().title(), "Groceries");
+    }
+
+    #[test]
+    fn placeholder_drafts_are_not_persisted_but_can_be_edited() {
+        let mut notes = Notes::default();
+        let draft = notes.add(" \n\t", 1);
+        let real = notes.add("Keep this", 2);
+        let saved = Notes::from_json(&notes.to_json());
+        assert!(saved.get(draft).is_none());
+        assert_eq!(saved.get(real).unwrap().text, "Keep this");
+        assert!(notes.get(draft).is_some());
+        assert!(notes.set_text(draft, "Written later", 3));
+        let mut saved = Notes::from_json(&notes.to_json());
+        assert_eq!(saved.get(draft).unwrap().text, "Written later");
+        assert!(saved.add("Next", 4) > real);
     }
 
     #[test]
