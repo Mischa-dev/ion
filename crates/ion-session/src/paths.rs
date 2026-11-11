@@ -37,14 +37,10 @@ pub fn write_atomic(path: &std::path::Path, contents: &[u8]) -> std::io::Result<
         builder.create(parent)?;
     }
     static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let tmp = path.with_extension(format!("{}.{}.tmp", std::process::id(), n));
-    let mut options = fs::OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    let (tmp, mut file) = create_temp(path, || {
+        COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    })?;
     let result = (|| {
-        let mut file = options.open(&tmp)?;
         file.write_all(contents)?;
         file.sync_all()?;
         drop(file);
@@ -54,6 +50,29 @@ pub fn write_atomic(path: &std::path::Path, contents: &[u8]) -> std::io::Result<
         let _ = fs::remove_file(&tmp);
     }
     result
+}
+
+/// Only the temporary file created by this call may be written or removed.
+fn create_temp(
+    path: &std::path::Path,
+    mut next: impl FnMut() -> u64,
+) -> std::io::Result<(PathBuf, fs::File)> {
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    for _ in 0..128 {
+        let tmp = path.with_extension(format!("{}.{}.tmp", std::process::id(), next()));
+        match options.open(&tmp) {
+            Ok(file) => return Ok((tmp, file)),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        "couldn't create an unused temporary file",
+    ))
 }
 
 #[cfg(test)]
@@ -82,6 +101,29 @@ mod tests {
         assert_eq!(std::fs::read(&path).unwrap(), b"two");
         assert!(!dir.join("a/b/file.json.tmp").exists());
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn temp_collisions_retry_without_changing_existing_files() {
+        let dir = test_dir("collision");
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("file.json");
+        let occupied = path.with_extension(format!("{}.0.tmp", std::process::id()));
+        fs::write(&occupied, b"keep").unwrap();
+        let mut n = 0;
+        let (tmp, file) = create_temp(&path, || {
+            let here = n;
+            n += 1;
+            here
+        })
+        .unwrap();
+        assert_eq!(n, 2);
+        assert_ne!(tmp, occupied);
+        drop(file);
+        assert_eq!(fs::read(&occupied).unwrap(), b"keep");
+        assert!(create_temp(&path, || 0).is_err());
+        assert_eq!(fs::read(&occupied).unwrap(), b"keep");
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[cfg(unix)]
