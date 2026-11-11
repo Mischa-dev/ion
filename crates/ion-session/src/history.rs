@@ -116,20 +116,21 @@ impl History {
         // to only the last copy selected by `HashMap::collect`.
         let mut unique: Vec<HistoryEntry> = Vec::with_capacity(self.entries.len());
         let mut by_url: HashMap<String, usize> = HashMap::with_capacity(self.entries.len());
+        let mut title_times = Vec::with_capacity(self.entries.len());
         for entry in self.entries.drain(..) {
             if let Some(&i) = by_url.get(&entry.url) {
                 let here = &mut unique[i];
                 here.visits = here.visits.max(entry.visits);
-                if entry.last_visit > here.last_visit {
-                    here.last_visit = entry.last_visit;
-                    if !entry.title.is_empty() {
-                        here.title = entry.title;
-                    }
-                } else if here.title.is_empty() {
+                if !entry.title.is_empty()
+                    && (here.title.is_empty() || entry.last_visit > title_times[i])
+                {
+                    title_times[i] = entry.last_visit;
                     here.title = entry.title;
                 }
+                here.last_visit = here.last_visit.max(entry.last_visit);
             } else {
                 by_url.insert(entry.url.clone(), unique.len());
+                title_times.push(entry.last_visit);
                 unique.push(entry);
             }
         }
@@ -541,6 +542,36 @@ mod tests {
         assert_eq!(history.len(), 2);
         assert_eq!(history.get("https://a.example/").unwrap().visits, 8);
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn duplicate_titles_use_the_freshest_nonempty_visit_in_any_order() {
+        for order in [
+            [0, 1, 2],
+            [0, 2, 1],
+            [1, 0, 2],
+            [1, 2, 0],
+            [2, 0, 1],
+            [2, 1, 0],
+        ] {
+            let entries = [("Old", 10), ("", 30), ("Middle", 20)];
+            let mut history = History::default();
+            for i in order {
+                let (title, last_visit) = entries[i];
+                history.entries.push(HistoryEntry {
+                    url: "https://a.example/".into(),
+                    title: title.into(),
+                    visits: i as u32 + 1,
+                    last_visit,
+                });
+            }
+            history.reindex();
+            let entry = history.get("https://a.example/").unwrap();
+            assert_eq!(
+                (entry.title.as_str(), entry.last_visit, entry.visits),
+                ("Middle", 30, 3)
+            );
+        }
     }
 
     #[test]
