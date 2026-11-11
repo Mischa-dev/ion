@@ -62,7 +62,24 @@ pub fn describe(entry: &Entry, name: &dyn Fn(&str) -> String) -> Option<Line> {
             let what = if detail.is_empty() {
                 phrase.unwrap_or_default()
             } else {
-                lowercase_first(detail)
+                let detail = lowercase_first(detail);
+                if matches!(
+                    entry.action,
+                    Some(
+                        Action::Interact
+                            | Action::Submit
+                            | Action::EnterPersonalData
+                            | Action::Purchase
+                    )
+                ) && entry
+                    .target
+                    .as_deref()
+                    .is_some_and(|target| !target.is_empty())
+                {
+                    format!("{detail} on {site}")
+                } else {
+                    detail
+                }
             };
             let text = if ok {
                 format!("{agent}: {what}")
@@ -203,10 +220,23 @@ mod tests {
         e.ok = Some(true);
         e.detail = Some("Type “Mischa” into Name".into());
         let line = describe(&e, &name).unwrap();
-        assert_eq!(line.text, "Ion Agent: type “Mischa” into Name");
+        assert_eq!(
+            line.text,
+            "Ion Agent: type “Mischa” into Name on github.com"
+        );
         assert_eq!(line.mark, Mark::Done);
 
         e.ok = Some(false);
+        assert_eq!(
+            describe(&e, &name).unwrap().text,
+            "Ion Agent couldn't type “Mischa” into Name on github.com"
+        );
+        e.target = None;
+        assert_eq!(
+            describe(&e, &name).unwrap().text,
+            "Ion Agent couldn't type “Mischa” into Name"
+        );
+        e.target = Some("https://www.github.com".into());
         e.detail = None;
         let line = describe(&e, &name).unwrap();
         assert_eq!(line.text, "Ion Agent couldn't work on github.com");
